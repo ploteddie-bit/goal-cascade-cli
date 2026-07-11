@@ -195,7 +195,7 @@ class CascadeState(BaseModel):
     last_synthesis: GoalOrientedSynthesis | None = None
     artifacts: list[ImmutableArtifact] = Field(default_factory=list)
     final_verdict: Verdict | None = None
-    status: Literal["running", "stopped", "forced_stop", "failed"] = "running"
+    status: Literal["running", "stopped", "forced_stop", "budget_exceeded", "failed"] = "running"
     last_error: str | None = None
     accumulated_cost: float = 0.0
 

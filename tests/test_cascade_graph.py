@@ -312,7 +312,7 @@ class TestResumeCLI:
             ["uv", "run", "goal", "--help"],
             capture_output=True,
             text=True,
-            cwd="/mnt/c/Users/eddie/ZCodeProject/goal-cascade-cli",
+            cwd=str(Path(__file__).resolve().parents[1]),
         )
         assert "resume" in result.stdout
 
@@ -324,7 +324,7 @@ class TestResumeCLI:
             ["uv", "run", "goal", "resume", "--help"],
             capture_output=True,
             text=True,
-            cwd="/mnt/c/Users/eddie/ZCodeProject/goal-cascade-cli",
+            cwd=str(Path(__file__).resolve().parents[1]),
         )
         assert "RUN_ID" in result.stdout
         assert "checkpoint" in result.stdout.lower()

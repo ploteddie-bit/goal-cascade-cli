@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from unittest.mock import MagicMock
 
 import pytest
 from typer.testing import CliRunner
@@ -8,6 +9,19 @@ from typer.testing import CliRunner
 from goal_cascade.cli import app, _build_provider
 from goal_cascade.config import GoalConfig, ProvidersConfig
 from goal_cascade.providers.base import BaseProvider
+
+
+@pytest.fixture(autouse=True)
+def _no_real_rag_bridge(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Empêche tout appel réel au RAG PostgreSQL pendant les tests CLI.
+
+    Remplace ``RagBridge`` dans le module CLI par un ``MagicMock`` dont
+    ``sync_run`` est un no-op.  Aucune connexion PostgreSQL, aucun
+    sous-processus RAG ne seront lancés.
+    """
+    mock_bridge = MagicMock()
+    mock_bridge.sync_run.return_value = {}
+    monkeypatch.setattr("goal_cascade.cli.RagBridge", lambda: mock_bridge)
 
 
 @pytest.fixture()
