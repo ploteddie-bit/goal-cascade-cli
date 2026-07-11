@@ -1,8 +1,8 @@
 """Tests unitaires pour le budget tracker et le kill switch.
 
 Couvre :
-- is_exceeded declenche quand max_per_run atteint
-- is_exceeded declenche quand cumul jour + courant atteint max_per_day
+- is_exceeded declenche quand max_per_run_usd atteint
+- is_exceeded declenche quand cumul jour + courant atteint max_per_day_usd
 - hard_stop=False desactive le kill switch
 - is_warning au seuil warn_at_percent
 - record() incremente le cumul quotidien et persiste sur disque
@@ -38,16 +38,16 @@ from goal_cascade.schemas.models import (
 
 def test_budget_config_has_sensible_defaults() -> None:
     config = BudgetConfig()
-    assert config.max_per_run == 0.50
-    assert config.max_per_day == 10.00
+    assert config.max_per_run_usd == 0.50
+    assert config.max_per_day_usd == 10.00
     assert config.warn_at_percent == 80
     assert config.hard_stop is True
     assert config.runs_per_day_projection == 10
 
 
-def test_budget_config_rejects_zero_max_per_run() -> None:
+def test_budget_config_rejects_zero_max_per_run_usd() -> None:
     with pytest.raises(ValueError):
-        BudgetConfig(max_per_run=0.0)
+        BudgetConfig(max_per_run_usd=0.0)
 
 
 def test_budget_config_rejects_warn_above_100() -> None:
@@ -57,8 +57,8 @@ def test_budget_config_rejects_warn_above_100() -> None:
 
 # ---------- BudgetTracker.is_exceeded ----------
 
-def test_is_exceeded_triggers_when_max_per_run_reached(tmp_path: Path) -> None:
-    config = BudgetConfig(max_per_run=0.10, max_per_day=10.0)
+def test_is_exceeded_triggers_when_max_per_run_usd_reached(tmp_path: Path) -> None:
+    config = BudgetConfig(max_per_run_usd=0.10, max_per_day_usd=10.0)
     tracker = BudgetTracker(config, tmp_path / "budget.json")
 
     assert not tracker.is_exceeded(0.05)
@@ -68,13 +68,13 @@ def test_is_exceeded_triggers_when_max_per_run_reached(tmp_path: Path) -> None:
 
 
 def test_is_exceeded_triggers_when_daily_cumulative_reached(tmp_path: Path) -> None:
-    """Si le cumul du jour + courant depasse max_per_day, kill switch."""
+    """Si le cumul du jour + courant depasse max_per_day_usd, kill switch."""
     daily = tmp_path / "budget.json"
     daily.write_text(json.dumps({
         "date": date.today().isoformat(),
         "total": 9.50,
     }), encoding="utf-8")
-    config = BudgetConfig(max_per_run=1.0, max_per_day=10.0)
+    config = BudgetConfig(max_per_run_usd=1.0, max_per_day_usd=10.0)
     tracker = BudgetTracker(config, daily)
 
     assert not tracker.is_exceeded(0.40)  # 9.50 + 0.40 = 9.90
@@ -82,7 +82,7 @@ def test_is_exceeded_triggers_when_daily_cumulative_reached(tmp_path: Path) -> N
 
 
 def test_is_exceeded_disabled_when_hard_stop_false(tmp_path: Path) -> None:
-    config = BudgetConfig(max_per_run=0.10, hard_stop=False)
+    config = BudgetConfig(max_per_run_usd=0.10, hard_stop=False)
     tracker = BudgetTracker(config, tmp_path / "budget.json")
 
     assert not tracker.is_exceeded(0.05)
@@ -92,7 +92,7 @@ def test_is_exceeded_disabled_when_hard_stop_false(tmp_path: Path) -> None:
 # ---------- BudgetTracker.is_warning ----------
 
 def test_is_warning_at_threshold(tmp_path: Path) -> None:
-    config = BudgetConfig(max_per_run=1.0, warn_at_percent=80)
+    config = BudgetConfig(max_per_run_usd=1.0, warn_at_percent=80)
     tracker = BudgetTracker(config, tmp_path / "budget.json")
 
     assert not tracker.is_warning(0.79)
@@ -100,10 +100,10 @@ def test_is_warning_at_threshold(tmp_path: Path) -> None:
     assert tracker.is_warning(1.50)
 
 
-def test_is_warning_disabled_when_max_per_run_zero(tmp_path: Path) -> None:
-    """Configuration defensive : si max_per_run=0 (mal configure), pas de warning."""
+def test_is_warning_disabled_when_max_per_run_usd_zero(tmp_path: Path) -> None:
+    """Configuration defensive : si max_per_run_usd=0 (mal configure), pas de warning."""
     # On contourne le validator Pydantic pour creer ce cas limite.
-    config = BudgetConfig.model_construct(max_per_run=0, max_per_day=10.0)
+    config = BudgetConfig.model_construct(max_per_run_usd=0, max_per_day_usd=10.0)
     tracker = BudgetTracker(config, tmp_path / "budget.json")
 
     assert not tracker.is_warning(5.0)
@@ -177,7 +177,7 @@ def test_projected_monthly_multiplies_correctly(tmp_path: Path) -> None:
 
 
 def test_explain_returns_human_readable_string(tmp_path: Path) -> None:
-    config = BudgetConfig(max_per_run=1.0, max_per_day=10.0)
+    config = BudgetConfig(max_per_run_usd=1.0, max_per_day_usd=10.0)
     tracker = BudgetTracker(config, tmp_path / "budget.json")
 
     msg = tracker.explain(0.50)

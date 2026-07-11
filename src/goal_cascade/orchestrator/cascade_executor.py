@@ -210,7 +210,7 @@ class CascadeExecutor:
                     decision="STOP",
                     justification=(
                         f"Budget depasse: ${state.accumulated_cost:.4f} "
-                        f"(max ${self._budget.config.max_per_run:.2f})"
+                        f"(max ${self._budget.config.max_per_run_usd:.2f})"
                     ),
                 )
                 state_manager.save_state(state)

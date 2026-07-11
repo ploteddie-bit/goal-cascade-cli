@@ -2,8 +2,8 @@
 
 Section 9 du plan d'implementation v2 (transparence radicale des couts).
 Le tracker :
-- empeche un run de depasser ``max_per_run`` (kill switch dur)
-- empeche plusieurs runs d'epuiser ``max_per_day`` (cumul quotidien)
+- empeche un run de depasser ``max_per_run_usd`` (kill switch dur)
+- empeche plusieurs runs d'epuiser ``max_per_day_usd`` (cumul quotidien)
 - previent quand on atteint ``warn_at_percent`` du budget run
 - expose ``projected_monthly`` pour anticiper les couts a l'echelle
 
@@ -22,8 +22,8 @@ from pydantic import BaseModel, Field
 class BudgetConfig(BaseModel):
     """Configuration du budget et du kill switch."""
 
-    max_per_run: float = Field(default=0.50, gt=0)
-    max_per_day: float = Field(default=10.00, gt=0)
+    max_per_run_usd: float = Field(default=0.50, gt=0)
+    max_per_day_usd: float = Field(default=10.00, gt=0)
     warn_at_percent: int = Field(default=80, ge=0, le=100)
     hard_stop: bool = True
     runs_per_day_projection: int = Field(default=10, ge=1)
@@ -58,21 +58,21 @@ class BudgetTracker:
 
         Regles :
         - ``hard_stop=False`` : jamais de kill switch automatique
-        - Sinon : depasse ``max_per_run`` OU cumul quotidien + courant depasse ``max_per_day``
+        - Sinon : depasse ``max_per_run_usd`` OU cumul quotidien + courant depasse ``max_per_day_usd``
         """
         if not self._config.hard_stop:
             return False
-        if current_cost >= self._config.max_per_run:
+        if current_cost >= self._config.max_per_run_usd:
             return True
-        if (self._daily_total + current_cost) >= self._config.max_per_day:
+        if (self._daily_total + current_cost) >= self._config.max_per_day_usd:
             return True
         return False
 
     def is_warning(self, current_cost: float) -> bool:
         """Vrai si on a atteint le seuil d'alerte sur le run courant."""
-        if self._config.max_per_run <= 0:
+        if self._config.max_per_run_usd <= 0:
             return False
-        pct = (current_cost / self._config.max_per_run) * 100
+        pct = (current_cost / self._config.max_per_run_usd) * 100
         return pct >= self._config.warn_at_percent
 
     def record(self, cost: float) -> None:
@@ -95,10 +95,10 @@ class BudgetTracker:
     def explain(self, current_cost: float) -> str:
         """Message humain expliquant l'etat du budget (debug, logs)."""
         return (
-            f"cout={current_cost:.4f}$ / max_run={self._config.max_per_run:.2f}$ "
-            f"({100 * current_cost / self._config.max_per_run:.0f}%) | "
-            f"cumul_jour={self._daily_total:.4f}$ / max_jour={self._config.max_per_day:.2f}$ "
-            f"({100 * (self._daily_total + current_cost) / self._config.max_per_day:.0f}%)"
+            f"cout={current_cost:.4f}$ / max_run={self._config.max_per_run_usd:.2f}$ "
+            f"({100 * current_cost / self._config.max_per_run_usd:.0f}%) | "
+            f"cumul_jour={self._daily_total:.4f}$ / max_jour={self._config.max_per_day_usd:.2f}$ "
+            f"({100 * (self._daily_total + current_cost) / self._config.max_per_day_usd:.0f}%)"
         )
 
     def _load_daily_total(self) -> float:

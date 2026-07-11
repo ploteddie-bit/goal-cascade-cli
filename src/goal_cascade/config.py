@@ -174,6 +174,22 @@ class ProvidersConfig(BaseModel):
         return rows
 
 
+class CacheConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    provider: str = Field(default="exact", description="Stratégie de cache : exact ou semantic")
+    enable_semantic: bool = Field(default=False, description="Activer le cache sémantique")
+    ttl_seconds: int = Field(default=3600, ge=60, description="Durée de vie du cache en secondes")
+
+
+class LoggingConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    level: str = Field(default="INFO", description="Niveau de log (DEBUG, INFO, WARNING, ERROR)")
+    format: str = Field(default="structlog", description="Format de log : structlog ou plain")
+    file: str | None = Field(default=None, description="Chemin du fichier de log (None = stdout)")
+
+
 class GoalConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -185,6 +201,8 @@ class GoalConfig(BaseModel):
         default_factory=RateLimitConfig,
         validation_alias=AliasChoices("ratelimit", "rate_limit"),
     )
+    cache: CacheConfig = Field(default_factory=CacheConfig)
+    logging: LoggingConfig = Field(default_factory=LoggingConfig)
 
 
 def load_goal_config(path: Path) -> GoalConfig:
