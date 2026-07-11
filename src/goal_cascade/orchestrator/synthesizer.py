@@ -6,6 +6,7 @@ import hashlib
 import json
 import re
 from dataclasses import dataclass
+from typing import Literal, cast
 
 from pydantic import ValidationError
 
@@ -139,14 +140,17 @@ class Synthesizer:
             content = match.group("content").rstrip()
             if not content:
                 continue
-            artifact_type = {
-                "json": "json_schema",
-                "jsonschema": "json_schema",
-                "sql": "sql",
-                "toml": "config",
-                "yaml": "config",
-                "yml": "config",
-            }.get(language or "", "code")
+            artifact_type = cast(
+                Literal["code", "json_schema", "formula", "test", "config", "sql"],
+                {
+                    "json": "json_schema",
+                    "jsonschema": "json_schema",
+                    "sql": "sql",
+                    "toml": "config",
+                    "yaml": "config",
+                    "yml": "config",
+                }.get(language or "", "code"),
+            )
             checksum = hashlib.sha256(content.encode("utf-8")).hexdigest()
             artifacts.append(
                 ImmutableArtifact(

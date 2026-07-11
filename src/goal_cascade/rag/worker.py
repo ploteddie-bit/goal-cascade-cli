@@ -233,7 +233,7 @@ def embed_indexed_document(
         with conn.cursor() as cursor:
             cursor.execute("DELETE FROM chunks WHERE doc_id = %s", (document_id,))
             chunk_ids = []
-            for position, (text, vector) in enumerate(zip(chunks, embeddings)):
+            for position, (text, vector) in enumerate(zip(chunks, embeddings, strict=False)):
                 cursor.execute(
                     """INSERT INTO chunks (doc_id, position, text, embedding)
                        VALUES (%s, %s, %s, %s::vector) RETURNING id""",
@@ -304,7 +304,7 @@ def main() -> int:
         print(json.dumps(result, ensure_ascii=False, sort_keys=True))
         return 0
     except Exception as error:
-        payload = {
+        payload: dict[str, Any] = {
             "status": ("indexed_pending_embedding" if document_id is not None else "failed"),
             "error_type": type(error).__name__,
             "message": redact_sensitive(str(error)),

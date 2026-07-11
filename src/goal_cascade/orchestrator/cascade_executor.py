@@ -178,10 +178,7 @@ class CascadeExecutor:
             iteration = state.current_iteration
 
             # Apres l'iteration 4, on reboucle vers le critique (iteration 5 max)
-            if iteration <= 4:
-                role = state.role_for_iteration(iteration)
-            else:
-                role = IterationRole.CRITIC
+            role = state.role_for_iteration(iteration) if iteration <= 4 else IterationRole.CRITIC
 
             if verbose:
                 tier = ROLE_TIERS.get(role, "medium")

@@ -415,7 +415,6 @@ class MirascopeProvider(BaseProvider):
             excs = _get_mirascope_exceptions()
         except ImportError:
             return
-        names = {RateLimitError, ProviderUnavailableError}
         for name in (RateLimitError, ProviderUnavailableError, Exception):
             cls = getattr(excs, name.__name__, None)
             if cls is not None and isinstance(exc, cls):

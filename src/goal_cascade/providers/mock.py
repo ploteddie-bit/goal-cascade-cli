@@ -96,9 +96,8 @@ class MockProvider(BaseProvider):
         for line in text.split("\n"):
             line = line.strip()
             # Lignes numerotees ou avec puces
-            if re.match(r"^[\d\-\*\+]\s+", line) or "[" in line:
-                if len(line) > 10:
-                    claims.append(line)
+            if (re.match(r"^[\d\-\*\+]\s+", line) or "[" in line) and len(line) > 10:
+                claims.append(line)
         return claims[:8]  # max 8
 
     def _generate_id(self, text: str) -> str:

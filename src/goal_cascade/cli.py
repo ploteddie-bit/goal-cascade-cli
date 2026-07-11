@@ -17,7 +17,7 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 
-from .config import DEFAULT_CONFIG_PATH, ProvidersConfig, load_goal_config
+from .config import DEFAULT_CONFIG_PATH, GoalConfig, ProvidersConfig, load_goal_config
 from .orchestrator.cascade_executor import CascadeExecutor
 from .orchestrator.state_manager import RUNS_DIR, list_runs, load_state
 from .providers.base import BaseProvider
@@ -206,11 +206,11 @@ def run(
         providers_by_name = {
             provider_name: _build_provider(provider_name) for provider_name in provider_names
         }
-        selected_provider = RoleMappedProvider(
+        selected_provider: BaseProvider = RoleMappedProvider(
             providers_by_name=providers_by_name,
             role_mapping=goal_config.providers.resolved_role_mapping,
         )
-        selected_synthesizer_provider = _build_provider(
+        selected_synthesizer_provider: BaseProvider = _build_provider(
             goal_config.providers.resolved_synthesizer,
             synthesizer_model=synthesizer_model,
         )

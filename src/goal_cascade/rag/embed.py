@@ -46,7 +46,7 @@ class OllamaEmbedding:
         )
         with urllib.request.urlopen(req, timeout=TIMEOUT) as resp:  # nosemgrep
             data = json.loads(resp.read())
-        embs = data.get("embeddings")
+        embs: list[list[float]] = data.get("embeddings")
         if not embs:
             raise RuntimeError(f"réponse sans embeddings: {str(data)[:200]}")
         return embs
