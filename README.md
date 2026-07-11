@@ -149,6 +149,14 @@ Les providers Mirascope appliquent un backoff exponentiel sur les rate limits pu
 
 La logique de résilience (rate limit + chaîne de fallback) est isolée dans `src/goal_cascade/providers/rate_limiter.py` sous la forme d'une fonction `call_with_retry_and_fallback` testable indépendamment. Le provider ne fait plus qu'injecter sa méthode d'appel backend dans cette fonction.
 
+### Diversité des familles au runtime (Pilier 1)
+
+Le fallback refuse explicitement les backends qui appartiennent à la même famille que le backend primaire (via `PROVIDER_FAMILIES`). Si tous les fallbacks sont dans la même famille (cas théorique mais explicitement défendu), `ProviderExhaustedError` est levée comme si tous les backends avaient échoué. Le log `provider_fallback_skipped reason=same_family` trace chaque refus.
+
+### Configuration `[ratelimit]` dans le TOML
+
+Les valeurs `RateLimitConfig` (max_retries, initial_backoff_s, backoff_multiplier) peuvent être surchargées via la section `[ratelimit]` du TOML (`[rate_limit]` reste accepté comme alias historique). `_build_provider` reconstruit un `RateLimitConfig` neuf via `model_dump()` (copie défensive), avec fallback sur les défauts si aucune config n'est chargée.
+
 Sont volontairement hors périmètre de ce jalon : LangGraph, dérive cosinus, multi-cascade et CI/CD hook. Le **budget tracker** et le **reçu détaillé** sont en revanche implémentés (voir section "Transparence des coûts" plus bas).
 
 ## Transparence des coûts
