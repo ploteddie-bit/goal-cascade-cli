@@ -26,8 +26,8 @@ from ..schemas.models import (
     CascadeState,
     IterationRole,
     LLMCallRecord,
-    Verdict,
     Variant,
+    Verdict,
 )
 from . import state_manager
 from .synthesizer import SynthesisError, Synthesizer

@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import pytest
-import typer
 from typer.testing import CliRunner
 
 from goal_cascade.cli import app

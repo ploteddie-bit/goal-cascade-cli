@@ -13,7 +13,6 @@ from ..prompts import PromptLoader
 from ..providers.base import BaseProvider, LLMResponse
 from ..schemas.models import GoalOrientedSynthesis, ImmutableArtifact
 
-
 CODE_BLOCK_RE = re.compile(
     r"```(?P<language>[\w.+-]*)\s*\n(?P<content>.*?)```",
     re.DOTALL,

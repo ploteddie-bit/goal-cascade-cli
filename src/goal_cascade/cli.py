@@ -82,7 +82,7 @@ def _build_provider(
     provider_id: str,
     *,
     synthesizer_model: str | None = None,
-    config: "GoalConfig | None" = None,
+    config: GoalConfig | None = None,
 ) -> BaseProvider:
     """Construit l'instance de provider effective pour un identifiant résolu.
 
@@ -522,11 +522,11 @@ def init(
     )
 
     console.print(f"[green]Projet '{name}' cree.[/green]")
-    console.print(f"\nStructure :")
+    console.print("\nStructure :")
     console.print(f"  {name}/")
-    console.print(f"  ├── .goal/       (config locale)")
-    console.print(f"  ├── output/      (livrables)")
-    console.print(f"  └── README.md")
+    console.print("  ├── .goal/       (config locale)")
+    console.print("  ├── output/      (livrables)")
+    console.print("  └── README.md")
 
 
 if __name__ == "__main__":

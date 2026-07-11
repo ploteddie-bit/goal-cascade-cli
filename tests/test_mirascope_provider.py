@@ -3,7 +3,6 @@ from __future__ import annotations
 import asyncio
 import importlib
 from dataclasses import dataclass
-from typing import Any
 
 import pytest
 
@@ -11,13 +10,13 @@ from goal_cascade.providers.base import LLMResponse
 from goal_cascade.providers.families import PROVIDER_FAMILIES
 from goal_cascade.providers.mirascope_provider import (
     FALLBACK_CHAIN,
+    TIER_MODEL_MAP,
     Backend,
     MirascopeProvider,
     ProviderExhaustedError,
     ProviderUnavailableError,
     RateLimitConfig,
     RateLimitError,
-    TIER_MODEL_MAP,
     _estimate_cost_anthropic,
     _estimate_cost_google,
     _estimate_cost_openai,

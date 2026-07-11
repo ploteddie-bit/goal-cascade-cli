@@ -8,7 +8,7 @@ import socket
 import time
 import urllib.error
 import urllib.request
-from typing import Iterable
+from collections.abc import Iterable
 
 import numpy as np
 
@@ -62,13 +62,7 @@ class OllamaEmbedding:
                     return self._embed_batch(inputs[:mid]) + self._embed_batch(inputs[mid:])
                 last_err = e
                 time.sleep(2 * (attempt + 1))
-            except (
-                urllib.error.URLError,
-                TimeoutError,
-                socket.timeout,
-                OSError,
-                RuntimeError,
-            ) as e:
+            except (urllib.error.URLError, TimeoutError, OSError, RuntimeError) as e:
                 reason = getattr(e, "reason", e)
                 is_timeout = isinstance(e, (TimeoutError, socket.timeout)) or isinstance(
                     reason, (TimeoutError, socket.timeout)

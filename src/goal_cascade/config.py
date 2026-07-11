@@ -42,7 +42,7 @@ class ProvidersConfig(BaseModel):
     adaptations: list[ProviderAdaptation] = Field(default_factory=list)
 
     @model_validator(mode="after")
-    def resolve_providers(self) -> "ProvidersConfig":
+    def resolve_providers(self) -> ProvidersConfig:
         ordered_available = list(dict.fromkeys(self.enabled))
         available = set(ordered_available)
         if not available:

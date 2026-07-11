@@ -12,7 +12,6 @@ from pathlib import Path
 
 from ..schemas.models import CascadeState
 
-
 GOAL_DIR = Path(os.environ.get("GOAL_HOME", Path.home() / ".goal")).expanduser()
 RUNS_DIR = GOAL_DIR / "runs"
 

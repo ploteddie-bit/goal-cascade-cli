@@ -12,7 +12,6 @@ from typing import Any
 
 from .orchestrator import state_manager
 
-
 SECRET_KEY = (
     r"[A-Z0-9_-]*(?:API[_-]?KEY|SECRET[_-]?ACCESS[_-]?KEY|"
     r"ACCESS[_-]?TOKEN|REFRESH[_-]?TOKEN|PASSWORD|PASSWD|"

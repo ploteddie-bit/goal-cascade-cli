@@ -5,11 +5,10 @@ from __future__ import annotations
 import hashlib
 import json
 import os
-import re
 import subprocess
 import sys
+from collections.abc import Callable
 from pathlib import Path
-from typing import Any, Callable
 
 from .audit_journal import AuditJournal, redact_sensitive
 from .rag import (

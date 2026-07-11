@@ -21,7 +21,6 @@ sys.path.insert(0, str(PACKAGE_DIR.parents[1]))
 
 from goal_cascade.rag.embed import OllamaEmbedding  # noqa: E402
 
-
 DEFAULT_HOST = "http://127.0.0.1:11434"
 DEFAULT_EMBED_URL = f"{DEFAULT_HOST}/api/embed"
 DEFAULT_MODEL = "bge-m3:latest"
