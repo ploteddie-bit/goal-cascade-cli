@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import pytest
+import typer
 from typer.testing import CliRunner
 
 from goal_cascade.cli import app
@@ -50,4 +52,4 @@ def test_cli_requires_explicit_small_model_for_kimi() -> None:
         )
 
         assert result.exit_code != 0
-        assert "synthesizer-model" in result.output
+        assert "Erreur : --synthesizer-model est requis avec un provider Kimi" in result.output

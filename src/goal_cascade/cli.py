@@ -211,6 +211,10 @@ def run(
             goal_config.providers.resolved_synthesizer in ("kimi-cli", "kimi-code")
             and not synthesizer_model
         ):
+            typer.echo(
+                "Erreur : --synthesizer-model est requis avec un provider Kimi",
+                err=True,
+            )
             raise typer.BadParameter(
                 "requis avec un provider Kimi",
                 param_hint="--synthesizer-model",
@@ -240,6 +244,10 @@ def run(
         synthesizer_label = "Mock small (instance isolée)"
     elif provider == ProviderChoice.KIMI_CLI:
         if not synthesizer_model:
+            typer.echo(
+                "Erreur : --synthesizer-model est requis avec un provider Kimi",
+                err=True,
+            )
             raise typer.BadParameter(
                 "requis avec un provider Kimi",
                 param_hint="--synthesizer-model",
@@ -257,6 +265,10 @@ def run(
         synthesizer_label = f"Kimi CLI 1.x / {synthesizer_model}"
     else:
         if not synthesizer_model:
+            typer.echo(
+                "Erreur : --synthesizer-model est requis avec un provider Kimi",
+                err=True,
+            )
             raise typer.BadParameter(
                 "requis avec un provider Kimi",
                 param_hint="--synthesizer-model",
