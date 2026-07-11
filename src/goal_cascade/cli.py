@@ -20,6 +20,7 @@ from rich.panel import Panel
 from rich.table import Table
 
 from .config import DEFAULT_CONFIG_PATH, ProvidersConfig, load_goal_config
+from .audit_journal import redact_sensitive
 from .orchestrator.budget_tracker import BudgetConfig, BudgetTracker
 from .orchestrator.cascade_executor import CascadeExecutor
 from .orchestrator.state_manager import RUNS_DIR, list_runs, load_state
@@ -591,6 +592,90 @@ def init(
     console.print(f"  ├── .goal/       (config locale)")
     console.print(f"  ├── output/      (livrables)")
     console.print(f"  └── README.md")
+
+
+@app.command()
+def resume(
+    run_id: str = typer.Argument(..., help="Run ID à reprendre"),
+    audience: str = typer.Option(
+        "", "--audience", "-a", help="Public cible"
+    ),
+    constraints: str = typer.Option(
+        "", "--constraints", "-c", help="Contraintes (format, longueur, etc.)"
+    ),
+):
+    """Reprend une cascade interrompue depuis le dernier checkpoint SQLite."""
+    from .orchestrator.cascade_executor import CascadeExecutor
+    from .orchestrator.state_manager import RUNS_DIR, load_state
+
+    run_dir = RUNS_DIR / run_id
+    checkpoint_dir = run_dir / ".checkpoints"
+    checkpoint_path = checkpoint_dir / "checkpoint.db"
+
+    if not checkpoint_path.exists():
+        console.print(
+            f"[bold red]Aucun checkpoint trouvé pour le run '{run_id}'[/bold red]"
+        )
+        console.print(f"  Chemin attendu : {checkpoint_path}")
+        raise typer.Exit(1)
+
+    # Charger l'état initial depuis le checkpoint
+    console.print(
+        f"[cyan]Reprise du run {run_id} depuis le checkpoint SQLite...[/cyan]"
+    )
+    console.print(f"  Checkpoint : [cyan]{checkpoint_path}[/cyan]")
+
+    # Créer un executor minimal pour la reprise
+    # On utilise MockProvider comme fallback — le vrai provider sera
+    # déterminé par le checkpoint.
+    from .providers.mock import MockProvider
+
+    executor = CascadeExecutor(
+        provider=MockProvider(),
+        synthesizer_provider=MockProvider(),
+    )
+
+    try:
+        state = executor.resume(
+            run_id,
+            audience=redact_sensitive(audience) if audience else "",
+            constraints=redact_sensitive(constraints) if constraints else "",
+            verbose=True,
+        )
+    except FileNotFoundError as exc:
+        console.print(f"[bold red]{exc}[/bold red]")
+        raise typer.Exit(1) from exc
+    except Exception as exc:
+        console.print(f"[bold red]Erreur lors de la reprise : {exc}[/bold red]")
+        raise typer.Exit(1) from exc
+
+    # Afficher le résultat
+    console.print()
+    if state.status == "stopped":
+        console.print(
+            f"[bold green]Cascade reprise et terminée en "
+            f"{state.current_iteration} iterations[/bold green]"
+        )
+    elif state.status == "forced_stop":
+        console.print(
+            f"[bold yellow]Cascade reprise et stoppée (limite atteinte) "
+            f"après {state.current_iteration} iterations[/bold yellow]"
+        )
+    else:
+        console.print(
+            f"[bold cyan]Cascade reprise — statut : {state.status}[/bold cyan]"
+        )
+
+    if state.final_verdict:
+        verdict = state.final_verdict
+        color = "green" if verdict.decision == "STOP" else "yellow"
+        console.print(
+            f"\nVerdict : [{color}]{verdict.decision}[/{color}]"
+        )
+        console.print(f"Justification : {verdict.justification}")
+
+    console.print(f"\nRun ID : [cyan]{state.run_id}[/cyan]")
+    console.print(f"Livrable : {run_dir / 'final_output.md'}")
 
 
 if __name__ == "__main__":

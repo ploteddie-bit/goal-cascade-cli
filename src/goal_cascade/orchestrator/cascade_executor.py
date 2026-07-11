@@ -135,7 +135,7 @@ class CascadeExecutor:
         constraints = redact_sensitive(constraints)
 
         try:
-            state = self._run_loop(state, audience, constraints, verbose, journal, no_synth=no_synth)
+            state = self._run_with_graph(state, audience, constraints, verbose, journal, no_synth=no_synth)
         except Exception as exc:
             state.status = "failed"
             state.last_error = redact_sensitive(str(exc))
@@ -183,8 +183,13 @@ class CascadeExecutor:
         verbose: bool,
         journal: AuditJournal,
         no_synth: bool = False,
+        _single_iteration: bool = False,
     ) -> CascadeState:
-        """Exécute la boucle tout en enregistrant chaque entrée et sortie."""
+        """Exécute la boucle tout en enregistrant chaque entrée et sortie.
+
+        Si _single_iteration=True, exécute exactement une itération et retourne.
+        Utilisé par le graphe LangGraph pour le checkpointing par itération.
+        """
 
         while state.status == "running":
             # Limite absolue : 5 iterations
@@ -470,6 +475,11 @@ class CascadeExecutor:
             # Sauvegarder l'etat a chaque iteration (checkpointing)
             state_manager.save_state(state)
 
+            # En mode single_iteration (graphe LangGraph), on s'arrête
+            # après chaque itération pour laisser le graphe gérer la boucle.
+            if _single_iteration:
+                break
+
         # Sauvegarder le livrable final
         if state.history:
             arbiter_outputs = [
@@ -488,6 +498,158 @@ class CascadeExecutor:
         state_manager.save_state(state)
 
         return state
+
+    def _run_with_graph(
+        self,
+        state: CascadeState,
+        audience: str,
+        constraints: str,
+        verbose: bool,
+        journal: AuditJournal,
+        no_synth: bool = False,
+    ) -> CascadeState:
+        """Exécute la cascade via un graphe LangGraph avec checkpointing SQLite.
+
+        Le graphe a un nœud "iteration" qui appelle _run_loop en mode
+        _single_iteration. Le checkpoint SQLite sauvegarde l'état à chaque
+        transition de nœud, permettant goal resume.
+        """
+        from .cascade_graph import build_cascade_graph, compile_with_sqlite
+
+        run_dir = state_manager.get_run_dir(state.run_id)
+        checkpoint_dir = run_dir / ".checkpoints"
+        checkpoint_dir.mkdir(parents=True, exist_ok=True)
+        checkpoint_path = checkpoint_dir / "checkpoint.db"
+
+        # Fonction nœud : encapsule une itération de la cascade.
+        # Capture self, audience, constraints, verbose, no_synth, journal
+        # via closure.
+        def iteration_node(graph_state: dict) -> dict:
+            # Désérialiser le CascadeState depuis le dict du graphe
+            cascade_dict = graph_state.get("cascade", {})
+            if cascade_dict:
+                current_state = CascadeState(**cascade_dict)
+            else:
+                current_state = state
+
+            # Exécuter une itération
+            self._run_loop(
+                current_state,
+                audience=audience,
+                constraints=constraints,
+                verbose=verbose,
+                journal=journal,
+                no_synth=no_synth,
+                _single_iteration=True,
+            )
+
+            # Sérialiser et retourner la mise à jour
+            return {
+                "cascade": current_state.model_dump(),
+                "current_iteration": current_state.current_iteration,
+                "status": current_state.status,
+            }
+
+        # Construire et compiler le graphe avec checkpointer SQLite
+        graph = build_cascade_graph(iteration_node)
+        app, checkpointer = compile_with_sqlite(graph, checkpoint_path)
+
+        # État initial du graphe
+        initial_graph_state = {
+            "cascade": state.model_dump(),
+            "run_id": state.run_id,
+            "current_iteration": state.current_iteration,
+            "status": state.status,
+        }
+        config = {"configurable": {"thread_id": state.run_id}}
+
+        try:
+            result = app.invoke(initial_graph_state, config)
+        except Exception:
+            # En cas d'erreur, on peut récupérer le dernier checkpoint
+            # et mettre à jour l'état depuis celui-ci.
+            try:
+                saved = app.get_state(config)
+                if saved and saved.values:
+                    checkpointed = saved.values
+                    if checkpointed.get("cascade"):
+                        restored = CascadeState(**checkpointed["cascade"])
+                        state.status = restored.status
+                        state.current_iteration = restored.current_iteration
+                        state.history = restored.history
+                        state.accumulated_cost = restored.accumulated_cost
+                        state.last_synthesis = restored.last_synthesis
+                        state.artifacts = restored.artifacts
+                        state.final_verdict = restored.final_verdict
+            except Exception:
+                pass
+            raise
+
+        # Mettre à jour l'état depuis le résultat final du graphe
+        final_cascade = result.get("cascade", {})
+        if final_cascade:
+            final_state = CascadeState(**final_cascade)
+            state.status = final_state.status
+            state.current_iteration = final_state.current_iteration
+            state.history = final_state.history
+            state.accumulated_cost = final_state.accumulated_cost
+            state.last_synthesis = final_state.last_synthesis
+            state.artifacts = final_state.artifacts
+            state.final_verdict = final_state.final_verdict
+
+        return state
+
+    def resume(
+        self,
+        run_id: str,
+        audience: str = "",
+        constraints: str = "",
+        verbose: bool = True,
+    ) -> CascadeState:
+        """Reprend une cascade interrompue depuis le dernier checkpoint SQLite.
+
+        Charge le checkpoint pour le run_id donné et ré-invocque le graphe
+        LangGraph pour continuer l'exécution.
+        """
+        from .cascade_graph import build_cascade_graph, compile_with_sqlite
+
+        run_dir = state_manager.get_run_dir(run_id)
+        checkpoint_dir = run_dir / ".checkpoints"
+        checkpoint_path = checkpoint_dir / "checkpoint.db"
+
+        if not checkpoint_path.exists():
+            raise FileNotFoundError(
+                f"Aucun checkpoint trouvé pour le run {run_id} : {checkpoint_path}"
+            )
+
+        # Charger l'état depuis le checkpoint
+        def dummy_node(graph_state: dict) -> dict:
+            return graph_state
+
+        graph = build_cascade_graph(dummy_node)
+        app, checkpointer = compile_with_sqlite(graph, checkpoint_path)
+
+        config = {"configurable": {"thread_id": run_id}}
+
+        saved = app.get_state(config)
+
+        if not saved or not saved.values:
+            raise FileNotFoundError(
+                f"Checkpoint vide pour le run {run_id}"
+            )
+
+        checkpointed = saved.values
+        cascade_dict = checkpointed.get("cascade", {})
+        if not cascade_dict:
+            raise FileNotFoundError(
+                f"Pas de CascadeState dans le checkpoint du run {run_id}"
+            )
+
+        state = CascadeState(**cascade_dict)
+        journal = AuditJournal(run_id)
+
+        # Relancer avec le vrai graphe
+        return self._run_with_graph(state, audience, constraints, verbose, journal)
 
     def _build_prompt(
         self,
