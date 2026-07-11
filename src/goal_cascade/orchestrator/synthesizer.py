@@ -4,14 +4,24 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
 import re
 from dataclasses import dataclass
+from typing import Any
 
 from pydantic import ValidationError
 
 from ..prompts import PromptLoader
 from ..providers.base import BaseProvider, LLMResponse
 from ..schemas.models import GoalOrientedSynthesis, ImmutableArtifact
+from .drift_detector import DriftDetector, DriftStatus
+
+try:
+    import structlog
+
+    _logger: Any = structlog.get_logger(__name__)
+except ImportError:
+    _logger = logging.getLogger(__name__)
 
 
 CODE_BLOCK_RE = re.compile(
@@ -33,14 +43,27 @@ class SynthesisResult:
     artifacts: list[ImmutableArtifact]
     response: LLMResponse
     prompt: str
+    # 🆕 DRIFT — champs ajoutés pour la détection de dérive cosinus
+    similarity_score: float | None = None
+    drift_status: DriftStatus = DriftStatus.NO_DATA
 
 
 class Synthesizer:
     """Produit les quatre blocs de synthèse et conserve le code intact."""
 
-    def __init__(self, provider: BaseProvider, prompt_loader: PromptLoader):
+    def __init__(
+        self,
+        provider: BaseProvider,
+        prompt_loader: PromptLoader,
+        drift_detector: DriftDetector | None = None,
+    ):
         self.provider = provider
         self.prompt_loader = prompt_loader
+        # Pas de DriftDetector par defaut : on evite qu'une simple creation
+        # de Synthesizer declenche une connexion reseau. Le CascadeExecutor
+        # injecte explicitement un DriftDetector quand la detection de derive
+        # est activee.
+        self.drift_detector = drift_detector
 
     def process(
         self,
@@ -73,11 +96,39 @@ class Synthesizer:
             previous_artifacts or [],
             self._extract_artifacts(raw_output, iteration_from),
         )
+
+        # 🆕 DRIFT — Évaluer la similarité cosinus (section 5.3 + 11.3 du plan v2)
+        drift_status = DriftStatus.NO_DATA
+        similarity_score: float | None = None
+        if self.drift_detector is not None:
+            drift_status, similarity_score = self.drift_detector.evaluate(raw_output)
+
+        if drift_status == DriftStatus.CRITICAL:
+            _logger.warning(
+                "drift_critical_detected iteration=%d similarity=%.4f "
+                "action=forced_stop",
+                iteration_to, similarity_score or 0.0,
+            )
+        elif drift_status == DriftStatus.WARNING:
+            _logger.info(
+                "drift_warning iteration=%d similarity=%.4f "
+                "action=verify_new_content",
+                iteration_to, similarity_score or 0.0,
+            )
+        elif drift_status == DriftStatus.ERROR:
+            _logger.warning(
+                "drift_embedding_unavailable iteration=%d "
+                "action=continue_without_drift_check",
+                iteration_to,
+            )
+
         return SynthesisResult(
             synthesis=synthesis,
             artifacts=artifacts,
             response=response,
             prompt=prompt,
+            similarity_score=similarity_score,
+            drift_status=drift_status,
         )
 
     def build_prompt(
@@ -174,3 +225,7 @@ class Synthesizer:
             ).hexdigest()
             merged[key] = artifact
         return list(merged.values())
+
+    def reset_drift(self) -> None:
+        """🆕 DRIFT — Réinitialiser le détecteur (nouvelle cascade)."""
+        self.drift_detector.reset()

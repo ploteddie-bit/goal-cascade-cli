@@ -439,6 +439,24 @@ class CascadeExecutor:
                 if verbose:
                     print("  Synthese orientee objectif -- OK")
 
+                # 🆕 DRIFT — STOP anticipé si dérive critique (section 6.1 + 11.3)
+                if synthesis_result.drift_status.value == "critical":
+                    state.status = "forced_stop"
+                    state.final_verdict = Verdict(
+                        decision="STOP",
+                        justification=(
+                            f"Dérive détectée (sim={synthesis_result.similarity_score:.3f})"
+                        ),
+                    )
+                    journal.record_event(
+                        "drift_forced_stop",
+                        iteration=iteration,
+                        similarity=synthesis_result.similarity_score,
+                        drift_status=synthesis_result.drift_status.value,
+                    )
+                    state_manager.save_state(state)
+                    break
+
             # Sauvegarder l'etat a chaque iteration (checkpointing)
             state_manager.save_state(state)
 
