@@ -12,14 +12,18 @@ from enum import Enum
 from pathlib import Path
 
 import typer
+from pydantic import ValidationError
 from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 
+from .config import DEFAULT_CONFIG_PATH, ProvidersConfig, load_goal_config
 from .orchestrator.cascade_executor import CascadeExecutor
 from .orchestrator.state_manager import RUNS_DIR, list_runs, load_state
-from .providers.mock import MockProvider
+from .providers.base import BaseProvider
 from .providers.kimi_command import KimiBackend, KimiCommandProvider
+from .providers.mock import MockProvider
+from .providers.router import RoleMappedProvider
 from .rag_bridge import RagBridge, RagSyncError
 from .schemas.models import Variant
 
@@ -30,11 +34,81 @@ app = typer.Typer(
 )
 console = Console()
 
+__all__ = [
+    "app",
+    "DEFAULT_CONFIG_PATH",
+    "ProviderChoice",
+    "run",
+    "status",
+    "list_cmd",
+    "rag_status",
+    "rag_sync",
+    "init",
+]
+
 
 class ProviderChoice(str, Enum):
     MOCK = "mock"
     KIMI_CLI = "kimi-cli"
     KIMI_CODE = "kimi-code"
+
+
+def _print_config_summary(config_path: Path, providers: ProvidersConfig) -> None:
+    """Affiche un résumé lisible de la config TOML chargée."""
+
+    console.print(f"[green]✅ Config chargée[/green] — {config_path.expanduser()}")
+    available_count = len(set(providers.enabled))
+    if providers.degraded:
+        console.print(
+            f"[yellow]⚠️  Mode dégradé : {available_count}/3 provider(s) "
+            f"disponible(s)[/yellow]"
+        )
+        console.print("   Mapping effectif :")
+        for row in providers.mapping_rows():
+            if row.auto_switched:
+                status = f"configuré: {row.configured} ✗ → auto-switch"
+            else:
+                status = f"configuré: {row.configured} ✓"
+            console.print(f"     {row.role:<11} → {row.effective} ({status})")
+        console.print(
+            "   [yellow]La diversité multi-provider est réduite. "
+            "Les erreurs seront corrélées.[/yellow]"
+        )
+    else:
+        console.print(
+            f"   Providers : {', '.join(providers.enabled)} "
+            f"({available_count}/3 ✓)"
+        )
+        console.print("   Diversité : optimale")
+
+
+def _build_provider(
+    provider_id: str, *, synthesizer_model: str | None = None
+) -> BaseProvider:
+    """Construit l'instance de provider effective pour un identifiant résolu.
+
+    Refuse explicitement les providers non implémentés dans ce jalon pour
+    éviter tout appel API involontaire.
+    """
+
+    if provider_id == "mock":
+        return MockProvider()
+    if provider_id == "kimi-cli":
+        return KimiCommandProvider(
+            backend=KimiBackend.CLI,
+            work_dir=Path.cwd(),
+            model=synthesizer_model,
+        )
+    if provider_id == "kimi-code":
+        return KimiCommandProvider(
+            backend=KimiBackend.CODE,
+            work_dir=Path.cwd(),
+            model=synthesizer_model,
+        )
+    raise typer.BadParameter(
+        f"Provider {provider_id!r} configuré mais non implémenté dans ce jalon. "
+        "Providers disponibles : mock, kimi-cli, kimi-code."
+    )
 
 
 @app.command()
@@ -50,6 +124,14 @@ def run(
     provider: ProviderChoice = typer.Option(
         ProviderChoice.MOCK, "--provider", "-p",
         help="Provider : mock, kimi-cli ou kimi-code"
+    ),
+    config: Path | None = typer.Option(
+        None,
+        "--config",
+        help=(
+            "Chemin du fichier config TOML. "
+            f"Par défaut : {DEFAULT_CONFIG_PATH} si présent."
+        ),
     ),
     audience: str = typer.Option(
         "", "--audience", "-a",
@@ -71,9 +153,59 @@ def run(
     if synthesizer_model is not None:
         synthesizer_model = synthesizer_model.strip()
 
-    # Selection du provider. Chaque appel Kimi omet volontairement les
-    # options de reprise : une iteration = une nouvelle session.
-    if provider == ProviderChoice.MOCK:
+    # Resolution de la config TOML : charge si --config est fourni OU si
+    # le chemin par defaut existe. Sinon, retombe sur la selection legacy.
+    candidate_config_path = config or DEFAULT_CONFIG_PATH
+    should_load_config = config is not None or candidate_config_path.exists()
+    if should_load_config:
+        # Si l'utilisateur a passe --config PATH explicitement et que le
+        # fichier n'existe pas, on remonte une erreur CLI claire plutot
+        # qu'un FileNotFoundError brut issu de tomllib.
+        if config is not None and not candidate_config_path.exists():
+            console.print(
+                f"[bold red]Config introuvable : "
+                f"{candidate_config_path.expanduser()}[/bold red]"
+            )
+            raise typer.Exit(2)
+        try:
+            goal_config = load_goal_config(candidate_config_path)
+        except (ValidationError, ValueError) as exc:
+            console.print(
+                f"[bold red]Config invalide ({candidate_config_path}): "
+                f"{exc}[/bold red]"
+            )
+            raise typer.Exit(1) from exc
+        _print_config_summary(candidate_config_path, goal_config.providers)
+
+        # Les providers Kimi exigent un modele explicite pour le synthetiseur
+        # (meme exigence que le mode legacy).
+        if (
+            goal_config.providers.resolved_synthesizer in ("kimi-cli", "kimi-code")
+            and not synthesizer_model
+        ):
+            raise typer.BadParameter(
+                "requis avec un provider Kimi",
+                param_hint="--synthesizer-model",
+            )
+
+        provider_names = set(goal_config.providers.resolved_role_mapping.values())
+        providers_by_name = {
+            provider_name: _build_provider(provider_name)
+            for provider_name in provider_names
+        }
+        selected_provider = RoleMappedProvider(
+            providers_by_name=providers_by_name,
+            role_mapping=goal_config.providers.resolved_role_mapping,
+        )
+        selected_synthesizer_provider = _build_provider(
+            goal_config.providers.resolved_synthesizer,
+            synthesizer_model=synthesizer_model,
+        )
+        provider_label = "Mapping TOML adaptatif"
+        synthesizer_label = goal_config.providers.resolved_synthesizer
+    elif provider == ProviderChoice.MOCK:
+        # Selection du provider. Chaque appel Kimi omet volontairement les
+        # options de reprise : une iteration = une nouvelle session.
         selected_provider = MockProvider()
         selected_synthesizer_provider = MockProvider()
         provider_label = "Mock (pas d'API)"

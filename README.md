@@ -75,6 +75,43 @@ d'éviter la réutilisation silencieuse du modèle principal.
 Les coûts des abonnements Kimi ne sont pas exposés par les flux CLI utilisés.
 Le programme les affiche donc comme **non mesurés**, jamais comme gratuits.
 
+## Config TOML des providers
+
+Si `~/.goal/config.toml` existe, `goal run` l'utilise pour résoudre les providers par rôle. Le mode CLI historique `--provider mock|kimi-cli|kimi-code` reste disponible quand aucun fichier de config n'est chargé.
+
+```toml
+[providers]
+# Liste des providers réellement disponibles pour ce run.
+enabled = ["anthropic", "openai", "google"]
+
+# Mapping idéal. Il est utilisé tel quel si tous les providers sont disponibles.
+role_mapping = { producer = "anthropic", critic = "openai", adversary = "google", arbiter = "google" }
+
+# Provider dédié au synthesizer.
+synthesizer = "anthropic"
+
+# Mode strict opt-in pour dev/CI : refuse tout mode dégradé.
+require_diversity = false
+```
+
+Quand un provider configuré n'est pas disponible dans `enabled`, le CLI duplique le provider effectif du tier immédiatement inférieur. Si seul un provider est disponible, tous les rôles utilisent ce provider et le démarrage affiche un warning explicite.
+
+```text
+✅ Config chargée — ~/.goal/config.toml
+⚠️  Mode dégradé : 1/3 provider(s) disponible(s)
+   Mapping effectif :
+     producer    → anthropic (configuré: anthropic ✓)
+     critic      → anthropic (configuré: openai ✗ → auto-switch)
+     adversary   → anthropic (configuré: google ✗ → auto-switch)
+     arbiter     → anthropic (configuré: google ✗ → auto-switch)
+     synthesizer → anthropic (configuré: anthropic ✓)
+   La diversité multi-provider est réduite. Les erreurs seront corrélées.
+```
+
+`require_diversity = true` est destiné au dev/CI : la config est rejetée si elle passe en mode dégradé.
+
+> Note de jalon : ce chantier ajoute la résolution TOML. Les vrais providers Anthropic/OpenAI/Google via Mirascope restent un chantier séparé ; le code actuel sait exécuter `mock`, `kimi-cli` et `kimi-code`.
+
 ## Traçabilité permanente
 
 Chaque run est conservé sous `~/.goal/runs/<run_id>/`. La commande affiche ce
