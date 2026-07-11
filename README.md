@@ -1,5 +1,7 @@
 # G.O.A.L. Cascade CLI
 
+[![CI](https://github.com/ploteddie-bit/goal-cascade-cli/actions/workflows/ci.yml/badge.svg)](https://github.com/ploteddie-bit/goal-cascade-cli/actions/workflows/ci.yml)
+
 Prototype exécutable du framework **Goal-Oriented Agentic Loop**.
 
 ## Contrat production V2
