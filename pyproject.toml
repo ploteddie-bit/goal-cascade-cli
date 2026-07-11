@@ -1,0 +1,39 @@
+[project]
+name = "goal-cascade"
+version = "0.1.0"
+description = "G.O.A.L. Cascade — Multi-agent cascade framework for high-quality AI deliverables"
+readme = "README.md"
+requires-python = ">=3.11"
+license = "MIT"
+authors = [{ name = "Eddie" }]
+dependencies = [
+    "typer>=0.12",
+    "rich>=13.0",
+    "pydantic>=2.0",
+    "jinja2>=3.1",
+]
+
+[project.optional-dependencies]
+# Provider real APIs (install when ready to use real LLMs)
+llm = [
+    "mirascope>=1.0",
+]
+# Mock mode needs no extra deps — pure Python simulation
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0",
+]
+
+[project.scripts]
+goal = "goal_cascade.cli:app"
+
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+goal_cascade = ["prompts/*.j2"]

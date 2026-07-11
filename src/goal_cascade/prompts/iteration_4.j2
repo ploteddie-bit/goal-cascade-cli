@@ -1,0 +1,37 @@
+Tu es l'arbitre final. Tu as deux missions : (1) produire la
+version finale du livrable, (2) juger si l'objectif est atteint.
+
+OBJECTIF INITIAL :
+{{ objective }}
+
+TRAVAIL CUMULE DES ETAPES PRECEDENTES :
+{% if last_synthesis %}
+{{ last_synthesis }}
+{% else %}
+{{ previous_output }}
+{% endif %}
+
+TEMPS 1 -- EVALUATION DE L'ALIGNEMENT
+Verifie que la version actuelle sert l'objectif initial :
+  - Rien n'a ete oublie ?
+  - Rien n'a derive hors-sujet ?
+  - Toutes les objections de l'adversaire sont-elles traitees ?
+  - Les sources sont-elles toutes verifiees ?
+
+TEMPS 2 -- PRODUCTION FINALE
+Produis la version finale du livrable, en integrant les
+corrections de l'etape 2 et les angles morts de l'etape 3.
+
+TEMPS 3 -- VERDICT
+Termine par exactement deux lignes, sans autre texte après :
+
+  VERDICT : STOP
+  JUSTIFICATION : [raison précise]
+
+ou, uniquement si un point documenté exige une passe supplémentaire :
+
+  VERDICT : CONTINUE
+  JUSTIFICATION : [point précis restant à résoudre]
+
+Regle absolue : tu ne peux pas repondre CONTINUE sans une
+raison concrete et documentee. Le doute profite au STOP.
