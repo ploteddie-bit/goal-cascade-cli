@@ -4,7 +4,7 @@ import logging
 import tomllib
 from pathlib import Path
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import AliasChoices, BaseModel, ConfigDict, Field, model_validator
 
 from .providers.families import PROVIDER_FAMILIES
 from .providers.rate_limiter import RateLimitConfig
@@ -179,7 +179,12 @@ class GoalConfig(BaseModel):
 
     providers: ProvidersConfig
     budget: BudgetConfig = Field(default_factory=BudgetConfig)
-    rate_limit: RateLimitConfig = Field(default_factory=RateLimitConfig)
+    # Accepte [ratelimit] (canonique) ou [rate_limit] (alias historique)
+    # dans le TOML. Le nom Python reste `ratelimit`.
+    ratelimit: RateLimitConfig = Field(
+        default_factory=RateLimitConfig,
+        validation_alias=AliasChoices("ratelimit", "rate_limit"),
+    )
 
 
 def load_goal_config(path: Path) -> GoalConfig:

@@ -130,16 +130,13 @@ def _build_provider(
                 for name in config.providers.enabled
                 if name in {"anthropic", "openai", "google"}
             }
-        if config is None:
-            # Pas de fallback hardcode : les valeurs rate_limit doivent venir
-            # du TOML. Un provider reel sans config explicite est refuse.
-            raise typer.BadParameter(
-                f"Provider {provider_id!r} necessite une config TOML avec "
-                "section [rate_limit]. Refuse d'inventer des valeurs hardcodees."
-            )
         return MirascopeProvider(
             backend=Backend(provider_id),
-            rate_limit_config=config.rate_limit,
+            rate_limit_config=(
+                RateLimitConfig(**config.ratelimit.model_dump())
+                if config is not None
+                else RateLimitConfig()
+            ),
             enable_cache=True,
             available_backends=available_backends,
         )
