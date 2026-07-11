@@ -59,7 +59,11 @@ select = [
     "C4",  # flake8-comprehensions
     "SIM", # flake8-simplify
 ]
-ignore = ["E501"]  # longueurs de ligne gérées par line-length
+ignore = [
+    "E501",  # longueurs de ligne gérées par line-length
+    "UP042", # str+Enum est un pattern volontaire pour Typer/Pydantic
+    "B008",  # typer.Option(...) dans les defaults est un pattern Typer normal
+]
 
 [tool.mypy]
 python_version = "3.11"
