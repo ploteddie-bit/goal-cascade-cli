@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import json
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 from pydantic import ValidationError
@@ -268,6 +268,7 @@ class CascadeExecutor:
                 latency_ms=response.latency_ms,
                 raw_output=response.text,
                 token_count_estimated=response.token_count_estimated,
+                timestamp_utc=datetime.now(timezone.utc).isoformat(),
             )
             state.history.append(call_record)
             state.accumulated_cost += response.cost_usd
@@ -381,6 +382,7 @@ class CascadeExecutor:
                                 token_count_estimated=(
                                     failed_response.token_count_estimated
                                 ),
+                                timestamp_utc=datetime.now(timezone.utc).isoformat(),
                             )
                         )
                         state.accumulated_cost += failed_response.cost_usd
@@ -420,6 +422,7 @@ class CascadeExecutor:
                         latency_ms=synthesis_response.latency_ms,
                         raw_output=synthesis_response.text,
                         token_count_estimated=synthesis_response.token_count_estimated,
+                        timestamp_utc=datetime.now(timezone.utc).isoformat(),
                     )
                 )
                 state.accumulated_cost += synthesis_response.cost_usd
@@ -743,32 +746,22 @@ class CascadeExecutor:
     def build_receipt(self, state: CascadeState, duration_s: float) -> RunReceipt:
         """Construit le RunReceipt depuis l'etat final de la cascade.
 
-        Calcule :
-        - ``cache_hit_rate`` : cache_read_tokens / total_input_tokens (0 si pas de cache)
-        - ``projected_monthly_cost`` : cout courant * 30 * runs_per_day_projection
-          (utilise BudgetTracker si disponible, sinon fallback 300x)
-        - ``total_cost_usd`` : somme des couts des appels dans ``state.history``
+        Délègue la construction à RunReceipt.from_calls() qui calcule
+        automatiquement total_cost, cache_hit_rate et projected_monthly_cost.
         """
-        total_input = sum(c.input_tokens for c in state.history)
-        total_cache_read = sum(c.cache_read_tokens for c in state.history)
-        cache_hit_rate = (
-            total_cache_read / total_input if total_input > 0 else 0.0
+        runs_per_day = (
+            self._budget.config.runs_per_day_projection
+            if self._budget is not None
+            else 10
         )
-        if self._budget is not None:
-            projected = self._budget.projected_monthly(state.accumulated_cost)
-        else:
-            projected = state.accumulated_cost * 30 * 10
-        return RunReceipt(
+        return RunReceipt.from_calls(
             run_id=state.run_id,
             objective=state.objective,
-            total_iterations=state.current_iteration,
-            final_verdict=(
+            verdict=(
                 state.final_verdict.decision
                 if state.final_verdict else "absent"
             ),
-            total_duration_s=duration_s,
+            duration_s=duration_s,
             calls=list(state.history),
-            total_cost_usd=state.accumulated_cost,
-            cache_hit_rate=cache_hit_rate,
-            projected_monthly_cost=projected,
+            runs_per_day=runs_per_day,
         )

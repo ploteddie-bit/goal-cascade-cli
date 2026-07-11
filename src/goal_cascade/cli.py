@@ -380,18 +380,16 @@ def run(
     receipt_path = RUNS_DIR / state.run_id / "receipt.json"
     if receipt_path.exists():
         try:
+            from .schemas.models import RunReceipt
             receipt_data = json.loads(receipt_path.read_text(encoding="utf-8"))
-            calls_count = len(receipt_data.get("calls", []))
-            cache_hit = receipt_data.get("cache_hit_rate", 0.0) * 100
-            projected = receipt_data.get("projected_monthly_cost", 0.0)
-            console.print(
-                f"[dim]Recu : {calls_count} appels, "
-                f"cache hit rate {cache_hit:.0f}%, "
-                f"projection mensuelle ${projected:.2f} "
-                f"({receipt_path})[/dim]"
-            )
-        except (OSError, json.JSONDecodeError, KeyError):
-            pass
+            receipt = RunReceipt.model_validate(receipt_data)
+            console.print()
+            for line in receipt.summary_lines():
+                console.print(f"[dim]{line}[/dim]")
+            console.print(f"  Recu complet : [dim]{receipt_path}[/dim]")
+        except (OSError, json.JSONDecodeError, Exception):
+            # Fallback : affichage minimal si le reçu ne peut pas être parsé
+            console.print(f"[dim]Recu : {receipt_path}[/dim]")
 
     # Afficher les details du run
     console.print(f"\nRun ID : [cyan]{state.run_id}[/cyan]")

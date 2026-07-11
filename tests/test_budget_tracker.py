@@ -318,10 +318,11 @@ def test_cascade_executor_build_receipt_handles_zero_input(
 def test_cascade_executor_build_receipt_uses_budget_projection(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Si un BudgetTracker est attache, projected_monthly utilise sa config."""
+    """Si un BudgetTracker est attaché, projected_monthly utilise sa config."""
     from goal_cascade.orchestrator.cascade_executor import CascadeExecutor
     from goal_cascade.providers.mock import MockProvider
     from goal_cascade.prompts import PromptLoader
+    from goal_cascade.schemas.models import LLMCallRecord
 
     budget = BudgetTracker(
         config=BudgetConfig(runs_per_day_projection=5),
@@ -337,6 +338,18 @@ def test_cascade_executor_build_receipt_uses_budget_projection(
 
     state = CascadeState(run_id="r", objective="x")
     state.accumulated_cost = 0.10
+    # Ajouter un appel à l'historique pour que from_calls() calcule le coût
+    state.history.append(
+        LLMCallRecord(
+            provider="mock",
+            model="mock-small",
+            iteration=1,
+            role="producer",
+            input_tokens=100,
+            output_tokens=50,
+            cost_usd=0.10,
+        )
+    )
 
     receipt = executor.build_receipt(state, duration_s=1.0)
 
