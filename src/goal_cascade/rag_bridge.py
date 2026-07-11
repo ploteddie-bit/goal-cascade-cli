@@ -7,8 +7,9 @@ import json
 import os
 import re
 import subprocess
+import sys
 from pathlib import Path
-from typing import Callable
+from typing import Any, Callable
 
 from .audit_journal import AuditJournal, redact_sensitive
 from .rag import (
@@ -17,10 +18,6 @@ from .rag import (
     default_ollama_host,
     resolve_worker_path,
 )
-
-
-IA_GENERAL_HOST = default_ollama_host()
-IA_GENERAL_EMBED_URL = default_ollama_embed_url()
 
 
 class RagSyncError(RuntimeError):
@@ -38,13 +35,16 @@ class RagBridge:
         timeout_s: int = 900,
     ):
         versioned_worker = resolve_worker_path()
+        using_versioned = versioned_worker.exists()
         self.worker_path = worker_path or (
             versioned_worker
-            if versioned_worker.exists()
+            if using_versioned
             else Path.home() / ".kimi" / "kimi-rag" / "goal-run-ingest.py"
         )
         self.interpreter = interpreter or (
-            Path.home() / ".kimi" / "kimi-rag" / "venv" / "bin" / "python"
+            Path(sys.executable)
+            if using_versioned
+            else Path.home() / ".kimi" / "kimi-rag" / "venv" / "bin" / "python"
         )
         self.runner = runner
         self.timeout_s = timeout_s
@@ -156,7 +156,11 @@ class RagBridge:
 
         try:
             result = self._parse_result(
-                completed.stdout, run_id, journal.timeline_path
+                completed.stdout,
+                run_id,
+                journal.timeline_path,
+                ollama_embed_model,
+                ollama_embed_url,
             )
         except RagSyncError as exc:
             message = redact_sensitive(str(exc))
@@ -193,7 +197,13 @@ class RagBridge:
         return result
 
     @staticmethod
-    def _parse_result(stdout: str, run_id: str, timeline_path: Path) -> dict:
+    def _parse_result(
+        stdout: str,
+        run_id: str,
+        timeline_path: Path,
+        expected_model: str,
+        expected_endpoint: str,
+    ) -> dict:
         expected_sha256 = hashlib.sha256(timeline_path.read_bytes()).hexdigest()
         for line in reversed(stdout.splitlines()):
             try:
@@ -213,9 +223,9 @@ class RagBridge:
                 errors.append("chunks")
             if value.get("dimensions") != 1024:
                 errors.append("dimensions")
-            if value.get("model") != "bge-m3:latest":
+            if value.get("model") != expected_model:
                 errors.append("model")
-            if value.get("endpoint") != IA_GENERAL_EMBED_URL:
+            if value.get("endpoint") != expected_endpoint:
                 errors.append("endpoint")
             similarity = value.get("cosine_similarity")
             if not isinstance(similarity, (int, float)) or isinstance(

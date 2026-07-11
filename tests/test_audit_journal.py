@@ -12,9 +12,8 @@ from goal_cascade.orchestrator import state_manager
 from goal_cascade.orchestrator.cascade_executor import CascadeExecutor
 from goal_cascade.orchestrator.synthesizer import SynthesisError
 from goal_cascade.providers.base import BaseProvider, LLMResponse
+from goal_cascade.rag import default_ollama_embed_url, default_ollama_host
 from goal_cascade.rag_bridge import (
-    IA_GENERAL_EMBED_URL,
-    IA_GENERAL_HOST,
     RagBridge,
     RagSyncError,
 )
@@ -213,7 +212,7 @@ def test_rag_bridge_records_embedding_proof(tmp_path, monkeypatch) -> None:
             "chunks": 6,
             "dimensions": 1024,
             "model": "bge-m3:latest",
-            "endpoint": IA_GENERAL_EMBED_URL,
+            "endpoint": default_ollama_embed_url(),
             "cosine_similarity": 1.0,
             "sha256": hashlib.sha256(timeline.read_bytes()).hexdigest(),
             "source": ".goal/runs/rag-ok/timeline.md",
@@ -230,11 +229,11 @@ def test_rag_bridge_records_embedding_proof(tmp_path, monkeypatch) -> None:
     assert status["status"] == "embedded"
     assert status["dimensions"] == 1024
     expected_host = (
-        IA_GENERAL_HOST.replace("http://", "").replace("https://", "").split(":")[0]
+        default_ollama_host().replace("http://", "").replace("https://", "").split(":")[0]
     )
     assert status["embedding_host"] == expected_host
-    assert captured["env"]["OLLAMA_HOST"] == IA_GENERAL_HOST
-    assert captured["env"]["OLLAMA_EMBED_URL"] == IA_GENERAL_EMBED_URL
+    assert captured["env"]["OLLAMA_HOST"] == default_ollama_host()
+    assert captured["env"]["OLLAMA_EMBED_URL"] == default_ollama_embed_url()
 
 
 def test_rag_bridge_keeps_failure_visible_and_redacted(tmp_path, monkeypatch) -> None:
@@ -390,7 +389,7 @@ def test_false_embedded_index_only_receipt_and_wrong_hash_are_rejected(
             "chunks": 1,
             "dimensions": 1024,
             "model": "bge-m3:latest",
-            "endpoint": IA_GENERAL_EMBED_URL,
+            "endpoint": default_ollama_embed_url(),
             "cosine_similarity": 1.0,
             "postgres_indexed": True,
             "sha256": "f" * 64,

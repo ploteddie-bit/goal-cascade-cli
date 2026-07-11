@@ -12,7 +12,8 @@ from typing import Iterable
 
 import numpy as np
 
-DEFAULT_OLLAMA_URL = "http://127.0.0.1:11434/api/embed"
+DEFAULT_OLLAMA_HOST = "http://127.0.0.1:11434"
+DEFAULT_OLLAMA_URL = f"{DEFAULT_OLLAMA_HOST}/api/embed"
 DEFAULT_EMBED_MODEL = "bge-m3:latest"
 DEFAULT_BATCH = 1
 TIMEOUT = 180
@@ -31,7 +32,13 @@ class OllamaEmbedding:
         self.model_name = model_name or os.environ.get(
             "OLLAMA_EMBED_MODEL", DEFAULT_EMBED_MODEL
         )
-        self.url = url or os.environ.get("OLLAMA_EMBED_URL", DEFAULT_OLLAMA_URL)
+        if url:
+            self.url = url
+        else:
+            host = os.environ.get("OLLAMA_HOST", DEFAULT_OLLAMA_HOST).rstrip("/")
+            self.url = os.environ.get(
+                "OLLAMA_EMBED_URL", f"{host}/api/embed"
+            ).rstrip("/")
         self.batch_size = batch_size
 
     def _post(self, inputs: list[str]) -> list[list[float]]:
