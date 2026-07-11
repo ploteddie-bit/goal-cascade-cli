@@ -1,0 +1,65 @@
+# Checklist de vérification avant livraison — Draft v1
+
+---
+
+## 1. Tests automatisés verts
+
+Tous les tests unitaires et d'intégration liés à la modification passent. Aucun test préexistant n'est cassé par la modification. La couverture de code sur les lignes modifiées est suffisante (pas de baisse significative).
+
+*Confiance de l'affirmation :* [HAUT] — Pratique universellement reconnue en développement logiciel.
+
+---
+
+## 2. Revue de code effectuée
+
+Un pair a relu le diff complet. Les remarques ont été traitées (corrigées ou argumentées). Les choix d'architecture ou les écarts par rapport aux conventions du projet sont documentés dans la PR / le ticket.
+
+*Confiance de l'affirmation :* [HAUT] — Standard industriel établi depuis des décennies.
+
+---
+
+## 3. Impact sur les interfaces publiques vérifié
+
+Les API publiques (endpoints, fonctions exportées, CLI, formats de sortie) restent compatibles en arrière. Toute rupture est documentée et versionnée (semver, migration guide, changelog). Les consommateurs connus (front-end, services dépendants, scripts) ont été identifiés et testés si possible.
+
+*Confiance de l'affirmation :* [HAUT] — Règle fondamentale de gestion de dépendances logicielles.
+
+---
+
+## 4. Gestion des erreurs et cas limites
+
+Les chemins d'erreur (entrée invalide, timeout, indisponibilité d'un service dépendant, données manquantes) sont couverts. Les logs sont suffisants pour diagnostiquer un incident en production sans être verbeux au point de masquer le signal. Les messages d'erreur retournés à l'utilisateur ou au consommateur API sont explicites et actionnables.
+
+*Confiance de l'affirmation :* [HAUT] — Considération reconnue par la littérature opérationnelle (Google SRE, Twelve-Factor App).
+
+---
+
+## 5. Sécurité et données sensibles
+
+Les secrets (clés, tokens, mots de passe) ne figurent pas dans le code, les commits, ni les logs. Les entrées utilisateur sont validées et assainies (injection SQL, XSS, path traversal). Les dépendances ajoutées ou mises à jour ne comportent pas de CVE connues critiques (vérification rapide via l'outil de lockfile ou un audit automatisé).
+
+*Confiance de l'affirmation :* [HAUT] — Obligations de sécurité de base, largement documentées (OWASP Top 10, CWE).
+
+---
+
+## 6. Documentation et traçabilité mise à jour
+
+Le changelog ou la description de PR reflète le contenu réel du changement. Les commentaires de code périmés sont corrigés. La documentation utilisateur / opérateur est ajustée si le comportement visible a changé. Le ticket / issue de suivi est mis à jour avec le lien vers la PR et les résultats de tests.
+
+*Confiance de l'affirmation :* [MOYEN] — Pratique recommandée mais son application varie fortement selon les équipes et la taille du changement.
+
+---
+
+## Sources et niveaux de confiance
+
+| Source | Niveau |
+|--------|--------|
+| Pratiques communes de CI/CD et tests automatisés | [HAUT] |
+| Standards de revue de code (Google Engineering Practices, Code Review at Google) | [HAUT] |
+| Gestion de version sémantique (semver.org) et compatibilité ascendante | [HAUT] |
+| Google SRE Book — gestion des erreurs, logging, opérabilité | [HAUT] |
+| OWASP Top 10 — validation des entrées, gestion des secrets | [HAUT] |
+| Twelve-Factor App — logging, configuration | [HAUT] |
+| Pratiques de documentation dans le développement logiciel | [MOYEN] |
+
+*Aucune source externe n'a été consultée pour la rédaction de ce draft. Les niveaux de confiance reflètent la notoriété et l'adoption générale de chaque pratique dans l'industrie du logiciel, telle que je l'estime d'après mes connaissances d'entraînement.*

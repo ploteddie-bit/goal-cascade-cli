@@ -1,0 +1,14 @@
+{
+  "objective": "Produire une note concise expliquant pourquoi les tests reproductibles sont importants",
+  "key_decisions": [
+    "Cibler les développeurs débutants et adopter un ton pédagogique sans entrer dans la technique",
+    "Structurer la note autour de cinq bénéfices : gain de temps, attribution des causes, correction des bugs intermittents, confiance dans le code et l'équipe, montée en compétences",
+    "Ne citer aucune source externe ni statistique et qualifier les affirmations au niveau de confiance [MOYEN]",
+    "Conserver une longueur concise et privilégier des exemples concrets illustrant l'intérêt de la reproductibilité"
+  ],
+  "uncertainties": [
+    "L'absence de source externe ou de donnée chiffrée limite la crédibilité objective des affirmations",
+    "Le niveau de confiance [MOYEN] n'est pas vérifiable et pourrait nécessiter une revue par des pairs"
+  ],
+  "next_instruction": "Valider le ton et la clarté de la note auprès d'un public de développeurs débutants, puis finaliser le livrable sans ajouter de références externes ni statistiques."
+}

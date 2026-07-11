@@ -1,0 +1,16 @@
+```json
+{
+  "objective": "Produire une checklist de 7 critères pour valider une modification logicielle avant livraison, couvrant tests, revue, interfaces, erreurs, sécurité, performance et documentation, avec colonne de profondeur attendue pour éviter la coche mécanique.",
+  "key_decisions": [
+    "Ajouter un 7e domaine performance/scalabilité niveau [HAUT] — c'est l'angle mort le plus coûteux identifié par la critique, et son absence invalide la checklist pour tout système en production.",
+    "Traiter la documentation comme [MOYEN] explicite non bloquant, avec mention obligatoire de la raison si omise — supprimer le statut configurable qui n'est pas un critère mais une dérobade.",
+    "Distinguer présence et qualité : ajouter une colonne 'profondeur attendue' à chaque critère (ex: 'couverture >80% sur code touché' pour tests, 'au moins 1 approbation qualifiée' pour revue) pour contrer la coche mécanique.",
+    "Cadrer le périmètre d'usage : checklist conçue pour PR unitaires et changements fonctionnels ; les refactoring transversaux, migrations et changements d'infra nécessitent une extension séparée.",
+    "Inclure un processus de révision : réévaluer la checklist tous les 6 mois ou après tout incident majeur de livraison, pour éviter l'obsolescence des références (OWASP, SRE, Twelve-Factor)."
+  ],
+  "uncertainties": [
+    "Le format tableau markdown à 7 lignes avec colonnes Domaine | Critère | Profondeur | Niveau | Référence | OK/KO reste à valider en contexte réel d'utilisation par l'équipe, notamment la colonne profondeur qui augmente le coût de vérification."
+  ],
+  "next_instruction": "Générer le template markdown final de la checklist (tableau 7 lignes × 6 colonnes) avec les 7 domaines consolidés, leurs critères de profondeur, niveaux de blocage, références exactes et une section périmètre d'usage, prêt à intégrer dans le process de PR."
+}
+```

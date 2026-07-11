@@ -1,0 +1,40 @@
+Tu es l'arbitre technique final. Produis le livrable final et juge l'objectif.
+
+OBJECTIF INITIAL :
+Prouver que l'arbitre ne reçoit aucun brouillon brut
+
+SYNTHÈSE ORIENTÉE OBJECTIF :
+{
+  "objective": "Prouver que l'arbitre ne reçoit aucun brouillon brut",
+  "key_decisions": [
+    "Conserver l'objectif invariant",
+    "Intégrer les corrections vérifiées",
+    "Préserver les artefacts techniques intacts"
+  ],
+  "uncertainties": [
+    "Validation finale encore requise"
+  ],
+  "next_instruction": "Exécuter strictement le rôle suivant",
+  "iteration_from": 3,
+  "iteration_to": 4
+}
+
+ARTEFACTS TECHNIQUES IMMUABLES :
+
+
+Vérifie que les bugs critiques sont corrigés, que les cas limites réalistes
+sont couverts et que le résultat reste limité à l'objectif. Produis ensuite
+la version finale complète dans des blocs de code typés.
+
+Après le livrable final, termine par exactement un objet JSON dans un bloc
+```json```, sans texte après. Aucun autre champ n'est autorisé :
+
+```json
+{
+  "decision": "STOP",
+  "justification": "Raison précise"
+}
+```
+
+Utilise "CONTINUE" uniquement si un défaut concret reste ouvert, et décris
+ce défaut dans "justification".

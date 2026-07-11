@@ -1,0 +1,65 @@
+Tu es un synthétiseur. Produis une synthèse orientée objectif
+strictement conforme au contrat JSON ci-dessous.
+
+OBJECTIF :
+Écrire un haiku sur le printemps
+
+SYNTHÈSE CUMULÉE PRÉCÉDENTE :
+{
+  "objective": "Écrire un haiku sur le printemps",
+  "key_decisions": [
+    "Conserver l'objectif invariant",
+    "Intégrer les corrections vérifiées",
+    "Préserver les artefacts techniques intacts"
+  ],
+  "uncertainties": [
+    "Validation finale encore requise"
+  ],
+  "next_instruction": "Exécuter strictement le rôle suivant",
+  "iteration_from": 2,
+  "iteration_to": 3
+}
+TRAVAIL DE L'ETAPE PRECEDENTE :
+RAPPORT ADVERSARIAL — Adversaire (mock-large)
+==============================================
+[input hash: 2d27e592 — lit le rapport du critique]
+[objectif : Écrire un haiku sur le printemps]
+
+SECTIONS COUVERTES : 1/4
+ARGUMENTS ANALYSES : 1
+
+ANGLES MORTS (ce qui manque) :
+  1. Le public debutant n'est pas adresse
+  2. Aucune mention des couts ou contraintes pratiques
+  3. Les contre-arguments evidents ne sont pas anticipees
+  4. Sections manquantes : introduction, conclusion, exemple
+
+BIAIS IMPLICITES :
+  1. Postulat que le lecteur connait deja le sujet
+  2. Toutes les sources vont dans le meme sens (pas de debat)
+
+CONTRE-ARGUMENTS :
+  1. Une approche plus simple pourrait donner des resultats equivalents
+  2. Le ROI de la methode n'est pas demontre
+
+RISQUES :
+  - Si le contexte reel differe, la methode peut echouer
+  - Generalisation non prouvee (3 mois d'exemple, c'est court)
+
+VERDICT DE L'ADVERSAIRE : 6 point(s) faible(s) a adresser.
+
+
+Réponds avec UN SEUL objet JSON valide, sans bloc Markdown ni commentaire :
+{
+  "objective": "objectif invariant en une phrase",
+  "key_decisions": ["décision 1", "décision 2", "décision 3"],
+  "uncertainties": ["point restant à vérifier"],
+  "next_instruction": "instruction précise pour l'étape suivante"
+}
+
+Regles :
+- Entre 1 et 5 décisions clés, jamais davantage.
+- Consolide la synthèse précédente avec le nouveau travail.
+- Élimine les tournures et digressions, mais conserve les décisions.
+- Ne recopie pas les blocs de code : ils sont préservés séparément.
+- N'ajoute aucune clé au contrat JSON.

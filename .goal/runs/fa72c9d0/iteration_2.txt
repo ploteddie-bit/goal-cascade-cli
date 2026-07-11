@@ -1,0 +1,45 @@
+Voici le rapport de vérification factuelle portant sur la synthèse fournie.
+
+## Rapport d'erreurs — fact-check
+
+### Sources externes
+Aucune source externe n'est citée dans la synthèse. Il n'y a donc pas de citation, d'étude, d'auteur ou de donnée chiffrée à vérifier.
+
+### Affirmations factuelles
+
+**[OK]** `objective` : "Produire une note concise expliquant pourquoi les tests reproductibles sont importants"
+→ Il s'agit d'une consigne/objectif de rédaction. Vérifiable par lecture. Correct.
+
+**[OK]** `key_decisions[0]` : "Cibler les développeurs débutants et adopter un ton pédagogique sans entrer dans la technique"
+→ Choix éditorial et stratégique. Ni vrai ni faux, c'est une décision de rédaction. Accepté.
+
+**[!]** `key_decisions[1]` : "Structurer la note autour de cinq bénéfices : gain de temps, attribution des causes, correction des bugs intermittents, confiance dans le code et l'équipe, montée en compétences"
+→ NON VERIFIABLE en l'état. Ce sont cinq bénéfices présentés comme structurants, mais ils ne reposent sur aucune source, étude ou donnée chiffrée. Il s'agit d'une proposition de plan, pas d'un fait établi. À qualifier comme [MOYEN] ou opinion professionnelle.
+
+**[!]** `key_decisions[2]` : "Ne citer aucune source externe ni statistique et qualifier les affirmations au niveau de confiance [MOYEN]"
+→ La partie procédurale est un choix de rédaction (OK). La mention "[MOYEN]" est une auto-évaluation de confiance ; elle n'est pas elle-même vérifiable objectivement. Marqué [!] pour cette portion.
+
+**[OK]** `key_decisions[3]` : "Conserver une longueur concise et privilégier des exemples concrets illustrant l'intérêt de la reproductibilité"
+→ Choix éditorial. Correct.
+
+**[!]** `uncertainties[0]` : "L'absence de source externe ou de donnée chiffrée limite la crédibilité objective des affirmations"
+→ NON VERIFIABLE sans critère explicite de "crédibilité objective". L'affirmation est plausible et cohérente, mais reste une appréciation. Pas d'hallucination, mais pas vérifiable formellement.
+
+**[!]** `uncertainties[1]` : "Le niveau de confiance [MOYEN] n'est pas vérifiable et pourrait nécessiter une revue par des pairs"
+→ NON VERIFIABLE. L'affirmation est auto-référentielle et correcte en principe, mais elle ne peut pas être confirmée par une source externe. Pas d'hallucination.
+
+**[OK]** `next_instruction` : "Valider le ton et la clarté de la note auprès d'un public de développeurs débutants, puis finaliser le livrable sans ajouter de références externes ni statistiques"
+→ Consigne de processus. Correct.
+
+## Synthèse du fact-check
+
+- **Hallucinations détectées : 0**
+- **Affirmations non vérifiables : 4** (toutes liées à des généralités sur les bénéfices, au niveau de confiance [MOYEN], et à l'impact sur la crédibilité)
+- **Affirmations correctes / choix éditoriaux : 4**
+
+## Recommandation
+
+La synthèse ne contient pas de fait inventé ni de source falsifiée. Le risque principal est le manque de vérifabilité des bénéfices prétendus des tests reproductibles. Avant propagation, il est recommandé de :
+1. Transformer les bénéfices en affirmations conditionnelles ("peuvent aider à...", "permettent souvent de...") ;
+2. Maintenir le tag [MOYEN] ou [NON VÉRIFIÉ] sur chaque bénéfice général ;
+3. Ne pas présenter les cinq bénéfices comme un consensus établi du domaine sans source.

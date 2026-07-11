@@ -1,0 +1,70 @@
+# Rapport de vérification factuelle — Itération 2
+
+---
+
+## Affirmation 1
+
+> Structure en 6 domaines distincts : tests automatisés, revue de code, interfaces publiques, gestion des erreurs/cas limites, sécurité/données sensibles, documentation/traçabilité.
+
+**[OK]** Les 6 domaines listés sont des catégories reconnues dans les pratiques de revue pré-livraison logicielle. Cela constitue un choix de conception raisonnable, pas une affirmation factuelle sur une source externe. **-- VERIFIÉE**
+
+---
+
+## Affirmation 2
+
+> Niveau de confiance [HAUT] attribué à 5 domaines sur 6.
+
+**[OK]** Jugement subjectif explicite, pas une affirmation vérifiable. Cohérent avec le format de la synthèse. **-- VERIFIÉE (opinion, non fait)**
+
+---
+
+## Affirmation 3
+
+> Aligner les exigences de sécurité sur OWASP Top 10.
+
+**[OK]** L'OWASP Top 10 existe et est un document de référence publiquement maintenu (dernière version : 2021, https://owasp.org/Top10/). Cependant, l'OWASP Top 10 traite des **risques de sécurité des applications web** (injection, authentification cassée, etc.), pas génériquement de "sécurité et données sensibles" dans le contexte de toute modification logicielle. La référence est réelle mais son application est légèrement élargie par rapport au périmètre exact du document. **-- VERIFIÉE (avec nuance sur le périmètre)**
+
+---
+
+## Affirmation 4
+
+> Gestion des erreurs alignée sur Google SRE / Twelve-Factor App comme références canoniques.
+
+**[OK]** Le Google SRE Book (https://sre.google/sre-book/table-of-contents/) et The Twelve-Factor App (https://12factor.net/) existent tous deux. Cependant :
+- **Google SRE** couvre principalement les SLO, les error budgets, la tolérance aux pannes — pas spécifiquement la "gestion des erreurs" au sens code-level (try/catch, error handling).
+- **Twelve-Factor App** (facteur 9 : Disposability, facteur 11 : Logs) traite partiellement du sujet mais n'est pas un guide de gestion des erreurs.
+
+Les deux références existent et sont réputées, mais l'affirmation qu'elles servent de référence pour la "gestion des erreurs et cas limites" est une **interprétation élargie**. Ni l'un ni l'autre n'est un guide spécifique de error handling applicatif. **-- VERIFIÉE (avec nuance : périmètre surestimé)**
+
+---
+
+## Affirmation 5
+
+> Qualifier OWASP, Google SRE et Twelve-Factor App de "références canoniques".
+
+**[OK]** Les trois sont effectivement considérées comme des références majeures dans leurs domaines respectifs (sécurité web, fiabilité opérationnelle, architecture d'application). L'adjectif "canonique" est justifié. **-- VERIFIÉE**
+
+---
+
+## Affirmation 6
+
+> Aucune source externe n'a été consultée ; les niveaux de confiance reposent sur des connaissances générales.
+
+**[!]** Auto-déclaration non vérifiable de l'extérieur. L'absence de consultation est plausible mais invérifiable. De plus, l'étape 2 a bien fait référence à OWASP, SRE, Twelve-Factor — ce qui contredit partiellement l'affirmation "aucune source externe" pour l'étape 2, mais peut se référer à l'étape 1. **-- NON VERIFIABLE (auto-référence contradictoire partielle)**
+
+---
+
+## Résumé
+
+| # | Affirmation | Verdict |
+|---|-------------|---------|
+| 1 | 6 domaines de vérification | OK |
+| 2 | Niveaux de confiance 5×HAUT, 1×MOYEN | OK (subjectif) |
+| 3 | Alignement sécurité sur OWASP Top 10 | OK (nuance : périmètre élargi) |
+| 4 | Error handling sur Google SRE / Twelve-Factor | OK (nuance : périmètre surestimé) |
+| 5 | Qualification "canonique" | OK |
+| 6 | "Aucune source externe consultée" | NON VERIFIABLE (contradiction partielle) |
+
+**Score global : 0 hallucination, 1 non-vérifiable, 0 erreur factuelle, 2 nuances à porter.**
+
+Les deux nuances (périmètre OWASP élargi, SRE/Twelve-Factor pas spécifiquement error handling) sont mineures et ne compromettent pas la validité de la checklist — il convient simplement de ne pas présenter ces sources comme des guides *spécifiques* à la gestion des erreurs mais comme des *cadres plus larges* dont les principes s'appliquent.

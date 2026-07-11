@@ -1,0 +1,16 @@
+{
+  "objective": "Produire une note concise expliquant pourquoi les tests reproductibles sont importants",
+  "key_decisions": [
+    "Cibler les développeurs débutants avec un ton pédagogique, une définition opérationnelle simple du terme et aucune technique avancée",
+    "Présenter les cinq bénéfices comme des apports possibles, jamais comme des faits établis, en les reformulant au conditionnel et en les marquant du tag [MOYEN]",
+    "Maintenir l'absence de source externe ou de statistique, conformément au cahier des charges initial",
+    "Ajouter une section courte sur les limites, les coûts et les cas où la reproductibilité n'est pas souhaitable, pour éviter le dogmatisme",
+    "Justifier brièvement le choix de ces cinq bénéfices pour un débutant et conserver un exemple concret par bénéfice"
+  ],
+  "uncertainties": [
+    "La reformulation conditionnelle et le tag [MOYEN] peuvent-ils à la fois préserver la prudence épistémique et conserver l'utilité pédagogique de la note",
+    "Le niveau de confiance [MOYEN] reste une auto-évaluation qui ne peut être confirmée que par relecture humaine",
+    "L'ajout des limites et coûts pourrait alourdir la note au point de perdre la concision exigée"
+  ],
+  "next_instruction": "Rédiger une note concise : définir en une phrase ce qu'est un test reproductible pour un débutant, reformuler les cinq bénéfices au conditionnel avec le tag [MOYEN], illustrer chacun d'un exemple concret, ajouter un paragraphe de trois à cinq lignes sur les limites et coûts, justifier en une phrase le choix des cinq bénéfices, faire relire par un développeur débutant pour valider clarté et équilibre, puis finaliser sans ajouter de références externes ni statistiques."
+}

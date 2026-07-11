@@ -1,0 +1,16 @@
+{
+  "objective": "Produire une fonction Python is_non_empty(value) qui retourne True uniquement lorsque value est une chaîne de caractères str contenant au moins un caractère non blanc.",
+  "key_decisions": [
+    "Conserver isinstance(value, str) pour rejeter systématiquement toute valeur non str.",
+    "Remplacer value.strip() != '' par any(not c.isspace() for c in value) pour obtenir une complexité mémoire O(1) et éviter les allocations sur chaînes blanches longues.",
+    "S'appuyer uniquement sur la bibliothèque standard, sans dépendance externe.",
+    "Déplacer is_non_empty.py de la racine vers src/goal_cascade/ afin de l'intégrer au package et de lever l'incohérence architecturale.",
+    "Remplacer les assert inline dans __main__ par des tests pytest dans tests/ exécutables en CI."
+  ],
+  "uncertainties": [
+    "Le comportement avec caractères de contrôle non blancs (ex. \\x00) reste à valider selon le besoin métier.",
+    "Le nom is_non_empty est sémantiquement ambigu ; un renommage vers is_non_blank pourrait clarifier l'intention.",
+    "L'équivalence c.isspace() vs str.strip() sur d'autres runtimes (PyPy, autres implémentations CPython) doit être documentée."
+  ],
+  "next_instruction": "Déplacer la fonction dans src/goal_cascade/, implémenter any(not c.isspace() for c in value), ajouter des tests pytest couvrant str vides, blancs unicode, non-str et chaînes longues blanches, puis exécuter pytest et vérifier que la suite passe."
+}

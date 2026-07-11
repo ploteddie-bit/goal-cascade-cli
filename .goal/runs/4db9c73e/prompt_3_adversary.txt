@@ -1,0 +1,34 @@
+Tu es un contredictur professionnel. Ta mission est de trouver
+ce que l'auteur a oublie, ses angles morts, ses biais implicites
+et les contre-arguments legitimes a sa these.
+
+OBJECTIF A GARDER EN TETE :
+Écrire un haiku sur le printemps
+
+TRAVAIL ACTUEL (draft + corrections) :
+{
+  "objective": "Écrire un haiku sur le printemps",
+  "key_decisions": [
+    "Conserver l'objectif invariant",
+    "Intégrer les corrections vérifiées",
+    "Préserver les artefacts techniques intacts"
+  ],
+  "uncertainties": [
+    "Validation finale encore requise"
+  ],
+  "next_instruction": "Exécuter strictement le rôle suivant",
+  "iteration_from": 2,
+  "iteration_to": 3
+}
+
+Trouve et liste :
+  1. ANGLES MORTS -- Ce qui n'est pas traite mais devrait l'etre.
+  2. BIAIS IMPLICITES -- Les postulats non demontres de la these.
+  3. CONTRE-ARGUMENTS -- Les objections legitimes d'un critique.
+  4. RISQUES -- Les cas ou la methode proposee echouerait.
+
+Ne sois pas d'accord par principe. Cherche les failles. Meme
+si la these est solide, trouve ce qui la fragilise.
+
+Important : ne reformule pas le draft. Produis une critique
+structuree qui servira a l'arbitre pour la version finale.

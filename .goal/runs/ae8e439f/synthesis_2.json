@@ -1,0 +1,17 @@
+```json
+{
+  "objective": "Produire une fonction Python is_non_empty(value) qui retourne True uniquement lorsque value est une chaîne de caractères str contenant au moins un caractère non blanc.",
+  "key_decisions": [
+    "Utiliser isinstance(value, str) pour rejeter systématiquement toute valeur non str.",
+    "Utiliser value.strip() != '' pour détecter au moins un caractère non blanc, y compris les espaces unicode.",
+    "S'appuyer uniquement sur la bibliothèque standard, sans dépendance externe.",
+    "Conserver l'implémentation validée car aucun bug fonctionnel n'a été détecté."
+  ],
+  "uncertainties": [
+    "Le comportement avec value.strip() sur une chaîne géante composée uniquement d'espaces pose un risque de consommation mémoire O(n).",
+    "Les caractères de contrôle non blancs (ex. \\x00) sont considérés comme non vides ; à valider selon le besoin métier.",
+    "Les sous-classes de str sont acceptées via isinstance ; à valider si une exclusion stricte type(value) is str est requise."
+  ],
+  "next_instruction": "Exécuter la suite de tests existante pour confirmer que tous les cas documentés passent, puis décider si l'optimisation memory-safe any(not c.isspace() for c in value) doit remplacer value.strip() != ''."
+}
+```

@@ -1,0 +1,12 @@
+{
+  "objective": "Produire une fonction Python is_non_empty(value) qui retourne True uniquement lorsque value est une chaîne de caractères str contenant au moins un caractère non blanc.",
+  "key_decisions": [
+    "Utiliser isinstance(value, str) pour rejeter systématiquement toute valeur non str.",
+    "Utiliser value.strip() != '' pour détecter au moins un caractère non blanc, y compris les espaces unicode.",
+    "S'appuyer uniquement sur la bibliothèque standard, sans dépendance externe."
+  ],
+  "uncertainties": [
+    "Aucune incertitude majeure, l'implémentation est validée sous Python 3.12."
+  ],
+  "next_instruction": "Valider le fichier is_non_empty.py via la suite de tests existante et s'assurer que tous les cas limites documentés passent avant de considérer l'étape terminée."
+}

@@ -1,0 +1,11 @@
+{
+  "embedding_host": "ia-general",
+  "embedding_model": "bge-m3:latest",
+  "error_type": "OperationalError",
+  "message": "",
+  "postgres_indexed": false,
+  "returncode": 1,
+  "run_id": "4607e090",
+  "status": "failed",
+  "updated_at_utc": "2026-07-11T00:34:06.313517+00:00"
+}

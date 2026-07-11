@@ -1,0 +1,47 @@
+# Critique structurée — Note sur les tests reproductibles
+
+## 1. ANGLES MORTS — Ce qui n'est pas traité mais devrait l'être
+
+- **Définition opérationnelle absente.** Le draft parle de « tests reproductibles » sans jamais dire ce que cela signifie concrètement : même environnement, mêmes données, isolation des dépendances, graine aléatoire fixée, suppression des effets de bord ? Un débutant ne saura pas par où commencer.
+- **Le coût de mise en place.** Aucune mention du temps initial, de la complexité technique, ni de la courbe d'apprentissage pour rendre un test reproductible. Le lecteur débutant risque de sous-estimer l'effort.
+- **La distinction reproductible / déterministe / stable.** Ces trois notions se recouvrent partiellement mais ne sont pas identiques. Les mélanger fausse le raisonnement.
+- **Les cas où la reproductibilité n'est pas souhaitable.** Exploration, prototypage, tests d'UX, tests de charge avec bruit réaliste, systèmes distribués : dans ces contextes, exiger la reproductibilité peut être contre-productif.
+- **La maintenance des tests eux-mêmes.** Un test reproductible peut devenir fragile, obsolète ou coûteux à maintenir. La note ne traite pas la dette de tests.
+- **La culture d'équipe.** Des tests reproductibles ne servent à rien si personne ne les lit, ne les exécute ou ne les met à jour.
+- **Les bugs intrinsèquement non déterministes.** Certains bugs (race conditions, timing réseau, matériel défaillant, comportements probabilistes) ne sont pas reproductibles par nature. La note laisse entendre que la reproductibilité est toujours atteignable.
+
+## 2. BIAIS IMPLICITES — Les postulats non démontrés
+
+- **Biais de souhaitabilité.** Postulat implicite : les tests reproductibles sont *toujours* une bonne chose. Jamais il n'est question d'un arbitrage coût/bénéfice.
+- **Biais du consensus.** Reformuler au conditionnel ne supprime pas l'idée sous-jacente que « tout le monde s'accorde là-dessus ». Ce consensus n'est pas établi dans le draft.
+- **Biais de causalité simple.** Postulat : gain de temps, attribution des causes, confiance, etc., découlent *des tests reproductibles*. Or ces bénéfices peuvent venir d'autres pratiques (revue de code, typage statique, monitoring, architecture simple).
+- **Biais du lecteur-cible idéal.** Postulat : les développeurs débutants ont besoin *précisément* de ces cinq bénéfices présentés de cette manière. Aucune validation utilisateur n'est mentionnée.
+- **Biais de l'auto-évaluation.** Le tag [MOYEN] est présenté comme une balise de prudence, mais il repose sur un jugement interne sans critères explicites. Il peut devenir un bouclier rhétorique (« j'avais prévenu que c'était moyen »).
+- **Biais de la neutralité par conditionnel.** Postulat : « peuvent aider à » suffit à lever tout risque de présenter une opinion comme un fait. En réalité, l'accumulation de conditionnels peut aussi affaiblir le message au point de le rendre vide.
+- **Biais de l'exemple concret.** Postulat : un exemple concret est forcément compréhensible par un débutant. Un mauvais exemple peut au contraire créer de la confusion ou de fausses généralisations.
+
+## 3. CONTRE-ARGUMENTS — Objections légitimes
+
+- **La reproductibilité peut créer une fausse sécurité.** Un test reproductible qui passe à chaque fois n'indique pas que le code est correct, seulement qu'il est prévisible.
+- **Coût d'opportunité.** Le temps passé à rendre un test parfaitement reproductible pourrait être investi dans une meilleure architecture, une documentation ou une revue de code.
+- **Un test reproductible peut être un mauvais test.** Un test tautologique, sur-mocké ou couvrant un cas trivial sera reproductible mais inutile.
+- **La reproductibilité n'implique pas la pertinence.** Un test peut être parfaitement reproductible tout en ne vérifiant rien d'important.
+- **Les tests « flaky » ne sont pas toujours une maladie du test.** Une instabilité peut révéler un vrai problème d'architecture, de concurrence ou de dépendance externe. Chercher à l'étouffer par la reproductibilité peut masquer le symptôme.
+- **Dans certains domaines, la reproductibilité totale est illusoire.** Machine learning, systèmes distribués, IoT, hardware, simulations Monte-Carlo : exiger la reproductibilité systématique est irréaliste.
+- **Le ton pédagogique peut verser dans le dogmatisme.** Même avec des conditionnels, une liste de cinq bénéfices présentés sans critique peut être perçue comme un mantra à appliquer aveuglément.
+- **Le conditionnel peut miner l'utilité pédagogique.** Si tout est présenté comme « cela peut aider », le débutant peut conclure « ce n'est pas indispensable » et ignorer le message.
+
+## 4. RISQUES — Cas où la méthode proposée échouerait
+
+- **La note pourrait être lue comme un conseil technique normatif** malgré les conditionnels, faute de nuances suffisantes.
+- **Le lecteur débutant pourrait sur-ingénierier ses tests** en ajoutant isolation, mocks et fixtures complexes pour des cas simples, ralentissant son apprentissage.
+- **Un lecteur expérimenté pourrait rejeter la note entière** en voyant l'absence de distinction entre reproductibilité, déterminisme et qualité du test.
+- **Le tag [MOYEN] sans grille de confiance explicite** pourrait être interprété comme de l'humilité de façade plutôt que comme une évaluation réelle.
+- **La circularité du raisonnement.** Si les bénéfices se résument à « les tests reproductibles sont utiles car ils permettent de bien tester », la note ne répond pas vraiment au « pourquoi ».
+- **L'absence de source et de statistique**, présentée comme un choix éditorial, peut aussi priver le lecteur des moyens de vérifier ou d'approfondir.
+- **La note pourrait ne pas convaincre** : trop de conditionnels affaiblissent la thèse, trop peu la rendent dogmatique. Le draft ne montre pas comment résoudre cette tension.
+- **Si l'un des cinq bénéfices ne correspond pas à l'expérience vécue du lecteur**, il pourrait discréditer l'ensemble de la note.
+
+---
+
+**Synthèse pour l'arbitre :** la thèse n'est pas fausse, mais elle repose sur un postulat de souhaitabilité non démontré, ignore les coûts et les contre-exemples, et utilise le conditionnel comme substitut à une véritable argumentation nuancée. Avant finalisation, il faudrait définir le terme, reconnaître les limites et les coûts, et justifier pourquoi ces cinq bénéfices — et non d'autres — méritent d'être présentés à un débutant.

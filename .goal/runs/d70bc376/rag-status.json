@@ -1,0 +1,14 @@
+{
+  "document_id": 2755,
+  "embedding_host": "ia-general",
+  "embedding_model": "bge-m3:latest",
+  "error_type": "URLError",
+  "message": "<urlopen error [Errno 113] No route to host>",
+  "postgres_indexed": true,
+  "returncode": 1,
+  "run_id": "d70bc376",
+  "sha256": "cd488e4e625f2d88770102966e48060912f6d986e68adf0ee581845072b28873",
+  "source": ".goal/runs/d70bc376/timeline.md",
+  "status": "indexed_pending_embedding",
+  "updated_at_utc": "2026-07-10T23:33:48.712731+00:00"
+}

@@ -1,0 +1,38 @@
+# Pourquoi les tests reproductibles sont importants — Note de sensibilisation
+
+**Public cible :** développeurs débutants  
+**Objectif :** comprendre l’intérêt des tests reproductibles sans entrer dans la technique
+
+---
+
+## 1. Un résultat stable permet de gagner du temps
+
+Quand un test passe ou échoue de manière identique à chaque exécution, on peut se concentrer sur le code, et non sur le mystère du test. Un test qui échoue “parfois” oblige à relancer, vérifier, douter — et finit par faire perdre du temps [MOYEN].
+
+## 2. On sait si le code qu’on modifie est vraiment responsable
+
+Si un test échoue après une modification, et que ce test est reproductible, on peut raisonnablement penser que la modification en est la cause. Sinon, on ne sait jamais si c’est le code, l’environnement, ou le hasard [MOYEN].
+
+## 3. Les bugs intermittents sont plus difficiles à corriger
+
+Un bug qui n’apparaît pas à chaque coup coûte beaucoup plus cher à comprendre et à réparer. La reproductibilité transforme un problème flou en problème qu’on peut observer, isoler, puis corriger [MOYEN].
+
+## 4. Ça renforce la confiance dans le code et dans l’équipe
+
+Des tests stables créent une base de confiance : quand la suite de tests passe, on peut considérer qu’une partie du comportement attendu est préservée [MOYEN]. Cela facilite aussi l’intégration du travail des autres et les revues de code [MOYEN].
+
+## 5. Ça facilite la montée en compétences
+
+Pour un développeur débutant, un test reproductible est un outil d’apprentissage : on peut expérimenter, casser, réparer, et voir immédiatement l’effet d’une modification. Cela rend l’erreur productive plutôt que démoralisante [MOYEN].
+
+---
+
+## Sources et niveaux de confiance
+
+| Source / affirmation | Niveau de confiance |
+|---|---|
+| Expérience professionnelle générale en développement logiciel | [MOYEN] |
+| Pratiques courantes de l’ingénierie logicielle sur la reproductibilité des tests | [MOYEN] |
+| Aucune source externe, statistique ou étude n’a été consultée | — |
+
+**Note méthodologique :** ce document ne cite aucune source externe ni statistique, conformément aux contraintes. Les affirmations reposent sur des pratiques reconnues dans le métier de développeur, mais leur niveau de confiance reste [MOYEN] faute de références vérifiables.

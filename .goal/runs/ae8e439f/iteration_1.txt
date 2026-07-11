@@ -1,0 +1,33 @@
+Implémentation créée dans `is_non_empty.py` et validée sous Python 3.12.
+
+```python
+def is_non_empty(value: object) -> bool:
+    """Retourne True si ``value`` est une str contenant au moins un caractère non blanc."""
+    return isinstance(value, str) and value.strip() != ""
+```
+
+**Hypothèses**
+- Toute valeur non `str` est rejetée (`False`) : cela inclut `None`, les nombres, les collections, `bytes`, etc.
+- Les caractères blancs couvrent les espaces classiques, tabulations, sauts de ligne et les espaces unicode (`\u00A0`, `\u2000`, etc.) grâce à `str.strip()`.
+
+**Cas limites couverts**
+| Entrée | Résultat |
+|---|---|
+| `""` | `False` |
+| `"   "` | `False` |
+| `"\t\n\r"` | `False` |
+| `"\u00A0\u2000"` | `False` |
+| `"a"` | `True` |
+| `" hello "` | `True` |
+| `"  \t\n  x  "` | `True` |
+| `None`, `0`, `[]`, `{}`, `b"…"` | `False` |
+
+**Choix technique**
+- Bibliothèque standard uniquement : `isinstance` + `str.strip`.
+- Pas de dépendance externe ajoutée.
+
+Résultat du lancement des `assert` :
+
+```text
+Tous les tests ont réussi.
+```

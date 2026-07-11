@@ -6,7 +6,9 @@ __pycache__/
 dist/
 build/
 versions/
-.goal/
+.goal/*
+!.goal/runs/
+!.goal/runs/**
 .env
 .env.*
 !.env.example

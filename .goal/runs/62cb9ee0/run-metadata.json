@@ -1,0 +1,10 @@
+{
+  "iterations": 4,
+  "last_error": "aucune",
+  "objective": "Prouver que l'arbitre ne reçoit aucun brouillon brut",
+  "provider": "mock",
+  "status": "stopped",
+  "synthesizer_provider": "mock",
+  "variant": "B",
+  "verdict": "STOP"
+}

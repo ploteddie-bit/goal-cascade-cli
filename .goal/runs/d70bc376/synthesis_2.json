@@ -1,0 +1,15 @@
+```json
+{
+  "objective": "Produire une checklist opérationnelle de 6 points pour valider qu'une modification logicielle est prête à être livrée, couvrant tests, revue de code, interfaces publiques, gestion des erreurs, sécurité et documentation.",
+  "key_decisions": [
+    "Conserver la structure en 6 domaines validés : tests automatisés, revue de code, interfaces publiques, gestion des erreurs/cas limites, sécurité/données sensibles, documentation/traçabilité.",
+    "Préciser les références selon leur périmètre exact : OWASP Top 10 pour la sécurité web applicative, SRE et Twelve-Factor comme cadres opérationnels et architecturaux dont les principes s'appliquent par extension à la gestion des erreurs — non comme guides spécifiques de error handling.",
+    "Attribuer [HAUT] comme niveau de blocage à tests, revue, interfaces publiques, erreurs et sécurité ; traiter la documentation comme seuil configurable selon le contexte projet (bloquant ou recommandation souple).",
+    "Éliminer la contradiction relevée sur la source 'aucune source externe' : les références OWASP, SRE et Twelve-Factor sont désormais explicitement documentées dans le corps de la checklist."
+  ],
+  "uncertainties": [
+    "Le seuil de blocage pour la documentation (bloquant vs souple) reste à valider par l'équipe projet selon ses contraintes de release et de compliance."
+  ],
+  "next_instruction": "Générer le template markdown final de la checklist (tableau à 6 lignes avec colonnes Domaine | Critère | Niveau | Référence | OK/KO), prêt à intégrer dans le process de PR/merge, et soumettre pour validation équipe."
+}
+```

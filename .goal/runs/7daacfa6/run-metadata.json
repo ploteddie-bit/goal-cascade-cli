@@ -1,0 +1,10 @@
+{
+  "iterations": 4,
+  "last_error": "aucune",
+  "objective": "Écrire un haiku sur le printemps",
+  "provider": "mock",
+  "status": "stopped",
+  "synthesizer_provider": "mock",
+  "variant": "A",
+  "verdict": "STOP"
+}

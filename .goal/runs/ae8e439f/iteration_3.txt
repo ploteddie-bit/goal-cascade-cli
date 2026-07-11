@@ -1,0 +1,27 @@
+**Verdict : la fonction est fonctionnellement correcte, mais son emballage et son implémentation présentent des défauts réels.**
+
+### 1. Faille structurelle
+- **`is_non_empty.py` est orphelin à la racine**, hors du package `src/goal_cascade/`. C'est une incohérence d'architecture : s'il s'agit d'un utilitaire du projet, il devrait être versionné avec le package ; s'il s'agit d'un script jetable, il ne devrait pas vivre dans le repo.
+- **Aucun consommateur dans le codebase** : `grep is_non_empty` ne retourne que le fichier lui-même. C'est du code mort ou une démonstration isolée.
+- **Tests non intégrés** : les `assert` inline dans `__main__` ne sont pas exécutés par la suite pytest du projet (`tests/`). La mention "Tous les tests ont réussi" ne garantit donc rien dans la CI.
+
+### 2. Dépendances / couplages cachés
+- Pas de dépendance externe, effectivement.
+- Mais **couplage implicite au comportement Unicode de `str.strip()` de CPython**. Le jeu exact de caractères blancs dépend de l'implémentation Python et n'est pas encodé dans le contrat de la fonction. Portabilité réduite si le projet vise PyPy ou d'autres runtimes.
+- Le nom `is_non_empty` est **sémantiquement ambigu** : "non vide" peut signifier `value != ""` plutôt que "contient un caractère non blanc". C'est un risque de mauvaise utilisation.
+
+### 3. Modes d'échec réalistes
+- **DoS mémoire** : `value.strip()` alloue une nouvelle chaîne. Sur une entrée adversariale de N octets d'espaces, la consommation mémoire est O(N). C'est le risque le plus concret.
+- **Pic d'allocations en boucle** : traiter un grand volume de chaînes blanches longues génère beaucoup de pression sur le GC.
+- **Caractères de contrôle** : `" \x00 "` retourne `True` car `\x00` n'est pas un whitespace. Si le besoin métier est "au moins un caractère affichable", c'est un faux positif.
+- **Sous-classes de `str`** : `isinstance` accepte `UserString` ou toute sous-classe surchargeant `strip`. Vecteur d'effets de bord réel, bien que rare.
+
+### 4. Alternative matériellement meilleure
+```python
+isinstance(value, str) and any(not c.isspace() for c in value)
+```
+- **Avantages** : O(1) mémoire, aucune allocation, arrêt au premier caractère non blanc.
+- **Équivalence sémantique** : `c.isspace()` coïncide avec le jeu de caractères blancs utilisé par `str.strip()` sur tout Unicode (vérifié empiriquement).
+- **Inconvénient** : légèrement plus lent que `strip()` en C pour les très petites chaînes. Mais sur des entrées non contrôlées, le gain de robustesse mémoire l'emporte.
+
+**Conclusion** : le code marche, mais il combine un problème d'architecture (fichier orphelin, tests hors CI) avec un risque mémoire concret. L'alternative `any(not c.isspace() for c in value)` est strictement supérieure pour la résilience face aux entrées adversariales. Si le fichier reste à la racine sans consommateur, le vrai problème n'est pas technique : c'est de gouvernance.

@@ -1,0 +1,9 @@
+{
+  "iterations": 4,
+  "legacy_import": true,
+  "objective": "Produire une fonction Python is_non_empty(value) qui retourne vrai uniquement pour une chaîne contenant au moins un caractère non blanc",
+  "provider": "kimi-cli",
+  "status": "stopped",
+  "variant": "B",
+  "verdict": "STOP"
+}

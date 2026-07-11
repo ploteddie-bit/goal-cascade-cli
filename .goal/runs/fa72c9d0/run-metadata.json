@@ -1,0 +1,9 @@
+{
+  "iterations": 4,
+  "legacy_import": true,
+  "objective": "Produire une note concise expliquant pourquoi les tests reproductibles sont importants",
+  "provider": "kimi-cli",
+  "status": "stopped",
+  "variant": "A",
+  "verdict": "STOP"
+}

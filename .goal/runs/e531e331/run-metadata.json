@@ -1,0 +1,10 @@
+{
+  "iterations": 4,
+  "last_error": "aucune",
+  "objective": "Prouver le contrat S1 sans historique brut",
+  "provider": "mock",
+  "status": "stopped",
+  "synthesizer_provider": "mock",
+  "variant": "B",
+  "verdict": "STOP"
+}

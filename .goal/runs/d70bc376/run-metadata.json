@@ -1,0 +1,9 @@
+{
+  "iterations": 4,
+  "legacy_import": true,
+  "objective": "Produire une checklist concise pour vérifier une modification logicielle avant livraison",
+  "provider": "kimi-code",
+  "status": "stopped",
+  "variant": "A",
+  "verdict": "STOP"
+}

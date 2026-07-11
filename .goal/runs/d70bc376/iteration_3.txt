@@ -1,0 +1,86 @@
+# Critique structurée — Checklist de validation de modification logicielle (itération 2→3)
+
+---
+
+## 1. ANGLES MORTS
+
+**Performance et scalabilité — domaine entièrement absent.**
+La checklist couvre la sécurité, les erreurs, les tests — mais jamais la charge. Un changement peut passer tous les contrôles fonctionnels et dégrader les temps de réponse de 10x. Aucun critère ne couvre les tests de charge, les profils mémoire, les N+1 queries, ou la régression de latence. C'est l'angle mort le plus coûteux en production.
+
+**Observabilité post-déploiement.**
+La checklist s'arrête au moment du merge. Aucun critère ne vérifie la présence de logs structurés, de métriques, d'alertes ou de dashboards pour le changement livré. Un déploiement sans observabilité est un déploiement à l'aveugle — et une checklist qui prétend couvrir « la qualité » sans couvrir « comment on saura si ça pète » est incomplète par conception.
+
+**Stratégie de rollback et feature flags.**
+Aucun critère ne vérifie que le changement peut être désactivé ou annulé en production. Pour tout système critique, la capacité de rollback est aussi importante que la qualité du code. Absent.
+
+**Dépendances transitives et supply chain.**
+La checklist couvre le code écrit par l'équipe, mais pas les bibliothèques tierces ajoutées ou mises à jour. Un `npm audit` ou `pip audit` qui lève des CVE critiques n'est capturé nulle part.
+
+**Intégration et tests d'end-to-end.**
+Les « tests automatisés » sont mentionnés sans distinguer unit / intégration / E2E. Un changement peut passer tous les tests unitaires et casser un flux métier complet à cause d'une interaction entre composants. Le niveau de couverture attendu est indéfini.
+
+---
+
+## 2. BIAIS IMPLICITES
+
+**Postulat de maturité CI/CD.**
+La checklist suppose l'existence d'un pipeline qui exécute automatiquement les tests et la revue. Pour une équipe sans CI/CD, la moitié des critères sont inopérants. Le document ne mentionne pas cette précondition.
+
+**Biais vers le code applicatif web.**
+OWASP Top 10 est pertinent pour du web — pas pour du code embarqué, du batch, des CLI, du data pipeline, ou du mobile. La référence sécurité est étroite sans le reconnaître.
+
+**Biais de périmètre de changement.**
+La checklist est implicitement dimensionnée pour des PR unitaires (un fichier, une feature). Pour un refactoring transversal (migration de BDD, changement de protocole, dépréciation d'API), les 6 domaines deviennent insuffisants — il faut des critères de compatibilité, de migration data, de dépréciation progressive.
+
+**Postulat d'équipe disponible.**
+La « revue de code » suppose un reviewer qualifié disponible. En pratique, c'est souvent le goulot d'étranglement. La checklist ne distingue pas revue obligatoire vs revue différée — et ne couvre pas le cas où l'urgence justifie un merge avec revue post-merge documentée.
+
+**Biais de complétude des domaines.**
+Choisir 6 domaines et les déclarer suffisants est un acte de cadrage arbitraire. Performance, accessibilité, compatibilité navigateur/API, et gestion des données personnelles pourraient tous prétendre au même statut de « domaine validé ». Le document ne justifie pas pourquoi ces 6-ci et pas d'autres.
+
+---
+
+## 3. CONTRE-ARGUMENTS
+
+**La checklist comme fausse assurance.**
+Une checklist coche des présences (« il y a des tests ») mais pas des qualités (« les tests couvrent les cas critiques »). Un équipe sous pression peut cocher 6/6 avec des tests triviaux, une revue superficielle, et une doc copiée du ticket Jira. Le format checklist encourage le remplissage, pas la rigueur. Un adversaire dirait : mieux vaut 3 critères profonds que 6 critères superficiels.
+
+**La documentation comme « seuil configurable » est une porte de sortie.**
+Rendre la documentation optionnelle selon le contexte projet revient à dire « faites ce que vous voulez ». Un critère configurable n'est plus un critère — c'est une suggestion. L'incertitude restante (« à valider par l'équipe ») n'est pas un détail : c'est une faiblesse structurelle qui affaiblit la checklist entière.
+
+**OWASP Top 10 ≠ sécurité complète.**
+OWASP couvre les vulnérabilités web les plus courantes, mais ignore les vecteurs d'attaque infrastructure (réseau, conteneurs, secrets dans les logs, dépendances compromises). Citer OWASP comme référence sécurité unique peut donner un faux sentiment de couverture complète.
+
+**Twelve-Factor n'est pas un guide d'error handling.**
+Le document le reconnaît partiellement (« par extension »), mais conserver cette référence crée de la confusion. Twelve-Factor traite de config, de statelessness, de logs — pas de gestion des erreurs applicatives au sens strict. Citer un cadre « par extension » pour justifier un critère de blocage [HAUT] est un glissement sémantique.
+
+---
+
+## 4. RISQUES
+
+**Échec sur les systèmes à déploiement continu.**
+Pour une équipe qui déploie 20 fois par jour, une checklist de 6 points bloquants avec niveau [HAUT] sur 5 d'entre eux est un frein opérationnel. Le document ne propose aucun mécanisme d'accélération (auto-merge sur vert, revue asynchrone, seuils adaptatifs selon la criticité du changement).
+
+**Échec sur les changements non fonctionnels.**
+Un changement de configuration d'infrastructure, un tuning de BDD, une mise à jour de certificat — ces modifications ne rentrent pas naturellement dans « interfaces publiques » ou « gestion des erreurs ». La checklist sera contournée ou ignorée pour ces cas.
+
+**Échec culturel.**
+Imposer une checklist sans accompagnement ni formation produit deux comportements : cocher mécaniquement sans réfléchir, ou la contourner comme bureaucratie. Le document ne prévoit ni adoption, ni métrique de suivi de conformité, ni feedback loop.
+
+**Échec par contradiction entre domaines.**
+Un changement peut être sécurisé (OWASP) mais incompatible avec les interfaces publiques existantes. Un autre peut nécessiter une modification d'interface publique qui casse la rétrocompatibilité. La checklist traite chaque domaine isolément — aucun critère ne couvre les conflits inter-domaines.
+
+**Échec par obsolècence.**
+OWASP est mis à jour régulièrement, SRE et Twelve-Factor évoluent. Sans processus de révision périodique de la checklist elle-même, les références deviennent obsolètes et les critères perdent leur légitimité.
+
+---
+
+## Synthèse pour l'arbitre
+
+Les points les plus critiques à arbitrer dans l'itération 3 :
+
+1. **Ajouter ou non un 7e domaine « performance / scalabilité »** — c'est l'angle mort le plus cher en production.
+2. **Clarifier le statut exact de la documentation** — soit c'est bloquant, soit c'est sorti de la checklist et mis en guide à part. Le « configurable » affaiblit l'outil.
+3. **Préciser le périmètre d'usage** — pour quel type de changement cette checklist est-elle conçue ? PR unitaire ? Refactoring ? Infra ? La réponse détermine s'il faut 6 ou 10 critères.
+4. **Distinguer présence et qualité** — ajouter une colonne « profondeur attendue » ou un mécanisme d'échantillonnage pour éviter la coche mécanique.
+5. **Prévoir la maintenance de la checklist elle-même** — sinon elle sera obsolète en 6 mois.

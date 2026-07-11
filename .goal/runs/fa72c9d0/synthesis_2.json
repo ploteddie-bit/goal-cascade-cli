@@ -1,0 +1,16 @@
+```json
+{
+  "objective": "Produire une note concise expliquant pourquoi les tests reproductibles sont importants",
+  "key_decisions": [
+    "Cibler les développeurs débutants avec un ton pédagogique et sans technique avancée",
+    "Présenter les cinq bénéfices (gain de temps, attribution des causes, bugs intermittents, confiance, montée en compétences) comme des apports possibles et non comme un consensus établi, en les reformulant au conditionnel et en conservant le tag [MOYEN]",
+    "Maintenir l'absence de source externe ou de statistique, conformément au cahier des charges initial",
+    "Conserver une longueur concise et illustrer chaque bénéfice par un exemple concret"
+  ],
+  "uncertainties": [
+    "Le fact-check qualifie les bénéfices de non vérifiables sans source externe : il reste à valider que la reformulation conditionnelle suffit à lever le risque de présenter une opinion comme un fait",
+    "Le niveau de confiance [MOYEN] reste une auto-évaluation qui ne peut être confirmée que par relecture humaine"
+  ],
+  "next_instruction": "Reformuler chacun des cinq bénéfices sous forme conditionnelle ('peuvent aider à', 'permettent souvent de') avec le tag [MOYEN], faire relire la note par un développeur débutant pour valider ton et clarté, puis finaliser sans ajouter de références externes ni statistiques."
+}
+```

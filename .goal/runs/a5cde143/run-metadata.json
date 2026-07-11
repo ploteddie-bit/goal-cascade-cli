@@ -1,0 +1,10 @@
+{
+  "iterations": 1,
+  "last_error": "kimi-code a quitté avec le code 1: error: failed to run prompt: provider.connection_error: Connection error.\nSee log: /home/eddie/.kimi-code/logs/kimi-code.log",
+  "objective": "Test",
+  "provider": "kimi-code",
+  "status": "failed",
+  "synthesizer_provider": "kimi-code",
+  "variant": "A",
+  "verdict": "absent"
+}

@@ -1,0 +1,48 @@
+Tu es un synthétiseur. Produis une synthèse orientée objectif
+strictement conforme au contrat JSON ci-dessous.
+
+OBJECTIF :
+Écrire un haiku sur le printemps
+
+TRAVAIL DE L'ETAPE PRECEDENTE :
+DRAFT INITIAL — Producteur (mock-small)
+=====================================
+[input hash: a1ded1ab]
+
+Objectif traite : Écrire un haiku sur le printemps
+
+STRUCTURE PROPOSEE :
+1. Introduction : pourquoi le sujet importe
+2. Arguments principaux (3 points)
+3. Exemple concret
+4. Conclusion et appel a l'action
+
+ARGUMENT 1 : Le sujet est sous-estime par la majorite des praticiens. [confiance: MOYENNE]
+ARGUMENT 2 : Les donnees recentes (2024) montrent un changement de paradigme. [confiance: HAUTE]
+ARGUMENT 3 : Une methode structuree donne de meilleurs resultats que l'improvisation. [confiance: FAIBLE]
+
+EXEMPLE : Cas d'usage en production — resultats observes sur 3 mois.
+
+SOURCES CITEES :
+- Etude de reference (2024) [MOYENNE — date exacte a confirmer]
+- Rapport technique officiel [HAUTE]
+- Blog post d'un expert [FAIBLE — opinion non verifiee]
+
+NOTE : Ce draft est volontairement imparfait. Il contient 1 confiance FAIBLE
+et 1 source d'opinion. La critique doit les identifier.
+
+
+Réponds avec UN SEUL objet JSON valide, sans bloc Markdown ni commentaire :
+{
+  "objective": "objectif invariant en une phrase",
+  "key_decisions": ["décision 1", "décision 2", "décision 3"],
+  "uncertainties": ["point restant à vérifier"],
+  "next_instruction": "instruction précise pour l'étape suivante"
+}
+
+Regles :
+- Entre 1 et 5 décisions clés, jamais davantage.
+- Consolide la synthèse précédente avec le nouveau travail.
+- Élimine les tournures et digressions, mais conserve les décisions.
+- Ne recopie pas les blocs de code : ils sont préservés séparément.
+- N'ajoute aucune clé au contrat JSON.
