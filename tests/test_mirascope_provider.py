@@ -1,9 +1,16 @@
+"""Tests du MirascopeProvider.
+
+Note : les tests de retry/timeout/fallback ont demenage dans
+``tests/test_rate_limiter.py`` apres l'extraction du rate limiter.
+La logique de resilience est testee la-bas, directement sur la
+fonction ``call_with_retry_and_fallback``.
+"""
+
 from __future__ import annotations
 
 import asyncio
 import importlib
 from dataclasses import dataclass
-from typing import Any
 
 import pytest
 
@@ -13,10 +20,7 @@ from goal_cascade.providers.mirascope_provider import (
     FALLBACK_CHAIN,
     Backend,
     MirascopeProvider,
-    ProviderExhaustedError,
-    ProviderUnavailableError,
     RateLimitConfig,
-    RateLimitError,
     TIER_MODEL_MAP,
     _estimate_cost_anthropic,
     _estimate_cost_google,
@@ -107,85 +111,55 @@ def test_call_backend_delegates_to_backend_method(monkeypatch: pytest.MonkeyPatc
 
 
 def test_fallback_chain_uses_distinct_backends() -> None:
+    """Chaque backend primaire a une liste de fallback distincte de lui-meme.
+
+    Test double : la logique est aussi testee dans test_rate_limiter.py,
+    ici on garde une verification rapide de l'invariant structurel.
+    """
     for backend, fallbacks in FALLBACK_CHAIN.items():
         assert backend not in fallbacks
         assert fallbacks
 
 
-def test_retry_on_rate_limit(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_mirascope_provider_uses_rate_limiter(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Le provider delegue la resilience a call_with_retry_and_fallback.
+
+    Verifie le contrat d'integration : quand MirascopeProvider.call est
+    invoque, la logique retry+fallback est appelee avec les bons parametres.
+    """
     provider = MirascopeProvider(
         Backend.ANTHROPIC,
-        rate_limit_config=RateLimitConfig(max_retries=3, initial_backoff_s=0.01),
-        available_backends={Backend.ANTHROPIC},
-    )
-    calls: list[Backend] = []
-    sleeps: list[float] = []
-
-    def fake_sleep(wait: float) -> None:
-        sleeps.append(wait)
-
-    async def fake_async_sleep(wait: float) -> None:
-        sleeps.append(wait)
-
-    def sync_call_backend(backend: Backend, prompt: str, role: str, tier: str) -> LLMResponse:
-        calls.append(backend)
-        if len(calls) < 3:
-            raise RateLimitError("429")
-        return LLMResponse(text="ok", provider=backend.value, model="model")
-
-    async def fake_call_backend(backend: Backend, prompt: str, role: str, tier: str) -> LLMResponse:
-        return sync_call_backend(backend, prompt, role, tier)
-
-    monkeypatch.setattr("asyncio.sleep", fake_async_sleep)
-    monkeypatch.setattr(provider, "_call_backend", fake_call_backend)
-
-    response = asyncio.run(provider._call_with_retry("prompt", "producer", "small"))
-
-    assert response.text == "ok"
-    assert calls == [Backend.ANTHROPIC, Backend.ANTHROPIC, Backend.ANTHROPIC]
-    assert sleeps == [0.01, 0.02]
-
-
-def test_fallback_when_primary_exhausted(monkeypatch: pytest.MonkeyPatch) -> None:
-    provider = MirascopeProvider(
-        Backend.ANTHROPIC,
-        rate_limit_config=RateLimitConfig(max_retries=1, initial_backoff_s=0.01),
-        available_backends={Backend.ANTHROPIC, Backend.OPENAI},
-    )
-    calls: list[Backend] = []
-
-    def sync_call_backend(backend: Backend, prompt: str, role: str, tier: str) -> LLMResponse:
-        calls.append(backend)
-        if backend == Backend.ANTHROPIC:
-            raise RateLimitError("429")
-        return LLMResponse(text="fallback", provider=backend.value, model="fallback-model")
-
-    async def fake_call_backend(backend: Backend, prompt: str, role: str, tier: str) -> LLMResponse:
-        return sync_call_backend(backend, prompt, role, tier)
-
-    monkeypatch.setattr(provider, "_call_backend", fake_call_backend)
-
-    response = asyncio.run(provider._call_with_retry("prompt", "critic", "medium"))
-
-    assert response.provider == "openai"
-    assert response.text == "fallback"
-    assert calls == [Backend.ANTHROPIC, Backend.OPENAI]
-
-
-def test_exhausted_raises_when_all_fail(monkeypatch: pytest.MonkeyPatch) -> None:
-    provider = MirascopeProvider(
-        Backend.ANTHROPIC,
-        rate_limit_config=RateLimitConfig(max_retries=1, initial_backoff_s=0.01),
-        available_backends={Backend.ANTHROPIC},
+        rate_limit_config=RateLimitConfig(max_retries=2, initial_backoff_s=0.001),
     )
 
-    def sync_call_backend(backend: Backend, prompt: str, role: str, tier: str) -> LLMResponse:
-        raise ProviderUnavailableError("down")
+    captured: dict[str, object] = {}
 
-    async def fake_call_backend(backend: Backend, prompt: str, role: str, tier: str) -> LLMResponse:
-        return sync_call_backend(backend, prompt, role, tier)
+    async def fake_call_with_retry_and_fallback(
+        backend_call: object,
+        backend: Backend,
+        prompt: str,
+        role: str,
+        tier: str,
+        rate_config: RateLimitConfig,
+        available_backends: object,
+    ) -> LLMResponse:
+        captured["backend"] = backend
+        captured["prompt"] = prompt
+        captured["role"] = role
+        captured["tier"] = tier
+        captured["rate_config"] = rate_config
+        return LLMResponse(text="delegated", provider="anthropic", model="x")
 
-    monkeypatch.setattr(provider, "_call_backend", fake_call_backend)
+    monkeypatch.setattr(
+        "goal_cascade.providers.mirascope_provider.call_with_retry_and_fallback",
+        fake_call_with_retry_and_fallback,
+    )
 
-    with pytest.raises(ProviderExhaustedError, match="Tous les providers"):
-        asyncio.run(provider._call_with_retry("prompt", "producer", "small"))
+    response = provider.call("hello", "producer", "small")
+
+    assert response.text == "delegated"
+    assert captured["backend"] == Backend.ANTHROPIC
+    assert captured["prompt"] == "hello"
+    assert captured["role"] == "producer"
+    assert captured["tier"] == "small"
+    assert captured["rate_config"].max_retries == 2
