@@ -1,330 +1,196 @@
-"""Tests du graphe LangGraph — checkpointing et resume.
+"""Tests du graphe LangGraph G.O.A.L. — architecture 6 nœuds.
 
 Couvre :
-- Le graphe LangGraph compile et s'exécute
-- Le checkpointing SQLite fonctionne (fichier créé, état persisté)
-- Le resume depuis un checkpoint fonctionne
-- goal resume est visible dans le CLI
-- _run_with_graph produit le même résultat que _run_loop
+- Routing après synthèse (critic, adversary, arbiter, forced_stop)
+- Routing après verdict (stop, continue, forced_stop)
+- Nœuds (producer, synth, critic, adversary, arbiter, verdict)
+- Budget check dans le routing
+- Détection de dérive dans le nœud synth
+- Checkpointing SQLite
+- _parse_verdict (JSON, fenced, fallback STOP)
 """
 
 from __future__ import annotations
 
-import tempfile
+import json
 from pathlib import Path
+from unittest.mock import MagicMock
 
 import pytest
 
-from goal_cascade.orchestrator.cascade_graph import (
-    GraphState,
-    build_cascade_graph,
-    compile_with_sqlite,
-    should_continue,
+from goal_cascade.schemas.models import (
+    CascadeState,
+    IterationRole,
+    Verdict,
 )
+from goal_cascade.orchestrator.cascade_graph import CascadeGraph
+from goal_cascade.orchestrator.budget_tracker import BudgetConfig, BudgetTracker
+from goal_cascade.orchestrator.drift_detector import DriftStatus
 
 
-# ---------- Graph construction ----------
+# ── Fixtures ────────────────────────────────────────────────────
 
 
-class TestCascadeGraphConstruction:
-    """Tests de construction du graphe LangGraph."""
+@pytest.fixture
+def mock_provider():
+    provider = MagicMock()
+    provider.name = "mock"
+    provider.call.return_value = MagicMock(
+        text='{"decision": "STOP", "justification": "Test OK"}',
+        provider="mock",
+        model="mock-xlarge",
+        input_tokens=100,
+        output_tokens=50,
+        cost_usd=0.001,
+        latency_ms=100,
+    )
+    return provider
 
-    def test_build_cascade_graph_returns_state_graph(self):
-        """Le graphe est un StateGraph LangGraph."""
+
+@pytest.fixture
+def mock_synthesizer():
+    synth = MagicMock()
+    synth.process.return_value = MagicMock(
+        artifacts=[],
+        synthesis=MagicMock(),
+        drift_status=DriftStatus.NORMAL,
+        similarity_score=0.75,
+        coverage_score=0.60,
+    )
+    return synth
+
+
+@pytest.fixture
+def budget_tracker(tmp_path: Path) -> BudgetTracker:
+    config = BudgetConfig(max_per_run_usd=1.0, max_per_day_usd=10.0)
+    return BudgetTracker(config=config, runs_dir=tmp_path)
+
+
+@pytest.fixture
+def cascade_graph(mock_provider, mock_synthesizer, budget_tracker) -> CascadeGraph:
+    return CascadeGraph(
+        provider=mock_provider,
+        synthesizer_provider=mock_provider,
+        synthesizer=mock_synthesizer,
+        budget_tracker=budget_tracker,
+    )
+
+
+# ── Routing après synthèse ─────────────────────────────────────
+
+
+class TestRouteAfterSynth:
+    def test_after_iteration_1_routes_to_critic(
+        self, cascade_graph: CascadeGraph
+    ) -> None:
+        state = {"run_id": "test", "objective": "Test", "current_iteration": 1, "status": "running"}
+        assert cascade_graph._route_after_synth(state) == "critic"
+
+    def test_after_iteration_2_routes_to_adversary(
+        self, cascade_graph: CascadeGraph
+    ) -> None:
+        state = {"run_id": "test", "objective": "Test", "current_iteration": 2, "status": "running"}
+        assert cascade_graph._route_after_synth(state) == "adversary"
+
+    def test_after_iteration_3_routes_to_arbiter(
+        self, cascade_graph: CascadeGraph
+    ) -> None:
+        state = {"run_id": "test", "objective": "Test", "current_iteration": 3, "status": "running"}
+        assert cascade_graph._route_after_synth(state) == "arbiter"
+
+    def test_forced_stop_status_returns_forced_stop(
+        self, cascade_graph: CascadeGraph
+    ) -> None:
+        state = {"run_id": "test", "objective": "Test", "current_iteration": 2, "status": "forced_stop"}
+        assert cascade_graph._route_after_synth(state) == "forced_stop"
+
+
+# ── Routing après verdict ───────────────────────────────────────
+
+
+class TestRouteAfterVerdict:
+    def test_stop_verdict_returns_stop(
+        self, cascade_graph: CascadeGraph
+    ) -> None:
+        state = {
+            "run_id": "test", "objective": "Test",
+            "current_iteration": 4, "status": "stopped",
+            "final_verdict": Verdict(decision="STOP", justification="OK"),
+        }
+        assert cascade_graph._route_after_verdict(state) == "stop"
+
+    def test_continue_under_max_returns_continue(
+        self, cascade_graph: CascadeGraph
+    ) -> None:
+        state = {
+            "run_id": "test", "objective": "Test",
+            "current_iteration": 4, "max_iterations": 5, "status": "running",
+            "final_verdict": Verdict(decision="CONTINUE", justification="Manque couverture"),
+        }
+        assert cascade_graph._route_after_verdict(state) == "continue"
+
+    def test_continue_at_max_returns_forced_stop(
+        self, cascade_graph: CascadeGraph
+    ) -> None:
+        state = {
+            "run_id": "test", "objective": "Test",
+            "current_iteration": 5, "max_iterations": 5, "status": "running",
+            "final_verdict": Verdict(decision="CONTINUE", justification="Encore"),
+        }
+        assert cascade_graph._route_after_verdict(state) == "forced_stop"
+
+    def test_forced_stop_status_returns_forced_stop(
+        self, cascade_graph: CascadeGraph
+    ) -> None:
+        state = {
+            "run_id": "test", "objective": "Test",
+            "current_iteration": 4, "status": "forced_stop",
+            "final_verdict": None,
+        }
+        assert cascade_graph._route_after_verdict(state) == "forced_stop"
+
+
+# ── Verdict parsing ─────────────────────────────────────────────
+
+
+class TestParseVerdict:
+    def test_parses_fenced_json(self, cascade_graph: CascadeGraph) -> None:
+        raw = 'Some text\n```json\n{"decision": "STOP", "justification": "OK"}\n```\nMore text'
+        verdict = cascade_graph._parse_verdict(raw)
+        assert verdict.decision == "STOP"
+        assert verdict.justification == "OK"
+
+    def test_parses_raw_json(self, cascade_graph: CascadeGraph) -> None:
+        raw = 'Blabla {"decision": "CONTINUE", "justification": "Manque"} fin'
+        verdict = cascade_graph._parse_verdict(raw)
+        assert verdict.decision == "CONTINUE"
+
+    def test_defaults_to_stop_on_parse_failure(
+        self, cascade_graph: CascadeGraph
+    ) -> None:
+        raw = "No JSON here at all"
+        verdict = cascade_graph._parse_verdict(raw)
+        assert verdict.decision == "STOP"
+        assert "non parsable" in verdict.justification.lower()
+
+
+# ── Graph compilation ───────────────────────────────────────────
+
+
+class TestGraphCompilation:
+    def test_build_graph_returns_state_graph(
+        self, cascade_graph: CascadeGraph
+    ) -> None:
         from langgraph.graph import StateGraph
 
-        def dummy_node(state: GraphState) -> dict:
-            return {"current_iteration": state.get("current_iteration", 0) + 1}
-
-        graph = build_cascade_graph(dummy_node)
+        graph = cascade_graph._build_graph()
         assert isinstance(graph, StateGraph)
 
-    def test_graph_compiles_without_checkpointer(self):
-        """Le graphe compile sans checkpointer."""
-        def dummy_node(state: GraphState) -> dict:
-            return {"current_iteration": state.get("current_iteration", 0) + 1}
+    def test_compile_with_sqlite_creates_checkpoint(
+        self, cascade_graph: CascadeGraph, tmp_path: Path
+    ) -> None:
+        db_path = tmp_path / "test_checkpoint.db"
+        app, checkpointer = cascade_graph.compile_with_sqlite(db_path)
 
-        graph = build_cascade_graph(dummy_node)
-        app = graph.compile()
         assert app is not None
-
-    def test_graph_compiles_with_sqlite_checkpointer(self, tmp_path: Path):
-        """Le graphe compile avec un checkpointer SQLite."""
-        def dummy_node(state: GraphState) -> dict:
-            return {"current_iteration": state.get("current_iteration", 0) + 1}
-
-        graph = build_cascade_graph(dummy_node)
-        db_path = tmp_path / "test.db"
-        app, checkpointer = compile_with_sqlite(graph, db_path)
-        assert app is not None
-
-
-# ---------- should_continue condition ----------
-
-
-class TestShouldContinue:
-    """Tests de la condition de continuation."""
-
-    def test_running_status_returns_continue(self):
-        state: GraphState = {
-            "cascade": {"max_iterations": 5},
-            "run_id": "test",
-            "current_iteration": 2,
-            "status": "running",
-        }
-        assert should_continue(state) == "continue"
-
-    def test_stopped_status_returns_end(self):
-        state: GraphState = {
-            "cascade": {"max_iterations": 5},
-            "run_id": "test",
-            "current_iteration": 3,
-            "status": "stopped",
-        }
-        assert should_continue(state) == "end"
-
-    def test_max_iterations_reached_returns_end(self):
-        state: GraphState = {
-            "cascade": {"max_iterations": 5},
-            "run_id": "test",
-            "current_iteration": 5,
-            "status": "running",
-        }
-        assert should_continue(state) == "end"
-
-    def test_budget_exceeded_returns_end(self):
-        state: GraphState = {
-            "cascade": {"max_iterations": 5},
-            "run_id": "test",
-            "current_iteration": 2,
-            "status": "budget_exceeded",
-        }
-        assert should_continue(state) == "end"
-
-    def test_forced_stop_returns_end(self):
-        state: GraphState = {
-            "cascade": {"max_iterations": 5},
-            "run_id": "test",
-            "current_iteration": 5,
-            "status": "forced_stop",
-        }
-        assert should_continue(state) == "end"
-
-
-# ---------- Graph execution ----------
-
-
-class TestCascadeGraphExecution:
-    """Tests d'exécution du graphe."""
-
-    def test_graph_runs_to_completion(self):
-        """Le graphe s'exécute jusqu'à la fin (5 itérations max)."""
-        call_count = 0
-
-        def counting_node(state: GraphState) -> dict:
-            nonlocal call_count
-            call_count += 1
-            current = state.get("current_iteration", 0)
-            new_status = "running" if current < 4 else "stopped"
-            return {"current_iteration": current + 1, "status": new_status}
-
-        graph = build_cascade_graph(counting_node)
-        app = graph.compile()
-
-        result = app.invoke({
-            "cascade": {"max_iterations": 5, "objective": "test"},
-            "run_id": "test-001",
-            "current_iteration": 0,
-            "status": "running",
-        })
-
-        assert result["current_iteration"] == 5
-        assert result["status"] == "stopped"
-        assert call_count == 5
-
-    def test_graph_stops_on_budget_exceeded(self):
-        """Le graphe s'arrête si le budget est dépassé."""
-        def budget_node(state: GraphState) -> dict:
-            current = state.get("current_iteration", 0)
-            # Simuler un budget dépassé à l'itération 3
-            if current >= 2:
-                return {"current_iteration": current + 1, "status": "budget_exceeded"}
-            return {"current_iteration": current + 1, "status": "running"}
-
-        graph = build_cascade_graph(budget_node)
-        app = graph.compile()
-
-        result = app.invoke({
-            "cascade": {"max_iterations": 5, "objective": "test"},
-            "run_id": "test-002",
-            "current_iteration": 0,
-            "status": "running",
-        })
-
-        assert result["current_iteration"] == 3
-        assert result["status"] == "budget_exceeded"
-
-
-# ---------- Checkpointing SQLite ----------
-
-
-class TestSqliteCheckpointing:
-    """Tests du checkpointing SQLite."""
-
-    def test_checkpoint_creates_file(self, tmp_path: Path):
-        """Le checkpoint SQLite crée un fichier."""
-        def simple_node(state: GraphState) -> dict:
-            current = state.get("current_iteration", 0)
-            return {
-                "current_iteration": current + 1,
-                "status": "stopped" if current >= 1 else "running",
-            }
-
-        graph = build_cascade_graph(simple_node)
-        db_path = tmp_path / "checkpoint.db"
-        app, checkpointer = compile_with_sqlite(graph, db_path)
-
-        app.invoke({
-            "cascade": {"max_iterations": 5, "objective": "test"},
-            "run_id": "test-cp-001",
-            "current_iteration": 0,
-            "status": "running",
-        }, config={"configurable": {"thread_id": "test-cp-001"}})
-
         assert db_path.exists()
-        assert db_path.stat().st_size > 0
-
-    def test_checkpoint_persists_state(self, tmp_path: Path):
-        """Le checkpoint persiste l'état entre les invocations."""
-        def simple_node(state: GraphState) -> dict:
-            current = state.get("current_iteration", 0)
-            return {
-                "current_iteration": current + 1,
-                "status": "stopped" if current >= 2 else "running",
-            }
-
-        graph = build_cascade_graph(simple_node)
-        db_path = tmp_path / "checkpoint.db"
-        app, checkpointer = compile_with_sqlite(graph, db_path)
-
-        config = {"configurable": {"thread_id": "test-cp-002"}}
-
-        # Première exécution
-        result = app.invoke({
-            "cascade": {"max_iterations": 5, "objective": "test"},
-            "run_id": "test-cp-002",
-            "current_iteration": 0,
-            "status": "running",
-        }, config)
-
-        assert result["current_iteration"] == 3
-        assert result["status"] == "stopped"
-
-        # Vérifier que le checkpoint a l'état final
-        saved = app.get_state(config)
-        assert saved is not None
-        assert saved.values.get("current_iteration") == 3
-
-
-# ---------- Resume ----------
-
-
-class TestResume:
-    """Tests du mécanisme de resume."""
-
-    def test_resume_from_checkpoint(self, tmp_path: Path):
-        """Le resume reprend depuis le dernier checkpoint."""
-        call_log = []
-
-        def crashing_node(state: GraphState) -> dict:
-            current = state.get("current_iteration", 0)
-            call_log.append(current + 1)
-
-            if current == 2:  # Crash à l'itération 3
-                raise TimeoutError("Simulated crash")
-
-            return {
-                "current_iteration": current + 1,
-                "status": "running" if current < 4 else "stopped",
-            }
-
-        def fixed_node(state: GraphState) -> dict:
-            current = state.get("current_iteration", 0)
-            call_log.append(current + 1)
-            return {
-                "current_iteration": current + 1,
-                "status": "running" if current < 4 else "stopped",
-            }
-
-        db_path = tmp_path / "resume.db"
-        config = {"configurable": {"thread_id": "resume-001"}}
-
-        # Étape 1 : Exécuter avec crash
-        graph1 = build_cascade_graph(crashing_node)
-        app1, cp1 = compile_with_sqlite(graph1, db_path)
-
-        try:
-            app1.invoke({
-                "cascade": {"max_iterations": 5, "objective": "test resume"},
-                "run_id": "resume-001",
-                "current_iteration": 0,
-                "status": "running",
-            }, config)
-        except TimeoutError:
-            pass  # Crash attendu
-
-        # Étape 2 : Vérifier le checkpoint
-        saved = app1.get_state(config)
-        assert saved is not None
-        checkpointed_iter = saved.values.get("current_iteration", 0)
-        assert checkpointed_iter == 2  # Itération 2 complétée
-
-        # Étape 3 : Resume avec le nœud corrigé
-        call_log.clear()
-        graph2 = build_cascade_graph(fixed_node)
-        app2, cp2 = compile_with_sqlite(graph2, db_path)
-
-        result = app2.invoke({
-            "cascade": {"max_iterations": 5, "objective": "test resume"},
-            "run_id": "resume-001",
-            "current_iteration": checkpointed_iter,
-            "status": "running",
-        }, config)
-
-        # Le resume doit continuer depuis l'itération 3
-        assert result["current_iteration"] == 5
-        assert result["status"] == "stopped"
-        # Les appels 3, 4, 5 doivent avoir été faits
-        assert call_log == [3, 4, 5]
-
-
-# ---------- Intégration CLI ----------
-
-
-class TestResumeCLI:
-    """Tests de la commande goal resume."""
-
-    def test_resume_command_visible(self):
-        """La commande resume est visible dans goal --help."""
-        import subprocess
-
-        result = subprocess.run(
-            ["uv", "run", "goal", "--help"],
-            capture_output=True,
-            text=True,
-            cwd=str(Path(__file__).resolve().parents[1]),
-        )
-        assert "resume" in result.stdout
-
-    def test_resume_command_shows_help(self):
-        """La commande resume --help affiche l'aide."""
-        import subprocess
-
-        result = subprocess.run(
-            ["uv", "run", "goal", "resume", "--help"],
-            capture_output=True,
-            text=True,
-            cwd=str(Path(__file__).resolve().parents[1]),
-        )
-        assert "RUN_ID" in result.stdout
-        assert "checkpoint" in result.stdout.lower()

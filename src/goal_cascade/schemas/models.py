@@ -198,6 +198,7 @@ class CascadeState(BaseModel):
     status: Literal["running", "stopped", "forced_stop", "budget_exceeded", "failed"] = "running"
     last_error: str | None = None
     accumulated_cost: float = 0.0
+    last_raw_output: str = ""  # Sortie brute de la dernière itération (pour le graphe LangGraph)
 
     def role_for_iteration(self, n: int) -> IterationRole:
         """Retourne le role pour une iteration donnee (1-4)."""
