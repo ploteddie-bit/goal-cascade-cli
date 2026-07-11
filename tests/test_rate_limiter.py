@@ -234,6 +234,92 @@ def test_fallback_skips_backends_not_in_available() -> None:
     assert calls == [Backend.ANTHROPIC, Backend.GOOGLE]
 
 
+def test_fallback_skips_backends_in_same_family(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Defense Pilier 1 : un fallback vers la meme famille est refuse.
+
+    On patche PROVIDER_FAMILIES pour mettre anthropic et openai dans la meme
+    famille, simulant un cas theorique ou deux providers distincts partagent
+    en fait la meme infra. Le fallback openai doit etre skippe, et comme
+    google reste dans une autre famille, on bascule vers google.
+    """
+    from goal_cascade.providers import rate_limiter
+    from goal_cascade.providers.families import PROVIDER_FAMILIES as real_families
+
+    fake_families = dict(real_families)
+    fake_families["anthropic"] = "anthropic_openai"
+    fake_families["openai"] = "anthropic_openai"
+    # google reste dans sa famille d'origine
+    monkeypatch.setattr(rate_limiter, "PROVIDER_FAMILIES", fake_families)
+
+    calls: list[Backend] = []
+
+    def sync_call_backend(backend: Backend, prompt: str, role: str, tier: str) -> LLMResponse:
+        calls.append(backend)
+        if backend == Backend.ANTHROPIC:
+            raise RateLimitError("429")
+        return _make_response("ok", backend)
+
+    config = RateLimitConfig(max_retries=1, initial_backoff_s=0.001)
+
+    response = asyncio.run(
+        call_with_retry_and_fallback(
+            backend_call=_async_sync(sync_call_backend),
+            backend=Backend.ANTHROPIC,
+            prompt="p",
+            role="critic",
+            tier="medium",
+            rate_config=config,
+            available_backends={Backend.ANTHROPIC, Backend.OPENAI, Backend.GOOGLE},
+        )
+    )
+
+    # openai (meme famille) doit etre skippe ; bascule vers google
+    assert response.provider == "google"
+    assert Backend.OPENAI not in calls
+
+
+def test_fallback_all_in_same_family_raises_exhausted(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Si TOUS les fallbacks sont dans la meme famille, ProviderExhaustedError."""
+    from goal_cascade.providers import rate_limiter
+    from goal_cascade.providers.families import PROVIDER_FAMILIES as real_families
+
+    fake_families = dict(real_families)
+    # Tous les backends Mirascope dans la meme famille
+    fake_families["anthropic"] = "all_same"
+    fake_families["openai"] = "all_same"
+    fake_families["google"] = "all_same"
+    monkeypatch.setattr(rate_limiter, "PROVIDER_FAMILIES", fake_families)
+
+    calls: list[Backend] = []
+
+    def sync_call_backend(backend: Backend, prompt: str, role: str, tier: str) -> LLMResponse:
+        calls.append(backend)
+        if backend == Backend.ANTHROPIC:
+            raise RateLimitError("429")
+        return _make_response("ok", backend)
+
+    config = RateLimitConfig(max_retries=1, initial_backoff_s=0.001)
+
+    with pytest.raises(ProviderExhaustedError, match="Tous les providers"):
+        asyncio.run(
+            call_with_retry_and_fallback(
+                backend_call=_async_sync(sync_call_backend),
+                backend=Backend.ANTHROPIC,
+                prompt="p",
+                role="producer",
+                tier="small",
+                rate_config=config,
+                available_backends={Backend.ANTHROPIC, Backend.OPENAI, Backend.GOOGLE},
+            )
+        )
+
+    # Anthropic a ete tente 1 fois, mais aucun fallback n'a ete appele
+    # (tous skippes pour meme famille).
+    assert calls == [Backend.ANTHROPIC]
+
+
 def test_mirascope_provider_re_exports() -> None:
     """Les imports depuis mirascope_provider fonctionnent toujours (retro-compat)."""
     from goal_cascade.providers import mirascope_provider as mp

@@ -19,6 +19,7 @@ from typing import Any
 from pydantic import BaseModel, Field
 
 from .base import LLMResponse
+from .families import PROVIDER_FAMILIES
 
 try:
     import structlog
@@ -156,9 +157,26 @@ async def _try_fallback(
     original_error: Exception | None,
     available_backends: set[Backend],
 ) -> LLMResponse:
-    """Parcourt la chaine de fallback et leve ProviderExhaustedError si tout echoue."""
+    """Parcourt la chaine de fallback et leve ProviderExhaustedError si tout echoue.
+
+    Regle de diversite (Pilier 1) : un fallback vers un provider de la meme
+    famille que le backend primaire est refuse. Si la chaine entiere est dans
+    la meme famille (cas theorique mais explicitement defendu), on leve
+    ``ProviderExhaustedError`` comme si tous les backends avaient echoue.
+    """
+    primary_family = PROVIDER_FAMILIES.get(backend.value, backend.value)
     for fallback_backend in FALLBACK_CHAIN.get(backend, []):
         if fallback_backend not in available_backends:
+            continue
+        # Defense en profondeur : refuser le fallback si meme famille
+        fallback_family = PROVIDER_FAMILIES.get(
+            fallback_backend.value, fallback_backend.value
+        )
+        if fallback_family == primary_family:
+            logger.warning(
+                "provider_fallback_skipped from=%s to=%s reason=same_family",
+                backend.value, fallback_backend.value,
+            )
             continue
         try:
             logger.warning(
