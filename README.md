@@ -47,6 +47,35 @@ goal --help
 Le mode éditable garantit que la commande exécute le code du projet visible au
 chemin ci-dessus.
 
+## RAG et traces d'exécution
+
+Chaque run produit une trace dans `~/.goal/runs/<run_id>/` :
+
+- `timeline.md` : manifeste complet de la cascade
+- `events.jsonl` : événements structurés
+- `rag-status.json` : preuve d'indexation PostgreSQL + embeddings
+
+Pour synchroniser un run dans le RAG PostgreSQL local :
+
+```bash
+# Ollama local avec bge-m3:latest
+goal rag-sync <run_id>
+
+# Ollama distant (par exemple serveur-io-ia)
+export OLLAMA_HOST=http://10.0.0.1:11434
+goal rag-sync <run_id>
+```
+
+Variables d'environnement :
+
+| Variable | Défaut | Description |
+|---|---|---|
+| `OLLAMA_HOST` | `http://127.0.0.1:11434` | URL de l'API Ollama |
+| `OLLAMA_EMBED_URL` | `$OLLAMA_HOST/api/embed` | Endpoint embeddings |
+| `OLLAMA_EMBED_MODEL` | `bge-m3:latest` | Modèle d'embeddings |
+
+Le worker RAG versionné se trouve dans `src/goal_cascade/rag/worker.py`. En production, il est utilisé en priorité ; sinon le pont retombe sur `~/.kimi/kimi-rag/goal-run-ingest.py`.
+
 ## Tests
 
 ```bash
