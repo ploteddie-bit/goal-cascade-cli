@@ -12,6 +12,7 @@ import sys
 import urllib.request
 from datetime import datetime
 from pathlib import Path
+from typing import Any
 
 import psycopg2
 
@@ -79,7 +80,7 @@ def load_pg_password() -> str:
     return os.environ.get("PGPASSWORD", "")
 
 
-def get_conn():
+def get_conn() -> Any:
     return psycopg2.connect(
         dbname="kimi_rag",
         user="eddie",
@@ -215,7 +216,7 @@ def embed_indexed_document(
     content: str,
     source: str,
     run_id: str,
-) -> dict:
+) -> dict[str, Any]:
     """Calcule tous les vecteurs sur Ollama puis remplace les chunks atomiquement."""
     embed_url, model_name = verify_endpoint()
     chunks = split_complete_text(content)

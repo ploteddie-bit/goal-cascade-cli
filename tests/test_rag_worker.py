@@ -10,8 +10,6 @@ def test_verify_endpoint_uses_env_host(monkeypatch) -> None:
     # On mock la vérification HTTP pour ne pas dépendre d'Ollama en test
     import urllib.request
 
-    original_urlopen = urllib.request.urlopen
-
     def fake_urlopen(req, **kwargs):
         class FakeResponse:
             def read(self):

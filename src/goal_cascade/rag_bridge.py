@@ -11,10 +11,16 @@ from pathlib import Path
 from typing import Callable
 
 from .audit_journal import AuditJournal, redact_sensitive
+from .rag import (
+    default_ollama_embed_model,
+    default_ollama_embed_url,
+    default_ollama_host,
+    resolve_worker_path,
+)
 
 
-IA_GENERAL_HOST = "http://10.0.0.1:11434"
-IA_GENERAL_EMBED_URL = f"{IA_GENERAL_HOST}/api/embed"
+IA_GENERAL_HOST = default_ollama_host()
+IA_GENERAL_EMBED_URL = default_ollama_embed_url()
 
 
 class RagSyncError(RuntimeError):
@@ -31,9 +37,15 @@ class RagBridge:
         runner: Callable = subprocess.run,
         timeout_s: int = 900,
     ):
-        rag_dir = Path.home() / ".kimi" / "kimi-rag"
-        self.worker_path = worker_path or rag_dir / "goal-run-ingest.py"
-        self.interpreter = interpreter or rag_dir / "venv" / "bin" / "python"
+        versioned_worker = resolve_worker_path()
+        self.worker_path = worker_path or (
+            versioned_worker
+            if versioned_worker.exists()
+            else Path.home() / ".kimi" / "kimi-rag" / "goal-run-ingest.py"
+        )
+        self.interpreter = interpreter or (
+            Path.home() / ".kimi" / "kimi-rag" / "venv" / "bin" / "python"
+        )
         self.runner = runner
         self.timeout_s = timeout_s
 
@@ -51,17 +63,24 @@ class RagBridge:
         if not self.worker_path.exists():
             raise RagSyncError(f"Worker RAG absent : {self.worker_path}")
 
+        ollama_host = default_ollama_host()
+        ollama_embed_url = default_ollama_embed_url()
+        ollama_embed_model = default_ollama_embed_model()
+        embedding_host_name = (
+            ollama_host.replace("http://", "").replace("https://", "").split(":")[0]
+        )
+
         journal.record_event(
             "rag_sync_started",
-            embedding_host="ia-general",
-            embedding_model="bge-m3:latest",
+            embedding_host=embedding_host_name,
+            embedding_model=ollama_embed_model,
             timeline=str(journal.timeline_path),
         )
         journal.update_rag_status(
             "indexing",
             message="Synchronisation PostgreSQL et embedding en cours",
-            embedding_host="ia-general",
-            embedding_model="bge-m3:latest",
+            embedding_host=embedding_host_name,
+            embedding_model=ollama_embed_model,
         )
         journal.refresh_timeline()
 
@@ -73,10 +92,11 @@ class RagBridge:
             "--run-id",
             run_id,
         ]
+
         env = os.environ.copy()
-        env["OLLAMA_HOST"] = IA_GENERAL_HOST
-        env["OLLAMA_EMBED_URL"] = IA_GENERAL_EMBED_URL
-        env["OLLAMA_EMBED_MODEL"] = "bge-m3:latest"
+        env["OLLAMA_HOST"] = ollama_host
+        env["OLLAMA_EMBED_URL"] = ollama_embed_url
+        env["OLLAMA_EMBED_MODEL"] = ollama_embed_model
 
         try:
             completed = self.runner(
@@ -111,8 +131,8 @@ class RagBridge:
                 failure_status,
                 returncode=completed.returncode,
                 message=message,
-                embedding_host="ia-general",
-                embedding_model="bge-m3:latest",
+                embedding_host=embedding_host_name,
+                embedding_model=ollama_embed_model,
                 **failure,
             )
             journal.refresh_timeline()
@@ -128,8 +148,8 @@ class RagBridge:
                     receipt_status,
                     returncode=completed.returncode,
                     message=message,
-                    embedding_host="ia-general",
-                    embedding_model="bge-m3:latest",
+                    embedding_host=embedding_host_name,
+                    embedding_model=ollama_embed_model,
                     **combined_receipt,
                 )
             raise RagSyncError(message)
@@ -144,8 +164,8 @@ class RagBridge:
             journal.update_rag_status(
                 "failed",
                 message=message,
-                embedding_host="ia-general",
-                embedding_model="bge-m3:latest",
+                embedding_host=embedding_host_name,
+                embedding_model=ollama_embed_model,
             )
             journal.refresh_timeline()
             index_receipt = self._index_only(
@@ -158,8 +178,8 @@ class RagBridge:
                 journal.update_rag_status(
                     receipt_status,
                     message=message,
-                    embedding_host="ia-general",
-                    embedding_model="bge-m3:latest",
+                    embedding_host=embedding_host_name,
+                    embedding_model=ollama_embed_model,
                     **index_receipt,
                 )
             raise
@@ -167,7 +187,7 @@ class RagBridge:
         journal.update_rag_status(
             "embedded",
             message="Document indexé et segments vectoriels vérifiés",
-            embedding_host="ia-general",
+            embedding_host=embedding_host_name,
             **receipt,
         )
         return result

@@ -229,7 +229,10 @@ def test_rag_bridge_records_embedding_proof(tmp_path, monkeypatch) -> None:
     status = json.loads(journal.rag_status_path.read_text(encoding="utf-8"))
     assert status["status"] == "embedded"
     assert status["dimensions"] == 1024
-    assert status["embedding_host"] == "ia-general"
+    expected_host = (
+        IA_GENERAL_HOST.replace("http://", "").replace("https://", "").split(":")[0]
+    )
+    assert status["embedding_host"] == expected_host
     assert captured["env"]["OLLAMA_HOST"] == IA_GENERAL_HOST
     assert captured["env"]["OLLAMA_EMBED_URL"] == IA_GENERAL_EMBED_URL
 
@@ -403,3 +406,34 @@ def test_false_embedded_index_only_receipt_and_wrong_hash_are_rejected(
     status = json.loads(journal.rag_status_path.read_text(encoding="utf-8"))
     assert status["status"] == "failed"
     assert status["status"] != "embedded"
+
+
+def test_rag_bridge_uses_versioned_worker_first(tmp_path) -> None:
+    from goal_cascade.rag import resolve_worker_path
+
+    bridge = RagBridge()
+    assert resolve_worker_path().exists()
+    assert bridge.worker_path == resolve_worker_path()
+
+
+def test_rag_bridge_propagates_ollama_host(monkeypatch, tmp_path) -> None:
+    monkeypatch.setenv("OLLAMA_HOST", "http://10.0.0.1:11434")
+    monkeypatch.setattr(state_manager, "RUNS_DIR", tmp_path / "runs")
+    journal = AuditJournal("rag-env")
+    journal.finalize({"status": "stopped"})
+    worker = tmp_path / "worker.py"
+    worker.write_text("# worker de test", encoding="utf-8")
+    interpreter = tmp_path / "python"
+    interpreter.write_text("", encoding="utf-8")
+    captured: dict = {}
+
+    def runner(command, **kwargs):
+        captured["env"] = kwargs["env"]
+        return CompletedProcess(
+            command, 1, stdout="", stderr='{"status":"failed","message":"nope"}'
+        )
+
+    bridge = RagBridge(worker_path=worker, interpreter=interpreter, runner=runner)
+    with pytest.raises(RagSyncError):
+        bridge.sync_run("rag-env", journal=journal)
+    assert captured["env"]["OLLAMA_HOST"] == "http://10.0.0.1:11434"
