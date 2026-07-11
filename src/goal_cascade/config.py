@@ -7,6 +7,8 @@ from pathlib import Path
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from .providers.families import PROVIDER_FAMILIES
+from .providers.rate_limiter import RateLimitConfig
+from .orchestrator.budget_tracker import BudgetConfig
 
 logger = logging.getLogger(__name__)
 
@@ -176,6 +178,8 @@ class GoalConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     providers: ProvidersConfig
+    budget: BudgetConfig = Field(default_factory=BudgetConfig)
+    rate_limit: RateLimitConfig = Field(default_factory=RateLimitConfig)
 
 
 def load_goal_config(path: Path) -> GoalConfig:

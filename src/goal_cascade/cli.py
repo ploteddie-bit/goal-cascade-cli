@@ -11,6 +11,8 @@ from __future__ import annotations
 from enum import Enum
 from pathlib import Path
 
+import json
+
 import typer
 from pydantic import ValidationError
 from rich.console import Console
@@ -18,6 +20,7 @@ from rich.panel import Panel
 from rich.table import Table
 
 from .config import DEFAULT_CONFIG_PATH, ProvidersConfig, load_goal_config
+from .orchestrator.budget_tracker import BudgetConfig, BudgetTracker
 from .orchestrator.cascade_executor import CascadeExecutor
 from .orchestrator.state_manager import RUNS_DIR, list_runs, load_state
 from .providers.base import BaseProvider
@@ -127,9 +130,16 @@ def _build_provider(
                 for name in config.providers.enabled
                 if name in {"anthropic", "openai", "google"}
             }
+        if config is None:
+            # Pas de fallback hardcode : les valeurs rate_limit doivent venir
+            # du TOML. Un provider reel sans config explicite est refuse.
+            raise typer.BadParameter(
+                f"Provider {provider_id!r} necessite une config TOML avec "
+                "section [rate_limit]. Refuse d'inventer des valeurs hardcodees."
+            )
         return MirascopeProvider(
             backend=Backend(provider_id),
-            rate_limit_config=RateLimitConfig(),
+            rate_limit_config=config.rate_limit,
             enable_cache=True,
             available_backends=available_backends,
         )
@@ -185,6 +195,7 @@ def run(
     # le chemin par defaut existe. Sinon, retombe sur la selection legacy.
     candidate_config_path = config or DEFAULT_CONFIG_PATH
     should_load_config = config is not None or candidate_config_path.exists()
+    budget_tracker: BudgetTracker | None = None
     if should_load_config:
         # Si l'utilisateur a passe --config PATH explicitement et que le
         # fichier n'existe pas, on remonte une erreur CLI claire plutot
@@ -222,7 +233,7 @@ def run(
 
         provider_names = set(goal_config.providers.resolved_role_mapping.values())
         providers_by_name = {
-            provider_name: _build_provider(provider_name)
+            provider_name: _build_provider(provider_name, config=goal_config)
             for provider_name in provider_names
         }
         selected_provider = RoleMappedProvider(
@@ -232,9 +243,15 @@ def run(
         selected_synthesizer_provider = _build_provider(
             goal_config.providers.resolved_synthesizer,
             synthesizer_model=synthesizer_model,
+            config=goal_config,
         )
         provider_label = "Mapping TOML adaptatif"
         synthesizer_label = goal_config.providers.resolved_synthesizer
+        # Activer le kill switch budgetaire si la section [budget] est definie.
+        budget_tracker = BudgetTracker(
+            config=goal_config.budget,
+            daily_total_path=RUNS_DIR.parent / "budget_daily.json",
+        )
     elif provider == ProviderChoice.MOCK:
         # Selection du provider. Chaque appel Kimi omet volontairement les
         # options de reprise : une iteration = une nouvelle session.
@@ -302,6 +319,7 @@ def run(
         provider=selected_provider,
         synthesizer_provider=selected_synthesizer_provider,
         rag_bridge=RagBridge(),
+        budget_tracker=budget_tracker,
     )
     state = executor.init_state(objective=objective, variant=variant)
     run_dir = RUNS_DIR / state.run_id
@@ -353,6 +371,23 @@ def run(
     else:
         cost_str = "non communiqué par le CLI Kimi"
     console.print(f"Cout total : {cost_str}")
+
+    # Recu detaille du run (transparence radicale des couts, section 9 plan v2)
+    receipt_path = RUNS_DIR / state.run_id / "receipt.json"
+    if receipt_path.exists():
+        try:
+            receipt_data = json.loads(receipt_path.read_text(encoding="utf-8"))
+            calls_count = len(receipt_data.get("calls", []))
+            cache_hit = receipt_data.get("cache_hit_rate", 0.0) * 100
+            projected = receipt_data.get("projected_monthly_cost", 0.0)
+            console.print(
+                f"[dim]Recu : {calls_count} appels, "
+                f"cache hit rate {cache_hit:.0f}%, "
+                f"projection mensuelle ${projected:.2f} "
+                f"({receipt_path})[/dim]"
+            )
+        except (OSError, json.JSONDecodeError, KeyError):
+            pass
 
     # Afficher les details du run
     console.print(f"\nRun ID : [cyan]{state.run_id}[/cyan]")

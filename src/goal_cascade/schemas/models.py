@@ -68,6 +68,25 @@ class LLMCallRecord(BaseModel):
     latency_ms: int = 0
     raw_output: str = ""
     token_count_estimated: bool = False
+    cache_read_tokens: int = 0
+    cache_write_tokens: int = 0
+
+
+class RunReceipt(BaseModel):
+    """Recu detaille d'un run complet (transparence radicale des couts).
+
+    Voir la section 9 du plan d'implementation v2. La construction se fait
+    dans ``CascadeExecutor.build_receipt`` depuis l'etat final de cascade.
+    """
+    run_id: str
+    objective: str
+    total_iterations: int
+    final_verdict: str
+    total_duration_s: float
+    calls: list[LLMCallRecord]
+    total_cost_usd: float
+    cache_hit_rate: float
+    projected_monthly_cost: float
 
 
 class Verdict(BaseModel):

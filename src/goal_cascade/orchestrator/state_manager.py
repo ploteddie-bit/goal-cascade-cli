@@ -10,7 +10,7 @@ import json
 import os
 from pathlib import Path
 
-from ..schemas.models import CascadeState
+from ..schemas.models import CascadeState, RunReceipt
 
 
 GOAL_DIR = Path(os.environ.get("GOAL_HOME", Path.home() / ".goal")).expanduser()
@@ -74,6 +74,17 @@ def save_final_output(run_id: str, output: str) -> Path:
     run_dir = get_run_dir(run_id)
     output_file = run_dir / "final_output.md"
     output_file.write_text(output, encoding="utf-8")
+    return output_file
+
+
+def save_receipt(run_id: str, receipt: RunReceipt) -> Path:
+    """Sauvegarde le recu detaille du run (transparence des couts)."""
+    run_dir = get_run_dir(run_id)
+    output_file = run_dir / "receipt.json"
+    output_file.write_text(
+        receipt.model_dump_json(indent=2),
+        encoding="utf-8",
+    )
     return output_file
 
 

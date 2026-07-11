@@ -16,6 +16,8 @@ from __future__ import annotations
 
 import json
 import uuid
+from datetime import datetime
+from pathlib import Path
 
 from pydantic import ValidationError
 
@@ -26,10 +28,12 @@ from ..schemas.models import (
     CascadeState,
     IterationRole,
     LLMCallRecord,
+    RunReceipt,
     Verdict,
     Variant,
 )
 from . import state_manager
+from .budget_tracker import BudgetTracker
 from .synthesizer import SynthesisError, Synthesizer
 
 # Tiers de modele par role (pour la cascade ascendante)
@@ -73,6 +77,7 @@ class CascadeExecutor:
         synthesizer_provider: BaseProvider,
         prompt_loader: PromptLoader | None = None,
         rag_bridge=None,
+        budget_tracker: BudgetTracker | None = None,
     ):
         if synthesizer_provider is provider:
             raise ValueError(
@@ -86,6 +91,7 @@ class CascadeExecutor:
             self.prompt_loader,
         )
         self.rag_bridge = rag_bridge
+        self._budget = budget_tracker
 
     def init_state(
         self,
@@ -113,6 +119,7 @@ class CascadeExecutor:
         """Execute la cascade jusqu'au verdict STOP ou la limite."""
 
         journal = AuditJournal(state.run_id)
+        start_time = datetime.now()
         journal.record_event(
             "run_started",
             objective=state.objective,
@@ -135,6 +142,7 @@ class CascadeExecutor:
             raise
         finally:
             state_manager.save_state(state)
+            duration_s = (datetime.now() - start_time).total_seconds()
             metadata = {
                 "objective": state.objective,
                 "variant": state.variant.value,
@@ -148,6 +156,14 @@ class CascadeExecutor:
                 "last_error": state.last_error or "aucune",
             }
             journal.finalize(metadata)
+            try:
+                receipt = self.build_receipt(state, duration_s)
+                receipt_path = state_manager.save_receipt(state.run_id, receipt)
+                journal.record_file("receipt_saved", receipt_path)
+                journal.refresh_timeline()
+            except Exception as exc:
+                journal.record_error(exc)
+                journal.refresh_timeline()
             if self.rag_bridge is not None:
                 try:
                     self.rag_bridge.sync_run(state.run_id, journal=journal)
@@ -174,6 +190,19 @@ class CascadeExecutor:
                 state.final_verdict = Verdict(
                     decision="STOP",
                     justification="Limite absolue de 5 iterations atteinte"
+                )
+                state_manager.save_state(state)
+                break
+
+            # Kill switch budgetaire (section 9 du plan v2)
+            if self._budget is not None and self._budget.is_exceeded(state.accumulated_cost):
+                state.status = "budget_exceeded"
+                state.final_verdict = Verdict(
+                    decision="STOP",
+                    justification=(
+                        f"Budget depasse: ${state.accumulated_cost:.4f} "
+                        f"(max ${self._budget.config.max_per_run:.2f})"
+                    ),
                 )
                 state_manager.save_state(state)
                 break
@@ -234,6 +263,8 @@ class CascadeExecutor:
             )
             state.history.append(call_record)
             state.accumulated_cost += response.cost_usd
+            if self._budget is not None:
+                self._budget.record(response.cost_usd)
 
             # Persister la sortie de cette iteration (angle mort identifie)
             iteration_path = state_manager.save_iteration_output(
@@ -338,6 +369,8 @@ class CascadeExecutor:
                             )
                         )
                         state.accumulated_cost += failed_response.cost_usd
+                        if self._budget is not None:
+                            self._budget.record(failed_response.cost_usd)
                         failed_path = state_manager.save_synthesis_output(
                             state.run_id,
                             iteration,
@@ -375,6 +408,8 @@ class CascadeExecutor:
                     )
                 )
                 state.accumulated_cost += synthesis_response.cost_usd
+                if self._budget is not None:
+                    self._budget.record(synthesis_response.cost_usd)
                 state.last_synthesis = synthesis_result.synthesis
                 state.artifacts = synthesis_result.artifacts
                 synthesis_path = state_manager.save_synthesis_output(
@@ -514,3 +549,36 @@ class CascadeExecutor:
             except Exception:
                 details = type(exc).__name__
             raise ValueError(f"Verdict JSON invalide ou absent : {details}") from exc
+
+    def build_receipt(self, state: CascadeState, duration_s: float) -> RunReceipt:
+        """Construit le RunReceipt depuis l'etat final de la cascade.
+
+        Calcule :
+        - ``cache_hit_rate`` : cache_read_tokens / total_input_tokens (0 si pas de cache)
+        - ``projected_monthly_cost`` : cout courant * 30 * runs_per_day_projection
+          (utilise BudgetTracker si disponible, sinon fallback 300x)
+        - ``total_cost_usd`` : somme des couts des appels dans ``state.history``
+        """
+        total_input = sum(c.input_tokens for c in state.history)
+        total_cache_read = sum(c.cache_read_tokens for c in state.history)
+        cache_hit_rate = (
+            total_cache_read / total_input if total_input > 0 else 0.0
+        )
+        if self._budget is not None:
+            projected = self._budget.projected_monthly(state.accumulated_cost)
+        else:
+            projected = state.accumulated_cost * 30 * 10
+        return RunReceipt(
+            run_id=state.run_id,
+            objective=state.objective,
+            total_iterations=state.current_iteration,
+            final_verdict=(
+                state.final_verdict.decision
+                if state.final_verdict else "absent"
+            ),
+            total_duration_s=duration_s,
+            calls=list(state.history),
+            total_cost_usd=state.accumulated_cost,
+            cache_hit_rate=cache_hit_rate,
+            projected_monthly_cost=projected,
+        )
