@@ -722,6 +722,51 @@ def resume(
         budget_tracker=budget_tracker,
     )
 
+    # ── Budget check fail fast (avant reprise) ──────────────────
+    pre_state = load_state(run_id)
+    if pre_state is not None and budget_tracker is not None:
+        if budget_tracker.is_exceeded(run_id, pre_state.accumulated_cost):
+            console.print(
+                f"[bold yellow]⛔ Budget déjà dépassé pour le run '{run_id}' "
+                f"(${pre_state.accumulated_cost:.4f} / "
+                f"${budget_tracker.config.max_per_run_usd:.2f}).[/bold yellow]"
+            )
+            console.print(
+                "[yellow]Reprise impossible : ajustez le budget dans la config TOML "
+                "ou relancez un nouveau run.[/yellow]"
+            )
+            raise typer.Exit(1)
+
+    # ── Contexte de reprise (avant exécution) ───────────────────
+    if pre_state is not None:
+        status_color = {
+            "running": "yellow",
+            "stopped": "green",
+            "forced_stop": "yellow",
+            "budget_exceeded": "red",
+            "failed": "red",
+        }.get(pre_state.status, "white")
+
+        resume_lines = [
+            f"[bold]Reprise du run {run_id}[/bold]",
+            f"Itération : [cyan]{pre_state.current_iteration}[/cyan]"
+            f"/{pre_state.max_iterations}",
+            f"Statut : [{status_color}]{pre_state.status}[/{status_color}]",
+            f"Coût accumulé : [yellow]${pre_state.accumulated_cost:.4f}[/yellow]",
+        ]
+        if pre_state.last_synthesis:
+            resume_lines.append(
+                f"Objectif synthèse : [dim]{pre_state.last_synthesis.objective}[/dim]"
+            )
+        console.print()
+        console.print(
+            Panel.fit(
+                "\n".join(resume_lines),
+                border_style="cyan",
+                title="Contexte de reprise",
+            )
+        )
+
     try:
         state = executor.resume(
             run_id,
