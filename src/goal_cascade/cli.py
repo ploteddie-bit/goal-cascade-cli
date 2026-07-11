@@ -601,10 +601,32 @@ def resume(
     constraints: str = typer.Option(
         "", "--constraints", "-c", help="Contraintes (format, longueur, etc.)"
     ),
+    config: Path | None = typer.Option(
+        None,
+        "--config",
+        help=(
+            "Chemin du fichier config TOML. "
+            f"Par défaut : {DEFAULT_CONFIG_PATH} si présent."
+        ),
+    ),
+    synthesizer_model: str | None = typer.Option(
+        None,
+        "--synthesizer-model",
+        envvar="GOAL_SYNTHESIZER_MODEL",
+        help="Modèle small/cheap dédié aux synthèses (obligatoire avec Kimi)",
+    ),
+    no_synth: bool = typer.Option(
+        False,
+        "--no-synth",
+        help="Désactiver la synthèse orientée objectif (debug : la sortie brute est passée telle quelle)",
+    ),
 ):
     """Reprend une cascade interrompue depuis le dernier checkpoint SQLite."""
     from .orchestrator.cascade_executor import CascadeExecutor
     from .orchestrator.state_manager import RUNS_DIR, load_state
+
+    if synthesizer_model is not None:
+        synthesizer_model = synthesizer_model.strip()
 
     run_dir = RUNS_DIR / run_id
     checkpoint_dir = run_dir / ".checkpoints"
@@ -623,14 +645,69 @@ def resume(
     )
     console.print(f"  Checkpoint : [cyan]{checkpoint_path}[/cyan]")
 
-    # Créer un executor minimal pour la reprise
-    # On utilise MockProvider comme fallback — le vrai provider sera
-    # déterminé par le checkpoint.
-    from .providers.mock import MockProvider
+    # --- Construction des providers (même logique que run()) ---
+    candidate_config_path = config or DEFAULT_CONFIG_PATH
+    should_load_config = config is not None or candidate_config_path.exists()
+    budget_tracker: BudgetTracker | None = None
 
+    if should_load_config:
+        if config is not None and not candidate_config_path.exists():
+            console.print(
+                f"[bold red]Config introuvable : "
+                f"{candidate_config_path.expanduser()}[/bold red]"
+            )
+            raise typer.Exit(2)
+        try:
+            goal_config = load_goal_config(candidate_config_path)
+        except (ValidationError, ValueError) as exc:
+            console.print(
+                f"[bold red]Config invalide ({candidate_config_path}): "
+                f"{exc}[/bold red]"
+            )
+            raise typer.Exit(1) from exc
+        _print_config_summary(candidate_config_path, goal_config.providers)
+
+        if (
+            goal_config.providers.resolved_synthesizer in ("kimi-cli", "kimi-code")
+            and not synthesizer_model
+        ):
+            typer.echo(
+                "Erreur : --synthesizer-model est requis avec un provider Kimi",
+                err=True,
+            )
+            raise typer.BadParameter(
+                "requis avec un provider Kimi",
+                param_hint="--synthesizer-model",
+            )
+
+        provider_names = set(goal_config.providers.resolved_role_mapping.values())
+        providers_by_name = {
+            provider_name: _build_provider(provider_name, config=goal_config)
+            for provider_name in provider_names
+        }
+        selected_provider = RoleMappedProvider(
+            providers_by_name=providers_by_name,
+            role_mapping=goal_config.providers.resolved_role_mapping,
+        )
+        selected_synthesizer_provider = _build_provider(
+            goal_config.providers.resolved_synthesizer,
+            synthesizer_model=synthesizer_model,
+            config=goal_config,
+        )
+        budget_tracker = BudgetTracker(
+            config=goal_config.budget,
+            daily_total_path=RUNS_DIR.parent / "budget_daily.json",
+        )
+    else:
+        # Fallback Mock (comportement legacy)
+        selected_provider = MockProvider()
+        selected_synthesizer_provider = MockProvider()
+
+    # Créer un executor avec les vrais providers
     executor = CascadeExecutor(
-        provider=MockProvider(),
-        synthesizer_provider=MockProvider(),
+        provider=selected_provider,
+        synthesizer_provider=selected_synthesizer_provider,
+        budget_tracker=budget_tracker,
     )
 
     try:
@@ -639,6 +716,7 @@ def resume(
             audience=redact_sensitive(audience) if audience else "",
             constraints=redact_sensitive(constraints) if constraints else "",
             verbose=True,
+            no_synth=no_synth,
         )
     except FileNotFoundError as exc:
         console.print(f"[bold red]{exc}[/bold red]")

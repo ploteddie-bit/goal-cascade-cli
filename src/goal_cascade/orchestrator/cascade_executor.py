@@ -566,27 +566,7 @@ class CascadeExecutor:
         }
         config = {"configurable": {"thread_id": state.run_id}}
 
-        try:
-            result = app.invoke(initial_graph_state, config)
-        except Exception:
-            # En cas d'erreur, on peut récupérer le dernier checkpoint
-            # et mettre à jour l'état depuis celui-ci.
-            try:
-                saved = app.get_state(config)
-                if saved and saved.values:
-                    checkpointed = saved.values
-                    if checkpointed.get("cascade"):
-                        restored = CascadeState(**checkpointed["cascade"])
-                        state.status = restored.status
-                        state.current_iteration = restored.current_iteration
-                        state.history = restored.history
-                        state.accumulated_cost = restored.accumulated_cost
-                        state.last_synthesis = restored.last_synthesis
-                        state.artifacts = restored.artifacts
-                        state.final_verdict = restored.final_verdict
-            except Exception:
-                pass
-            raise
+        result = app.invoke(initial_graph_state, config)
 
         # Mettre à jour l'état depuis le résultat final du graphe
         final_cascade = result.get("cascade", {})
@@ -608,6 +588,7 @@ class CascadeExecutor:
         audience: str = "",
         constraints: str = "",
         verbose: bool = True,
+        no_synth: bool = False,
     ) -> CascadeState:
         """Reprend une cascade interrompue depuis le dernier checkpoint SQLite.
 
@@ -652,7 +633,7 @@ class CascadeExecutor:
         journal = AuditJournal(run_id)
 
         # Relancer avec le vrai graphe
-        return self._run_with_graph(state, audience, constraints, verbose, journal)
+        return self._run_with_graph(state, audience, constraints, verbose, journal, no_synth=no_synth)
 
     def _build_prompt(
         self,
