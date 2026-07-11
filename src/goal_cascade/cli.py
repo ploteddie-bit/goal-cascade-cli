@@ -283,6 +283,12 @@ def run(
         )
         provider_label = "Kimi CLI 1.x (sessions non interactives)"
         synthesizer_label = f"Kimi CLI 1.x / {synthesizer_model}"
+        console.print(
+            "[bold yellow]⚠  Attention : le provider Kimi CLI utilise --print "
+            "qui auto-approuve les outils (shell, fichiers). "
+            "Risque d'injection de prompt. "
+            "Utilisez dans un environnement contrôlé.[/bold yellow]"
+        )
     else:
         if not synthesizer_model:
             typer.echo(
@@ -304,6 +310,12 @@ def run(
         )
         provider_label = "Kimi Code 0.x (sessions non interactives)"
         synthesizer_label = f"Kimi Code 0.x / {synthesizer_model}"
+        console.print(
+            "[bold yellow]⚠  Attention : le provider Kimi Code utilise --print "
+            "qui auto-approuve les outils (shell, fichiers). "
+            "Risque d'injection de prompt. "
+            "Utilisez dans un environnement contrôlé.[/bold yellow]"
+        )
 
     # Afficher l'en-tete
     header = Panel.fit(
