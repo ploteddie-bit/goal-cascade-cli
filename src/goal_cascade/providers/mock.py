@@ -57,9 +57,13 @@ class MockProvider(BaseProvider):
 
     def _extract_objective(self, prompt: str) -> str:
         """Extrait l'objectif du prompt."""
-        for marker in ["OBJECTIF INITIAL :\n",
-                       "OBJECTIF A GARDER EN TETE :\n",
-                       "OBJECTIF :\n", "OBJECTIF:\n", "Objectif :\n"]:
+        for marker in [
+            "OBJECTIF INITIAL :\n",
+            "OBJECTIF A GARDER EN TETE :\n",
+            "OBJECTIF :\n",
+            "OBJECTIF:\n",
+            "Objectif :\n",
+        ]:
             if marker in prompt:
                 start = prompt.index(marker) + len(marker)
                 # Prendre la ligne suivante comme objectif
@@ -78,10 +82,10 @@ class MockProvider(BaseProvider):
         ]:
             if marker in prompt:
                 start = prompt.index(marker)
-                return prompt[start:start + 1200]
+                return prompt[start : start + 1200]
         # Fallback : si aucun marker, prendre la seconde moitie du prompt
         if len(prompt) > 200:
-            return prompt[len(prompt) // 2:]
+            return prompt[len(prompt) // 2 :]
         return prompt
 
     # --- Compteurs pour rendre la transformation visible ---
@@ -92,7 +96,7 @@ class MockProvider(BaseProvider):
         for line in text.split("\n"):
             line = line.strip()
             # Lignes numerotees ou avec puces
-            if re.match(r'^[\d\-\*\+]\s+', line) or "[" in line:
+            if re.match(r"^[\d\-\*\+]\s+", line) or "[" in line:
                 if len(line) > 10:
                     claims.append(line)
         return claims[:8]  # max 8
@@ -208,10 +212,14 @@ RESULTAT : {len(weak_claims)} correction(s) necessaire(s) avant validation.
         prev_hash = self._generate_id(previous)
 
         # L'adversaire compte les sections traitees vs manquantes
-        sections_present = sum(1 for s in ["introduction", "conclusion", "exemple", "methode"]
-                             if s in previous.lower())
-        sections_manquantes = [s for s in ["introduction", "conclusion", "exemple", "methode"]
-                              if s not in previous.lower()]
+        sections_present = sum(
+            1 for s in ["introduction", "conclusion", "exemple", "methode"] if s in previous.lower()
+        )
+        sections_manquantes = [
+            s
+            for s in ["introduction", "conclusion", "exemple", "methode"]
+            if s not in previous.lower()
+        ]
 
         # Compter les arguments
         arg_count = previous.lower().count("argument")
@@ -278,8 +286,8 @@ VERDICT DE L'ADVERSAIRE : {len(sections_manquantes) + 3} point(s) faible(s) a ad
 [objectif : {objective[:80]}]
 
 ANALYSE DU CONTENU :
-  - Conclusion presente : {'OUI' if has_conclusion else 'NON'}
-  - Exemple presente : {'OUI' if has_example else 'NON'}
+  - Conclusion presente : {"OUI" if has_conclusion else "NON"}
+  - Exemple presente : {"OUI" if has_example else "NON"}
   - Corrections identifiees : {corrections_mentioned}
   - Points adverses : {adversary_points}
   - Confiances faibles : {weak_confidence}

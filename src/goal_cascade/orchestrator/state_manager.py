@@ -28,10 +28,7 @@ def save_state(state: CascadeState) -> Path:
     """Sauvegarde l'etat d'une cascade en JSON."""
     run_dir = get_run_dir(state.run_id)
     state_file = run_dir / "state.json"
-    state_file.write_text(
-        state.model_dump_json(indent=2),
-        encoding="utf-8"
-    )
+    state_file.write_text(state.model_dump_json(indent=2), encoding="utf-8")
     return state_file
 
 
@@ -87,10 +84,12 @@ def list_runs() -> list[dict]:
             state_file = run_dir / "state.json"
             if state_file.exists():
                 data = json.loads(state_file.read_text(encoding="utf-8"))
-                runs.append({
-                    "run_id": data.get("run_id", run_dir.name),
-                    "objective": data.get("objective", "")[:60],
-                    "status": data.get("status", "unknown"),
-                    "iterations": data.get("current_iteration", 0),
-                })
+                runs.append(
+                    {
+                        "run_id": data.get("run_id", run_dir.name),
+                        "objective": data.get("objective", "")[:60],
+                        "status": data.get("status", "unknown"),
+                        "iterations": data.get("current_iteration", 0),
+                    }
+                )
     return runs

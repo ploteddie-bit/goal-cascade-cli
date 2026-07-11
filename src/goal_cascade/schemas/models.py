@@ -14,6 +14,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 class IterationRole(str, Enum):
     """Les 4 roles d'iteration de la cascade."""
+
     PRODUCER = "producer"
     CRITIC = "critic"
     ADVERSARY = "adversary"
@@ -22,6 +23,7 @@ class IterationRole(str, Enum):
 
 class Variant(str, Enum):
     """Variante de livrable."""
+
     A = "A"  # redactionnel (article, post, rapport)
     B = "B"  # technique (code, architecture, revue)
 
@@ -29,14 +31,13 @@ class Variant(str, Enum):
 class GoalOrientedSynthesis(BaseModel):
     """Synthese transmise entre les iterations (section 4 du framework).
     Filtre le bruit, garde le signal, casse l'ancrage."""
+
     objective: str = Field(..., description="Objectif initial, reformule en une phrase")
     key_decisions: list[str] = Field(
-        ..., min_length=1, max_length=5,
-        description="3 a 5 decisions cles maximum"
+        ..., min_length=1, max_length=5, description="3 a 5 decisions cles maximum"
     )
     uncertainties: list[str] = Field(
-        default_factory=list,
-        description="Points non tranches ou a verifier"
+        default_factory=list, description="Points non tranches ou a verifier"
     )
     next_instruction: str = Field(
         ..., description="Role de l'iteration suivante + ce qu'elle doit produire"
@@ -49,6 +50,7 @@ class ImmutableArtifact(BaseModel):
     """Charge utile immuable transmise intacte entre les jonctions.
     Ne JAMAIS etre synthetisee -- la forme EST le signal.
     (Identifie par revue externe Qwen, section 4.3 du framework)"""
+
     artifact_type: Literal["code", "json_schema", "formula", "test", "config", "sql"]
     language: str | None = None
     content: str = Field(..., description="Le contenu brut, non modifie")
@@ -58,6 +60,7 @@ class ImmutableArtifact(BaseModel):
 
 class LLMCallRecord(BaseModel):
     """Enregistrement d'un appel LLM pour la transparence des couts."""
+
     provider: str
     model: str
     iteration: int
@@ -72,6 +75,7 @@ class LLMCallRecord(BaseModel):
 
 class Verdict(BaseModel):
     """Verdict de l'iteration 4 (Arbitre)."""
+
     model_config = ConfigDict(extra="forbid")
 
     decision: Literal["STOP", "CONTINUE"]
@@ -80,6 +84,7 @@ class Verdict(BaseModel):
 
 class CascadeState(BaseModel):
     """Etat persistant d'une cascade en cours d'execution."""
+
     run_id: str
     objective: str
     variant: Variant = Variant.A

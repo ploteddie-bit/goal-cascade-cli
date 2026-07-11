@@ -117,13 +117,11 @@ class ProvidersConfig(BaseModel):
         if same_family:
             degraded = True
             details = "; ".join(
-                f"{family}: {', '.join(roles)}"
-                for family, roles in same_family.items()
+                f"{family}: {', '.join(roles)}" for family, roles in same_family.items()
             )
             if self.require_diversity:
                 raise ValueError(
-                    "require_diversity=true : plusieurs rôles dans la même famille. "
-                    f"{details}"
+                    f"require_diversity=true : plusieurs rôles dans la même famille. {details}"
                 )
             logger.warning("Diversité réduite : mêmes familles détectées. %s", details)
 

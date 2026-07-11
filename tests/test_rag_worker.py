@@ -20,6 +20,7 @@ def test_verify_endpoint_uses_env_host(monkeypatch) -> None:
 
             def __exit__(self, exc_type, exc, tb):
                 return False
+
         return FakeResponse()
 
     monkeypatch.setattr(urllib.request, "urlopen", fake_urlopen)

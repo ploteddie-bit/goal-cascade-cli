@@ -44,9 +44,7 @@ UNQUOTED_SECRET_RE = re.compile(
     rf"(?P<value>(?!\[MASQUÉ\])[^\s,;]+)",
     re.IGNORECASE,
 )
-AUTHORIZATION_RE = re.compile(
-    r"(?i)\bauthorization\s*:\s*bearer\s+[^\s,;]+"
-)
+AUTHORIZATION_RE = re.compile(r"(?i)\bauthorization\s*:\s*bearer\s+[^\s,;]+")
 PRIVATE_KEY_RE = re.compile(
     r"-----BEGIN(?: [A-Z0-9]+)* PRIVATE KEY-----.*?"
     r"-----END(?: [A-Z0-9]+)* PRIVATE KEY-----",
@@ -60,8 +58,7 @@ def redact_sensitive(value: str) -> str:
     result = AUTHORIZATION_RE.sub("Authorization: Bearer [MASQUÉ]", result)
     result = QUOTED_SECRET_RE.sub(
         lambda match: (
-            f"{match.group('prefix')}{match.group('quote')}"
-            f"[MASQUÉ]{match.group('quote')}"
+            f"{match.group('prefix')}{match.group('quote')}[MASQUÉ]{match.group('quote')}"
         ),
         result,
     )
@@ -309,9 +306,7 @@ def main() -> int:
         return 0
     except Exception as error:
         payload = {
-            "status": (
-                "indexed_pending_embedding" if document_id is not None else "failed"
-            ),
+            "status": ("indexed_pending_embedding" if document_id is not None else "failed"),
             "error_type": type(error).__name__,
             "message": redact_sensitive(str(error)),
             "postgres_indexed": document_id is not None,

@@ -60,8 +60,7 @@ def _print_config_summary(config_path: Path, providers: ProvidersConfig) -> None
     available_count = len(set(providers.enabled))
     if providers.degraded:
         console.print(
-            f"[yellow]⚠️  Mode dégradé : {available_count}/3 provider(s) "
-            f"disponible(s)[/yellow]"
+            f"[yellow]⚠️  Mode dégradé : {available_count}/3 provider(s) disponible(s)[/yellow]"
         )
         console.print("   Mapping effectif :")
         for row in providers.mapping_rows():
@@ -75,10 +74,7 @@ def _print_config_summary(config_path: Path, providers: ProvidersConfig) -> None
             "Les erreurs seront corrélées.[/yellow]"
         )
     else:
-        console.print(
-            f"   Providers : {', '.join(providers.enabled)} "
-            f"({available_count}/3 ✓)"
-        )
+        console.print(f"   Providers : {', '.join(providers.enabled)} ({available_count}/3 ✓)")
         console.print("   Diversité : optimale")
 
 
@@ -142,32 +138,22 @@ def _build_provider(
 @app.command()
 def run(
     objective: str = typer.Option(
-        ..., "--objective", "-o",
-        help="L'objectif du livrable (une phrase claire)"
+        ..., "--objective", "-o", help="L'objectif du livrable (une phrase claire)"
     ),
     variant: Variant = typer.Option(
-        Variant.A, "--variant", "-v",
-        help="Variante : A (redactionnel) ou B (technique)"
+        Variant.A, "--variant", "-v", help="Variante : A (redactionnel) ou B (technique)"
     ),
     provider: ProviderChoice = typer.Option(
-        ProviderChoice.MOCK, "--provider", "-p",
-        help="Provider : mock, kimi-cli ou kimi-code"
+        ProviderChoice.MOCK, "--provider", "-p", help="Provider : mock, kimi-cli ou kimi-code"
     ),
     config: Path | None = typer.Option(
         None,
         "--config",
-        help=(
-            "Chemin du fichier config TOML. "
-            f"Par défaut : {DEFAULT_CONFIG_PATH} si présent."
-        ),
+        help=(f"Chemin du fichier config TOML. Par défaut : {DEFAULT_CONFIG_PATH} si présent."),
     ),
-    audience: str = typer.Option(
-        "", "--audience", "-a",
-        help="Public cible"
-    ),
+    audience: str = typer.Option("", "--audience", "-a", help="Public cible"),
     constraints: str = typer.Option(
-        "", "--constraints", "-c",
-        help="Contraintes (format, longueur, etc.)"
+        "", "--constraints", "-c", help="Contraintes (format, longueur, etc.)"
     ),
     synthesizer_model: str | None = typer.Option(
         None,
@@ -191,17 +177,13 @@ def run(
         # qu'un FileNotFoundError brut issu de tomllib.
         if config is not None and not candidate_config_path.exists():
             console.print(
-                f"[bold red]Config introuvable : "
-                f"{candidate_config_path.expanduser()}[/bold red]"
+                f"[bold red]Config introuvable : {candidate_config_path.expanduser()}[/bold red]"
             )
             raise typer.Exit(2)
         try:
             goal_config = load_goal_config(candidate_config_path)
         except (ValidationError, ValueError) as exc:
-            console.print(
-                f"[bold red]Config invalide ({candidate_config_path}): "
-                f"{exc}[/bold red]"
-            )
+            console.print(f"[bold red]Config invalide ({candidate_config_path}): {exc}[/bold red]")
             raise typer.Exit(1) from exc
         _print_config_summary(candidate_config_path, goal_config.providers)
 
@@ -222,8 +204,7 @@ def run(
 
         provider_names = set(goal_config.providers.resolved_role_mapping.values())
         providers_by_name = {
-            provider_name: _build_provider(provider_name)
-            for provider_name in provider_names
+            provider_name: _build_provider(provider_name) for provider_name in provider_names
         }
         selected_provider = RoleMappedProvider(
             providers_by_name=providers_by_name,
@@ -329,8 +310,7 @@ def run(
     console.print()
     if state.status == "stopped":
         console.print(
-            f"[bold green]Cascade terminee en {state.current_iteration} "
-            f"iterations[/bold green]"
+            f"[bold green]Cascade terminee en {state.current_iteration} iterations[/bold green]"
         )
     elif state.status == "forced_stop":
         console.print(
@@ -341,9 +321,7 @@ def run(
     if state.final_verdict:
         verdict = state.final_verdict
         color = "green" if verdict.decision == "STOP" else "yellow"
-        console.print(
-            f"\nVerdict : [{color}]{verdict.decision}[/{color}]"
-        )
+        console.print(f"\nVerdict : [{color}]{verdict.decision}[/{color}]")
         console.print(f"Justification : {verdict.justification}")
 
     if state.accumulated_cost > 0:
@@ -356,9 +334,7 @@ def run(
 
     # Afficher les details du run
     console.print(f"\nRun ID : [cyan]{state.run_id}[/cyan]")
-    console.print(
-        f"Livrable : {RUNS_DIR / state.run_id / 'final_output.md'}"
-    )
+    console.print(f"Livrable : {RUNS_DIR / state.run_id / 'final_output.md'}")
     console.print(f"Cheminement : {run_dir / 'timeline.md'}")
     console.print(f"Événements : {run_dir / 'events.jsonl'}")
     console.print(f"Preuve RAG : {run_dir / 'rag-status.json'}")
@@ -457,9 +433,7 @@ def status(
 
     if state.final_verdict:
         color = "green" if state.final_verdict.decision == "STOP" else "yellow"
-        console.print(
-            f"\nVerdict : [{color}]{state.final_verdict.decision}[/{color}]"
-        )
+        console.print(f"\nVerdict : [{color}]{state.final_verdict.decision}[/{color}]")
         console.print(f"  {state.final_verdict.justification}")
 
 
@@ -470,8 +444,9 @@ def list_cmd():
 
     if not runs:
         console.print("[yellow]Aucun run trouve.[/yellow]")
-        console.print("Lancez votre premiere cascade avec : "
-                      "[cyan]goal run --objective \"...\"[/cyan]")
+        console.print(
+            'Lancez votre premiere cascade avec : [cyan]goal run --objective "..."[/cyan]'
+        )
         return
 
     table = Table(title="Runs G.O.A.L. Cascade")
@@ -543,8 +518,7 @@ def init(
 
     # README minimal
     (project_dir / "README.md").write_text(
-        f"# {name}\n\nProjet G.O.A.L. Cascade.\n",
-        encoding="utf-8"
+        f"# {name}\n\nProjet G.O.A.L. Cascade.\n", encoding="utf-8"
     )
 
     console.print(f"[green]Projet '{name}' cree.[/green]")

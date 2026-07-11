@@ -94,9 +94,7 @@ class Synthesizer:
             objective=objective,
             previous_output=raw_output,
             previous_synthesis=(
-                previous_synthesis.model_dump_json(indent=2)
-                if previous_synthesis
-                else ""
+                previous_synthesis.model_dump_json(indent=2) if previous_synthesis else ""
             ),
             iteration_from=iteration_from,
             iteration_to=iteration_to,
@@ -169,8 +167,6 @@ class Synthesizer:
     ) -> list[ImmutableArtifact]:
         merged: dict[str, ImmutableArtifact] = {}
         for artifact in [*previous, *current]:
-            key = artifact.checksum or hashlib.sha256(
-                artifact.content.encode("utf-8")
-            ).hexdigest()
+            key = artifact.checksum or hashlib.sha256(artifact.content.encode("utf-8")).hexdigest()
             merged[key] = artifact
         return list(merged.values())

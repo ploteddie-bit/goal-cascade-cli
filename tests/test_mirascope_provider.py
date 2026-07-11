@@ -97,9 +97,7 @@ def test_call_backend_delegates_to_backend_method(monkeypatch: pytest.MonkeyPatc
 
     monkeypatch.setattr(provider, "_call_anthropic", fake_call)
 
-    response = asyncio.run(
-        provider._call_backend(Backend.ANTHROPIC, "hello", "producer", "small")
-    )
+    response = asyncio.run(provider._call_backend(Backend.ANTHROPIC, "hello", "producer", "small"))
 
     assert response.text.startswith("claude-haiku")
     assert response.provider == "anthropic"

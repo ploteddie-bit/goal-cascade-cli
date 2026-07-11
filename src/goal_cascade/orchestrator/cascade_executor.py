@@ -75,9 +75,7 @@ class CascadeExecutor:
         rag_bridge=None,
     ):
         if synthesizer_provider is provider:
-            raise ValueError(
-                "Le synthétiseur exige une instance de provider distincte"
-            )
+            raise ValueError("Le synthétiseur exige une instance de provider distincte")
         self.provider = provider
         self.synthesizer_provider = synthesizer_provider
         self.prompt_loader = prompt_loader or PromptLoader()
@@ -142,9 +140,7 @@ class CascadeExecutor:
                 "synthesizer_provider": self.synthesizer_provider.name,
                 "status": state.status,
                 "iterations": state.current_iteration,
-                "verdict": (
-                    state.final_verdict.decision if state.final_verdict else "absent"
-                ),
+                "verdict": (state.final_verdict.decision if state.final_verdict else "absent"),
                 "last_error": state.last_error or "aucune",
             }
             journal.finalize(metadata)
@@ -172,8 +168,7 @@ class CascadeExecutor:
             if state.current_iteration >= state.max_iterations:
                 state.status = "forced_stop"
                 state.final_verdict = Verdict(
-                    decision="STOP",
-                    justification="Limite absolue de 5 iterations atteinte"
+                    decision="STOP", justification="Limite absolue de 5 iterations atteinte"
                 )
                 state_manager.save_state(state)
                 break
@@ -191,8 +186,12 @@ class CascadeExecutor:
             if verbose:
                 tier = ROLE_TIERS.get(role, "medium")
                 label = ROLE_LABELS.get(role, role.value)
-                print(f"\n  Iteration {iteration}/{state.max_iterations} "
-                      f"-- {label} ({self.provider.name}/{tier}) ...", end=" ", flush=True)
+                print(
+                    f"\n  Iteration {iteration}/{state.max_iterations} "
+                    f"-- {label} ({self.provider.name}/{tier}) ...",
+                    end=" ",
+                    flush=True,
+                )
 
             # Construire le prompt
             prompt = self._build_prompt(state, role, audience, constraints)
@@ -332,9 +331,7 @@ class CascadeExecutor:
                                 cost_usd=failed_response.cost_usd,
                                 latency_ms=failed_response.latency_ms,
                                 raw_output=failed_response.text,
-                                token_count_estimated=(
-                                    failed_response.token_count_estimated
-                                ),
+                                token_count_estimated=(failed_response.token_count_estimated),
                             )
                         )
                         state.accumulated_cost += failed_response.cost_usd
@@ -409,15 +406,9 @@ class CascadeExecutor:
 
         # Sauvegarder le livrable final
         if state.history:
-            arbiter_outputs = [
-                call.raw_output for call in state.history if call.role == "arbiter"
-            ]
-            main_outputs = [
-                call.raw_output for call in state.history if call.role != "synthesizer"
-            ]
-            final_output = (
-                arbiter_outputs[-1] if arbiter_outputs else main_outputs[-1]
-            )
+            arbiter_outputs = [call.raw_output for call in state.history if call.role == "arbiter"]
+            main_outputs = [call.raw_output for call in state.history if call.role != "synthesizer"]
+            final_output = arbiter_outputs[-1] if arbiter_outputs else main_outputs[-1]
             final_path = state_manager.save_final_output(state.run_id, final_output)
             journal.record_file("final_output_saved", final_path)
 
