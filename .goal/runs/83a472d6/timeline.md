@@ -576,6 +576,20 @@
 }
 ```
 
+### 35 — rag_sync_started (2026-07-11T07:11:50.012683+00:00)
+
+```json
+{
+  "embedding_host": "ia-general",
+  "embedding_model": "bge-m3:latest",
+  "event": "rag_sync_started",
+  "run_id": "83a472d6",
+  "sequence": 35,
+  "timeline": "/home/eddie/.goal/runs/83a472d6/timeline.md",
+  "timestamp_utc": "2026-07-11T07:11:50.012683+00:00"
+}
+```
+
 ## Données persistées
 
 ### prompt_1_producer.txt

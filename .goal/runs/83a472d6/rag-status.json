@@ -1,14 +1,16 @@
 {
+  "chunks": 43,
+  "cosine_similarity": 1.0,
+  "dimensions": 1024,
   "document_id": 2875,
   "embedding_host": "ia-general",
-  "embedding_model": "bge-m3:latest",
-  "error_type": "RuntimeError",
-  "message": "Endpoint refusé : les embeddings G.O.A.L. doivent provenir de ia-general",
+  "endpoint": "http://10.0.0.1:11434/api/embed",
+  "message": "Document indexé et segments vectoriels vérifiés",
+  "model": "bge-m3:latest",
   "postgres_indexed": true,
-  "returncode": 1,
   "run_id": "83a472d6",
-  "sha256": "0ee0a6741236ff45cfc32756c949230c0822774352b49bd820e1f8ccd462512a",
+  "sha256": "8f21852a33f0a8d046660b68682815fa4e81c3706a07d8f559207f533519605d",
   "source": ".goal/runs/83a472d6/timeline.md",
-  "status": "indexed_pending_embedding",
-  "updated_at_utc": "2026-07-11T06:50:50.404919+00:00"
+  "status": "embedded",
+  "updated_at_utc": "2026-07-11T07:13:11.075339+00:00"
 }

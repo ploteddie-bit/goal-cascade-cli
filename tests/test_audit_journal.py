@@ -12,7 +12,12 @@ from goal_cascade.orchestrator import state_manager
 from goal_cascade.orchestrator.cascade_executor import CascadeExecutor
 from goal_cascade.orchestrator.synthesizer import SynthesisError
 from goal_cascade.providers.base import BaseProvider, LLMResponse
-from goal_cascade.rag_bridge import RagBridge, RagSyncError
+from goal_cascade.rag_bridge import (
+    IA_GENERAL_EMBED_URL,
+    IA_GENERAL_HOST,
+    RagBridge,
+    RagSyncError,
+)
 from goal_cascade.schemas.models import Variant
 
 
@@ -208,7 +213,7 @@ def test_rag_bridge_records_embedding_proof(tmp_path, monkeypatch) -> None:
             "chunks": 6,
             "dimensions": 1024,
             "model": "bge-m3:latest",
-            "endpoint": "http://localhost:11434/api/embed",
+            "endpoint": IA_GENERAL_EMBED_URL,
             "cosine_similarity": 1.0,
             "sha256": hashlib.sha256(timeline.read_bytes()).hexdigest(),
             "source": ".goal/runs/rag-ok/timeline.md",
@@ -225,8 +230,8 @@ def test_rag_bridge_records_embedding_proof(tmp_path, monkeypatch) -> None:
     assert status["status"] == "embedded"
     assert status["dimensions"] == 1024
     assert status["embedding_host"] == "ia-general"
-    assert captured["env"]["OLLAMA_HOST"] == "http://localhost:11434"
-    assert captured["env"]["OLLAMA_EMBED_URL"].endswith("localhost:11434/api/embed")
+    assert captured["env"]["OLLAMA_HOST"] == IA_GENERAL_HOST
+    assert captured["env"]["OLLAMA_EMBED_URL"] == IA_GENERAL_EMBED_URL
 
 
 def test_rag_bridge_keeps_failure_visible_and_redacted(tmp_path, monkeypatch) -> None:
@@ -382,7 +387,7 @@ def test_false_embedded_index_only_receipt_and_wrong_hash_are_rejected(
             "chunks": 1,
             "dimensions": 1024,
             "model": "bge-m3:latest",
-            "endpoint": "http://localhost:11434/api/embed",
+            "endpoint": IA_GENERAL_EMBED_URL,
             "cosine_similarity": 1.0,
             "postgres_indexed": True,
             "sha256": "f" * 64,

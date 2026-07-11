@@ -13,7 +13,7 @@ from typing import Callable
 from .audit_journal import AuditJournal, redact_sensitive
 
 
-IA_GENERAL_HOST = "http://localhost:11434"
+IA_GENERAL_HOST = "http://10.0.0.1:11434"
 IA_GENERAL_EMBED_URL = f"{IA_GENERAL_HOST}/api/embed"
 
 
