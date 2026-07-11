@@ -182,6 +182,11 @@ def run(
         envvar="GOAL_SYNTHESIZER_MODEL",
         help="Modèle small/cheap dédié aux synthèses (obligatoire avec Kimi)",
     ),
+    no_synth: bool = typer.Option(
+        False,
+        "--no-synth",
+        help="Désactiver la synthèse orientée objectif (debug : la sortie brute est passée telle quelle)",
+    ),
 ):
     """Lance une cascade G.O.A.L. complete."""
 
@@ -332,6 +337,7 @@ def run(
             audience=audience,
             constraints=constraints,
             verbose=True,
+            no_synth=no_synth,
         )
     except Exception as exc:
         console.print(f"\n[bold red]Cascade en erreur : {exc}[/bold red]")

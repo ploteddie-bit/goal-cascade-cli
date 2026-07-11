@@ -224,3 +224,46 @@ def test_technical_artifact_is_preserved(tmp_path, monkeypatch) -> None:
     assert "Draft initial" not in arbiter_prompt
     assert "Rapport critic" not in arbiter_prompt
     assert "Rapport adversary" not in arbiter_prompt
+
+
+def test_no_synth_skips_synthesis(tmp_path, monkeypatch) -> None:
+    """En mode --no-synth, le synthesizer n'est pas appelé.
+
+    La sortie brute de chaque itération est passée directement à la suivante,
+    sans filtre synthèse. Utile pour debugger une synthèse qui écrase des
+    informations critiques.
+    """
+    monkeypatch.setattr(state_manager, "RUNS_DIR", tmp_path / "runs")
+    provider = RecordingProvider(name="main")
+    synthesizer_provider = RecordingProvider(name="small")
+    executor = CascadeExecutor(
+        provider=provider,
+        synthesizer_provider=synthesizer_provider,
+    )
+
+    state = executor.run(
+        executor.init_state("Objectif de test no_synth", Variant.A),
+        verbose=False,
+        no_synth=True,
+    )
+
+    # Le provider principal fait toujours 4 appels (producer, critic,
+    # adversary, arbiter).
+    roles = [role for role, _ in provider.calls]
+    assert roles == [
+        "producer",
+        "critic",
+        "adversary",
+        "arbiter",
+    ]
+
+    # Le synthesizer ne fait AUCUN appel en mode --no-synth.
+    assert synthesizer_provider.calls == []
+
+    # last_synthesis reste None car la synthèse n'est jamais générée.
+    assert state.last_synthesis is None
+
+    # Le prompt du critique contient la sortie brute du producteur
+    # (pas de synthèse intermédiaire).
+    critic_prompt = next(prompt for role, prompt in provider.calls if role == "critic")
+    assert "Draft initial" in critic_prompt or "Producteur" in critic_prompt

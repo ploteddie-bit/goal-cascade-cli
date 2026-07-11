@@ -115,6 +115,7 @@ class CascadeExecutor:
         audience: str = "",
         constraints: str = "",
         verbose: bool = True,
+        no_synth: bool = False,
     ) -> CascadeState:
         """Execute la cascade jusqu'au verdict STOP ou la limite."""
 
@@ -126,6 +127,7 @@ class CascadeExecutor:
             variant=state.variant.value,
             provider=self.provider.name,
             synthesizer_provider=self.synthesizer_provider.name,
+            no_synth=no_synth,
         )
         state_manager.save_state(state)
 
@@ -133,7 +135,7 @@ class CascadeExecutor:
         constraints = redact_sensitive(constraints)
 
         try:
-            state = self._run_loop(state, audience, constraints, verbose, journal)
+            state = self._run_loop(state, audience, constraints, verbose, journal, no_synth=no_synth)
         except Exception as exc:
             state.status = "failed"
             state.last_error = redact_sensitive(str(exc))
@@ -180,6 +182,7 @@ class CascadeExecutor:
         constraints: str,
         verbose: bool,
         journal: AuditJournal,
+        no_synth: bool = False,
     ) -> CascadeState:
         """Exécute la boucle tout en enregistrant chaque entrée et sortie."""
 
@@ -310,7 +313,14 @@ class CascadeExecutor:
                 )
 
             # La synthese est un appel isole entre les iterations principales.
-            if role != IterationRole.ARBITER and state.status == "running":
+            # En mode --no-synth, on passe la sortie brute a l'iteration suivante
+            # sans filtrage. Utile pour debugger une synthese qui ecrase des
+            # informations critiques.
+            if (
+                role != IterationRole.ARBITER
+                and state.status == "running"
+                and not no_synth
+            ):
                 synthesis_prompt = self.synthesizer.build_prompt(
                     raw_output=response.text,
                     objective=state.objective,
