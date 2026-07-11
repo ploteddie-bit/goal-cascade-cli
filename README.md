@@ -147,7 +147,49 @@ Quand un provider configuré n'est pas disponible dans `enabled`, le CLI dupliqu
 
 Les providers Mirascope appliquent un backoff exponentiel sur les rate limits puis basculent vers un backend de fallback disponible, en conservant le même tier (`small`, `medium`, `large`, `xlarge`). `require_diversity = true` bloque aussi les mappings qui réutilisent plusieurs providers d'une même famille.
 
-Sont volontairement hors périmètre de ce jalon : LangGraph, budget tracker, dérive cosinus, multi-cascade et CI/CD hook.
+La logique de résilience (rate limit + chaîne de fallback) est isolée dans `src/goal_cascade/providers/rate_limiter.py` sous la forme d'une fonction `call_with_retry_and_fallback` testable indépendamment. Le provider ne fait plus qu'injecter sa méthode d'appel backend dans cette fonction.
+
+Sont volontairement hors périmètre de ce jalon : LangGraph, dérive cosinus, multi-cascade et CI/CD hook. Le **budget tracker** et le **reçu détaillé** sont en revanche implémentés (voir section "Transparence des coûts" plus bas).
+
+## Transparence des coûts
+
+Chaque run produit un reçu détaillé dans `<run_dir>/receipt.json` et un récapitulatif affiché en fin de CLI. Le reçu contient :
+
+- `total_cost_usd` : somme des coûts de tous les appels LLM
+- `cache_hit_rate` : `cache_read_tokens / total_input_tokens`
+- `projected_monthly_cost` : projection basée sur `runs_per_day_projection`
+- `calls` : liste complète des `LLMCallRecord` (input_tokens, output_tokens, cost_usd, latency_ms)
+- `final_verdict` : `STOP` / `CONTINUE` / `absent`
+- `total_duration_s` : durée du run
+
+### Kill switch budgétaire
+
+Pour activer un plafond de coût automatique, ajouter une section `[budget]` dans `~/.goal/config.toml` :
+
+```toml
+[budget]
+max_per_run = 0.50      # un run ne peut pas dépasser $0.50
+max_per_day = 10.00     # plafond journalier
+warn_at_percent = 80    # alerte à 80% du budget run
+hard_stop = true        # stopper net, pas juste avertir
+runs_per_day_projection = 10  # base du calcul de projection mensuelle
+```
+
+Quand `hard_stop=true` et que le coût courant dépasse `max_per_run` (ou que le cumul du jour + courant dépasse `max_per_day`), la cascade s'arrête avec le statut `budget_exceeded` et un verdict `STOP` documentant le coût atteint. Le reçu final est conservé.
+
+Le cumul quotidien est persisté dans `<GOAL_HOME>/budget_daily.json` et remis à zéro automatiquement à chaque changement de date.
+
+### Cache exact Anthropic (préparation)
+
+Le module `src/goal_cascade/providers/anthropic_cache.py` prépare l'infrastructure pour le prompt-caching Anthropic (`cache_control.ephemeral` sur le préfixe stable objectif + frozen spec). Il détecte la disponibilité du SDK `anthropic` et dégrade gracieusement si absent.
+
+**Limitation actuelle** : Mirascope v2 (`mirascope.llm.call`) n'expose pas `cache_control` via son API publique. Quand cette limitation sera levée (côté mirascope ou via appel direct à `anthropic` SDK), le câblage est prêt : `_call_mirascope_v2` logge déjà `cache_intent` avec les métadonnées utiles, et `build_cached_messages(...)` produit la structure de messages compatible.
+
+Pour activer le SDK dès aujourd'hui :
+
+```bash
+pip install 'goal-cascade[llm]'   # ajoute anthropic>=0.40 à mirascope
+```
 
 ## Traçabilité permanente
 
@@ -193,9 +235,11 @@ en faux succès ; `goal rag-sync <run_id>` reprend la tentative.
 ## Statut
 
 Cascade unique testée et installée comme commande utilisateur. La traçabilité
-locale et l'indexation PostgreSQL sont intégrées. Le multi-provider API,
-LangGraph et le multi-cascade ne font pas encore partie de ce jalon. Le statut
-`embedded` dépend de la disponibilité réelle de `ia-general`.
+locale, l'indexation PostgreSQL, le budget tracker avec kill switch, le reçu
+détaillé et l'infrastructure de cache exact Anthropic (en attente de l'API
+mirascope) sont intégrés. Le multi-provider API, LangGraph, la détection de
+dérive cosinus et le multi-cascade ne font pas encore partie de ce jalon. Le
+statut `embedded` dépend de la disponibilité réelle de `ia-general`.
 
 ## Licence
 
