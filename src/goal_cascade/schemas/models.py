@@ -9,7 +9,7 @@ from __future__ import annotations
 from enum import Enum
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class IterationRole(str, Enum):
@@ -29,7 +29,10 @@ class Variant(str, Enum):
 class GoalOrientedSynthesis(BaseModel):
     """Synthese transmise entre les iterations (section 4 du framework).
     Filtre le bruit, garde le signal, casse l'ancrage."""
-    objective: str = Field(..., description="Objectif initial, reformule en une phrase")
+    objective: str = Field(
+        ..., min_length=1,
+        description="Objectif initial, reformule en une phrase (non vide)",
+    )
     key_decisions: list[str] = Field(
         ..., min_length=1, max_length=5,
         description="3 a 5 decisions cles maximum"
@@ -39,10 +42,18 @@ class GoalOrientedSynthesis(BaseModel):
         description="Points non tranches ou a verifier"
     )
     next_instruction: str = Field(
-        ..., description="Role de l'iteration suivante + ce qu'elle doit produire"
+        ..., min_length=1,
+        description="Role de l'iteration suivante + ce qu'elle doit produire (non vide)",
     )
     iteration_from: int
     iteration_to: int
+
+    @field_validator("objective", "next_instruction", mode="before")
+    @classmethod
+    def _strip_whitespace(cls, v: str) -> str:
+        if isinstance(v, str):
+            v = v.strip()
+        return v
 
 
 class ImmutableArtifact(BaseModel):

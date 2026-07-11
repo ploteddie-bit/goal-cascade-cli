@@ -46,6 +46,8 @@ class SynthesisResult:
     # 🆕 DRIFT — champs ajoutés pour la détection de dérive cosinus
     similarity_score: float | None = None
     drift_status: DriftStatus = DriftStatus.NO_DATA
+    # 🆕 QUALITY — coverage de la synthèse vs sortie brute (S3-C)
+    coverage_score: float | None = None
 
 
 class Synthesizer:
@@ -122,6 +124,15 @@ class Synthesizer:
                 iteration_to,
             )
 
+        # 🆕 QUALITY — Coverage de la synthèse vs sortie brute (S3-C)
+        coverage_score = self._compute_coverage(raw_output, synthesis)
+        if coverage_score is not None and coverage_score < 0.30:
+            _logger.warning(
+                "synthesis_low_coverage iteration=%d coverage=%.3f "
+                "action=check_synthesis_quality",
+                iteration_to, coverage_score,
+            )
+
         return SynthesisResult(
             synthesis=synthesis,
             artifacts=artifacts,
@@ -129,6 +140,7 @@ class Synthesizer:
             prompt=prompt,
             similarity_score=similarity_score,
             drift_status=drift_status,
+            coverage_score=coverage_score,
         )
 
     def build_prompt(
@@ -225,6 +237,56 @@ class Synthesizer:
             ).hexdigest()
             merged[key] = artifact
         return list(merged.values())
+
+    @staticmethod
+    def _compute_coverage(
+        raw_output: str,
+        synthesis: GoalOrientedSynthesis,
+    ) -> float | None:
+        """Ratio de mots significatifs de la sortie brute présents dans la synthèse.
+
+        Mesure simple de la préservation d'information :
+        coverage = |mots_brut ∩ mots_synthèse| / |mots_brut|
+
+        Les mots < 4 caractères et les stop words courants sont exclus
+        pour réduire le bruit.
+        """
+        STOP_WORDS = {
+            "the", "a", "an", "is", "are", "was", "were", "be", "been",
+            "have", "has", "had", "do", "does", "did", "will", "would",
+            "shall", "should", "may", "might", "can", "could", "not",
+            "and", "but", "or", "nor", "for", "yet", "so", "if", "then",
+            "that", "this", "these", "those", "with", "from", "into",
+            "le", "la", "les", "un", "une", "des", "est", "sont", "ont",
+            "et", "ou", "mais", "donc", "car", "pour", "dans", "par",
+            "pas", "qui", "que", "quoi", "dont", "avec", "sur", "sous",
+        }
+
+        def _significant_words(text: str) -> set[str]:
+            return {
+                w.lower()
+                for w in re.findall(r"[a-zA-Z\u00C0-\u024F]{4,}", text)
+                if w.lower() not in STOP_WORDS
+            }
+
+        brute_words = _significant_words(raw_output)
+        if not brute_words:
+            return None
+
+        synth_text = " ".join(
+            [
+                synthesis.objective,
+                " ".join(synthesis.key_decisions),
+                " ".join(synthesis.uncertainties),
+                synthesis.next_instruction,
+            ]
+        )
+        synth_words = _significant_words(synth_text)
+        if not synth_words:
+            return 0.0
+
+        covered = brute_words & synth_words
+        return len(covered) / len(brute_words)
 
     def reset_drift(self) -> None:
         """🆕 DRIFT — Réinitialiser le détecteur (nouvelle cascade)."""
