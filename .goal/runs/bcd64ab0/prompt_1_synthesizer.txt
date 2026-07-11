@@ -1,0 +1,53 @@
+Tu es un synthétiseur. Produis une synthèse orientée objectif
+strictement conforme au contrat JSON ci-dessous.
+
+OBJECTIF :
+Rédiger une phrase de présentation de goal-cascade-cli
+
+TRAVAIL DE L'ETAPE PRECEDENTE :
+Voici une proposition de premier jet pour la phrase de présentation de **goal-cascade-cli**.
+
+### Draft de présentation
+
+**goal-cascade-cli** est un outil piloté par interface en ligne de commande (CLI) [HAUT] conçu pour faciliter la gestion et la visualisation de la décomposition d'objectifs stratégiques en sous-objectifs et tâches actionnables [MOYEN], permettant ainsi d'assurer l'alignement opérationnel et le suivi de la progression hiérarchique directement depuis un terminal [HAUT].
+
+---
+
+### Analyse des affirmations et niveaux de confiance
+
+1.  **Nature de l'outil (CLI) : [HAUT]**
+    *   *Justification :* Le suffixe "-cli" dans le nom du projet indique explicitement une "Command Line Interface". C'est une convention de nommage standard dans le développement logiciel.
+2.  **Fonctionnalité de décomposition (Cascading) : [HAUT]**
+    *   *Justification :* Le terme "goal-cascade" (objectifs en cascade) fait référence à une méthodologie de management (type OKR ou MBO) où les objectifs globaux sont déclinés à des niveaux inférieurs.
+3.  **Visualisation et gestion via le terminal : [MOYEN]**
+    *   *Justification :* Bien que la gestion soit certaine pour un CLI, la capacité de "visualisation" (sous forme d'arbre ou de liste) est une déduction logique basée sur le concept de "cascade", mais dépend de l'implémentation spécifique du développeur.
+4.  **Alignement stratégique : [MOYEN]**
+    *   *Justification :* C'est l'objectif métier principal de toute méthode de "cascading", bien qu'il faille confirmer si l'outil cible les entreprises ou un usage personnel.
+
+---
+
+### Liste des sources
+
+*   **Sémantique logicielle (Convention de nommage) : [HAUT]**
+    *   L'usage du terme "CLI" pour désigner les outils s'exécutant dans un terminal (ex: git-cli, docker-cli).
+*   **Théorie du Management (Goal Cascading / MBO) : [HAUT]**
+    *   Concept théorique de la "cascade d'objectifs" introduit initialement par Peter Drucker dans la gestion par objectifs.
+*   **Patterns courants sur GitHub/Package managers : [MOYEN]**
+    *   Observation de projets similaires (ex: `taskwarrior` ou divers outils d'OKR en CLI) qui partagent cette structure de promesse utilisateur.
+*   **Recherche de dépôt spécifique : [FAIBLE]**
+    *   Il n'existe pas, à date de ma dernière mise à jour, de projet "goal-cascade-cli" ayant une notoriété publique majeure (comme un outil de la fondation Apache ou de Google). Le draft repose donc sur l'analyse sémantique du nom fourni.
+
+Réponds avec UN SEUL objet JSON valide, sans bloc Markdown ni commentaire :
+{
+  "objective": "objectif invariant en une phrase",
+  "key_decisions": ["décision 1", "décision 2", "décision 3"],
+  "uncertainties": ["point restant à vérifier"],
+  "next_instruction": "instruction précise pour l'étape suivante"
+}
+
+Regles :
+- Entre 1 et 5 décisions clés, jamais davantage.
+- Consolide la synthèse précédente avec le nouveau travail.
+- Élimine les tournures et digressions, mais conserve les décisions.
+- Ne recopie pas les blocs de code : ils sont préservés séparément.
+- N'ajoute aucune clé au contrat JSON.

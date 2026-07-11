@@ -155,19 +155,41 @@ GOOGLE_PRICES = {
 
 def _estimate_cost_anthropic(model: str, usage: Any) -> float:
     input_price, output_price = ANTHROPIC_PRICES.get(model, (0.0, 0.0))
-    return getattr(usage, "input_tokens", 0) * input_price + getattr(usage, "output_tokens", 0) * output_price
+    input_tokens = getattr(usage, "input_tokens", 0) or 0
+    output_tokens = getattr(usage, "output_tokens", 0) or 0
+    return input_tokens * input_price + output_tokens * output_price
 
 
 def _estimate_cost_openai(model: str, usage: Any) -> float:
     if usage is None:
         return 0.0
     input_price, output_price = OPENAI_PRICES.get(model, (0.0, 0.0))
-    return getattr(usage, "prompt_tokens", 0) * input_price + getattr(usage, "completion_tokens", 0) * output_price
+    input_tokens = (
+        getattr(usage, "input_tokens", 0)
+        or getattr(usage, "prompt_tokens", 0)
+        or 0
+    )
+    output_tokens = (
+        getattr(usage, "output_tokens", 0)
+        or getattr(usage, "completion_tokens", 0)
+        or 0
+    )
+    return input_tokens * input_price + output_tokens * output_price
 
 
 def _estimate_cost_google(model: str, usage: Any) -> float:
     input_price, output_price = GOOGLE_PRICES.get(model, (0.0, 0.0))
-    return (getattr(usage, "prompt_token_count", 0) or 0) * input_price + (getattr(usage, "candidates_token_count", 0) or 0) * output_price
+    input_tokens = (
+        getattr(usage, "input_tokens", 0)
+        or getattr(usage, "prompt_token_count", 0)
+        or 0
+    )
+    output_tokens = (
+        getattr(usage, "output_tokens", 0)
+        or getattr(usage, "candidates_token_count", 0)
+        or 0
+    )
+    return input_tokens * input_price + output_tokens * output_price
 
 
 class RateLimitConfig(BaseModel):
@@ -328,17 +350,22 @@ class MirascopeProvider(BaseProvider):
     async def _call_mirascope_v2(
         self, backend: Backend, prompt: str, model: str
     ) -> LLMResponse:
-        """Appel Mirascope v2 unifié (anthropic/openai/google via `mirascope.llm.call`)."""
+        """Appel Mirascope v2 unifié (anthropic/openai/google via `mirascope.llm.call`).
+
+        Utilise la version synchrone de ``llm.call`` exécutée dans un thread
+        séparé via ``asyncio.to_thread``. L'API async native de Mirascope v2
+        ne supporte pas d'être invoquée à travers plusieurs ``asyncio.run``
+        successifs (le client HTTP sous-jacent garde une référence à la
+        première boucle event loop).
+
+        Le prompt-caching Anthropic n'est pas activé : Mirascope v2 n'expose
+        pas ``cache_control`` via l'API publique ``mirascope.llm``.
+        """
         llm = _get_llm()
         model_id = _build_model_id(backend, model)
-        params: dict[str, Any] = {}
-        if backend == Backend.ANTHROPIC and self._enable_cache and len(prompt) > 1024:
-            params["extra_headers"] = {
-                "anthropic-beta": "prompt-caching-2024-07-31"
-            }
 
         def _sync_call() -> Any:
-            @llm.call(model_id, **params)
+            @llm.call(model_id)
             def _prompt() -> str:
                 return prompt
 

@@ -1,0 +1,10 @@
+{
+  "iterations": 4,
+  "last_error": "aucune",
+  "objective": "Rédiger une phrase de présentation de goal-cascade-cli",
+  "provider": "role-mapped",
+  "status": "stopped",
+  "synthesizer_provider": "google",
+  "variant": "A",
+  "verdict": "STOP"
+}

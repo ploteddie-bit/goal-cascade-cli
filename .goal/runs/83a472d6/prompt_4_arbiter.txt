@@ -1,0 +1,54 @@
+Tu es l'arbitre final. Tu as deux missions : (1) produire la
+version finale du livrable, (2) juger si l'objectif est atteint.
+
+OBJECTIF INITIAL :
+Rédiger une phrase de présentation de goal-cascade-cli
+
+SYNTHÈSE ORIENTÉE OBJECTIF :
+{
+  "objective": "Rédiger une phrase de présentation synthétique et précise pour l'outil goal-cascade-cli.",
+  "key_decisions": [
+    "Intégrer le suffixe '-cli' comme une promesse de fonctionnalités techniques (automatisation, gestion par fichiers, pipelines) indissociable du nom.",
+    "Élargir le périmètre sémantique au-delà du management pour inclure des usages techniques possibles (cascade de permissions, orchestration de données, moteurs de jeux).",
+    "Adopter une stratégie de définition multi-scénarios (Management, Technique, Hybride) pour pallier l'absence de source primaire.",
+    "Reclasser l'outil comme 'artefact technique non localisé' (potentiellement privé ou interne) plutôt que comme simple hypothèse d'existence."
+  ],
+  "uncertainties": [
+    "Domaine d'application réel : outil de pilotage stratégique (OKR/Management) ou utilitaire système (Cascading/Engineering).",
+    "Nature de la source d'origine (prompt IA, projet interne, ou outil de niche non indexé)."
+  ],
+  "next_instruction": "Formuler trois variantes de la phrase de présentation (Managériale, Technique, et Hybride) en s'appuyant sur les standards sémantiques des outils CLI.",
+  "iteration_from": 3,
+  "iteration_to": 4
+}
+
+ARTEFACTS IMMUABLES :
+
+
+TEMPS 1 -- EVALUATION DE L'ALIGNEMENT
+Verifie que la version actuelle sert l'objectif initial :
+  - Rien n'a ete oublie ?
+  - Rien n'a derive hors-sujet ?
+  - Toutes les objections de l'adversaire sont-elles traitees ?
+  - Les sources sont-elles toutes verifiees ?
+
+TEMPS 2 -- PRODUCTION FINALE
+Produis la version finale du livrable, en integrant les
+corrections de l'etape 2 et les angles morts de l'etape 3.
+
+TEMPS 3 -- VERDICT JSON
+Après le livrable final, termine par exactement un objet JSON dans un bloc
+```json```, sans texte après. Aucun autre champ n'est autorisé :
+
+```json
+{
+  "decision": "STOP",
+  "justification": "Raison précise"
+}
+```
+
+Utilise "CONTINUE" uniquement si un point documenté exige une passe
+supplémentaire, et décris ce point dans "justification".
+
+Regle absolue : tu ne peux pas repondre CONTINUE sans une
+raison concrete et documentee. Le doute profite au STOP.

@@ -1,0 +1,14 @@
+{
+  "objective": "Rédiger une phrase de présentation synthétique et précise pour l'outil goal-cascade-cli.",
+  "key_decisions": [
+    "Définir l'outil comme une interface en ligne de commande (CLI) dédiée à la méthode de management par cascade d'objectifs.",
+    "Mettre l'accent sur la décomposition hiérarchique des ambitions stratégiques en résultats clés et actions opérationnelles.",
+    "Cibler les profils techniques en soulignant l'intégration directe dans le terminal pour optimiser le workflow.",
+    "Structurer la présentation autour des bénéfices d'alignement et de visibilité sur l'impact des tâches."
+  ],
+  "uncertainties": [
+    "Terminologie interne exacte (adoption stricte des OKR ou format propriétaire)",
+    "Existence réelle de fonctionnalités de traçabilité de l'impact dans le code"
+  ],
+  "next_instruction": "Vérifier la documentation technique (README) pour confirmer la structure des données et les fonctionnalités de traçabilité d'impact."
+}

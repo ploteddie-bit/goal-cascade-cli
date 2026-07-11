@@ -1,0 +1,61 @@
+Tu es un synthétiseur. Produis une synthèse orientée objectif
+strictement conforme au contrat JSON ci-dessous.
+
+OBJECTIF :
+Rédiger une phrase de présentation de goal-cascade-cli
+
+SYNTHÈSE CUMULÉE PRÉCÉDENTE :
+{
+  "objective": "Rédiger une phrase de présentation synthétique et précise pour l'outil goal-cascade-cli.",
+  "key_decisions": [
+    "Ajuster le statut de l'outil au rang d'hypothèse suite à l'absence de preuves d'existence sur les registres publics (NPM, GitHub, PyPI).",
+    "Suspendre les affirmations sur la structure technique (CLI, OKR) tant que la documentation source n'est pas localisée.",
+    "Maintenir le concept de 'Goal Cascading' comme seul socle théorique valide pour définir la finalité de l'outil."
+  ],
+  "uncertainties": [
+    "Existence réelle et disponibilité de l'outil goal-cascade-cli.",
+    "Structure exacte des données (OKR vs format propriétaire) et présence réelle de fonctions de traçabilité."
+  ],
+  "next_instruction": "Identifier la source primaire mentionnant goal-cascade-cli ou fournir un lien vers le dépôt de code pour valider l'existence du projet et ses spécifications.",
+  "iteration_from": 2,
+  "iteration_to": 3
+}
+TRAVAIL DE L'ETAPE PRECEDENTE :
+Voici une analyse critique et contradictoire du travail actuel sur `goal-cascade-cli`. En tant que contradicteur, mon rôle est de pointer les fragilités de votre démarche actuelle.
+
+### 1. ANGLES MORTS (Ce qui est ignoré)
+*   **L’étymologie technique du nom :** Le suffixe `-cli` (Command Line Interface) n'est pas qu'une supposition technique, c'est une promesse d'usage. L'analyse ignore l'aspect "interface" : un outil en ligne de commande implique une gestion par fichiers (JSON, YAML), une intégration dans des pipelines CI/CD ou une utilisation par des développeurs/SRE. Faire l'impasse là-dessus sous prétexte d'absence de code, c'est ignorer 50% de la sémantique du nom.
+*   **Le contexte d'émergence :** Pourquoi cherchez-vous à définir cet outil ? S'il apparaît dans un prompt, un document interne ou un test technique, ce *contexte* est une source de données aussi importante que le code lui-même. L'ignorer condamne à la spéculation pure.
+*   **Le "Cascading" vs "Alignment" :** En management moderne, le "Goal Cascading" (top-down strict) est souvent opposé au "Goal Alignment" (bi-directionnel). L'analyse ne traite pas le risque que l'outil soit une critique ou une automatisation d'un modèle de management potentiellement obsolète.
+
+### 2. BIAIS IMPLICITES (Postulats non démontrés)
+*   **Biais de la "Preuve Publique" :** Vous postulez que si ce n'est pas sur NPM/GitHub, c'est une "hypothèse". C'est un biais de disponibilité. L'outil peut être un projet interne (In-house), un module privé sous VPN, ou un outil en cours de développement (stealth mode). Le traiter comme une "hypothèse" dévalorise peut-être une réalité tangible mais privée.
+*   **Biais de Fixation Théorique :** Vous décidez que le "Goal Cascading" est le *seul* socle valide. C'est un biais de confirmation par le nom. Rien ne prouve que l'outil n'utilise pas ce nom de manière ironique, détournée, ou qu'il ne s'agit pas d'un simple alias pour une autre méthode (comme les OKR, malgré votre suspension de jugement).
+*   **Biais d'Isomorphisme :** Vous supposez qu'un outil de "Goal Cascading" doit forcément être un outil de management. Et s'il s'agissait d'un outil technique ? (ex: cascade de déploiements, cascade de permissions système).
+
+### 3. CONTRE-ARGUMENTS (Objections d'un critique)
+*   **Inutilité de la démarche :** À quoi sert de rédiger une phrase "précise et synthétique" pour un objet dont vous admettez ne pas connaître l'existence ? Vous risquez de produire une "hallucination structurée" : une phrase qui a l'air vraie mais qui ne décrit rien de réel.
+*   **Circularité sémantique :** Si vous définissez l'outil uniquement par son nom ("Goal Cascade"), votre phrase de présentation n'apportera aucune valeur ajoutée par rapport au nom lui-même. Elle sera une tautologie (ex: "Un outil CLI pour faire du goal cascading").
+*   **Erreur de cible :** Si l'outil est un CLI, sa cible est technique. Utiliser un jargon de management (Goal Cascading) sans l'articuler avec des concepts techniques (Automation, Versioning, Parsing) rendra la définition inutile pour l'utilisateur final.
+
+### 4. RISQUES (Cas d'échec de la méthode)
+*   **Le risque du "Faux Ami" :** L'outil pourrait être un utilitaire pour un moteur de jeu (cascade d'objectifs de personnages non-joueurs) ou une bibliothèque de CSS/Graph (cascading de nœuds de données). En vous enfermant dans la théorie du management, vous vous exposez à un contresens total.
+*   **Le risque de l'obsolescence immédiate :** Dès que la source primaire sera trouvée (Instruction suivante), votre travail actuel (Itération 2->3) risque d'être intégralement jeté car basé sur des spéculations sémantiques plutôt que sur des fonctionnalités réelles.
+*   **Le blocage opérationnel :** Faire de la "source primaire" un prérequis absolu tout en essayant de définir l'outil crée un paradoxe qui paralyse la rédaction. Soit on définit un *concept* (indépendamment de l'outil), soit on attend l'outil. Faire les deux à moitié affaiblit la rigueur de la définition.
+
+**Conseil du Contradicteur :** Arrêtez de traiter l'outil comme une entité de management abstraite. Traitez-le comme un artefact technique fantôme. Préparez trois définitions radicalement différentes (Management, Technique, Hybride) au lieu de chercher une "précision" impossible à atteindre sans les sources.
+
+Réponds avec UN SEUL objet JSON valide, sans bloc Markdown ni commentaire :
+{
+  "objective": "objectif invariant en une phrase",
+  "key_decisions": ["décision 1", "décision 2", "décision 3"],
+  "uncertainties": ["point restant à vérifier"],
+  "next_instruction": "instruction précise pour l'étape suivante"
+}
+
+Regles :
+- Entre 1 et 5 décisions clés, jamais davantage.
+- Consolide la synthèse précédente avec le nouveau travail.
+- Élimine les tournures et digressions, mais conserve les décisions.
+- Ne recopie pas les blocs de code : ils sont préservés séparément.
+- N'ajoute aucune clé au contrat JSON.

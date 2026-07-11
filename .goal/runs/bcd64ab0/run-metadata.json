@@ -1,0 +1,10 @@
+{
+  "iterations": 1,
+  "last_error": "Event loop is closed",
+  "objective": "Rédiger une phrase de présentation de goal-cascade-cli",
+  "provider": "role-mapped",
+  "status": "failed",
+  "synthesizer_provider": "google",
+  "variant": "A",
+  "verdict": "absent"
+}

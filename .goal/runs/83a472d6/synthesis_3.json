@@ -1,0 +1,14 @@
+{
+  "objective": "Rédiger une phrase de présentation synthétique et précise pour l'outil goal-cascade-cli.",
+  "key_decisions": [
+    "Intégrer le suffixe '-cli' comme une promesse de fonctionnalités techniques (automatisation, gestion par fichiers, pipelines) indissociable du nom.",
+    "Élargir le périmètre sémantique au-delà du management pour inclure des usages techniques possibles (cascade de permissions, orchestration de données, moteurs de jeux).",
+    "Adopter une stratégie de définition multi-scénarios (Management, Technique, Hybride) pour pallier l'absence de source primaire.",
+    "Reclasser l'outil comme 'artefact technique non localisé' (potentiellement privé ou interne) plutôt que comme simple hypothèse d'existence."
+  ],
+  "uncertainties": [
+    "Domaine d'application réel : outil de pilotage stratégique (OKR/Management) ou utilitaire système (Cascading/Engineering).",
+    "Nature de la source d'origine (prompt IA, projet interne, ou outil de niche non indexé)."
+  ],
+  "next_instruction": "Formuler trois variantes de la phrase de présentation (Managériale, Technique, et Hybride) en s'appuyant sur les standards sémantiques des outils CLI."
+}

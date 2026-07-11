@@ -1,0 +1,29 @@
+Voici un premier jet pour la phrase de présentation de **goal-cascade-cli**.
+
+### Proposition de draft
+
+« **goal-cascade-cli** est une interface en ligne de commande (CLI) **[HAUT]** conçue pour faciliter la gestion et la visualisation d'objectifs hiérarchisés (méthode de "goal cascading") **[HAUT]**, permettant de décomposer des ambitions stratégiques de haut niveau en résultats clés et actions opérationnelles alignés **[MOYEN]**, le tout intégré directement dans le terminal pour optimiser le workflow des développeurs et des profils techniques **[MOYEN]** afin d'assurer une traçabilité constante de l'impact de chaque tâche **[FAIBLE]**.»
+
+---
+
+### Analyse des affirmations et niveaux de confiance
+
+1.  **Interface en ligne de commande (CLI) : [HAUT]**
+    *   *Justification :* Le suffixe "-cli" dans le nom du projet indique explicitement qu'il s'agit d'un outil destiné à être utilisé dans un terminal.
+2.  **Gestion et visualisation d'objectifs hiérarchisés (Goal Cascading) : [HAUT]**
+    *   *Justification :* Le terme "goal-cascade" fait référence à la pratique de management consistant à aligner les objectifs de l'organisation avec ceux des équipes et des individus.
+3.  **Décomposition en résultats clés/actions (type OKR) : [MOYEN]**
+    *   *Justification :* C'est la structure standard de la plupart des outils de "cascading", bien que le projet puisse utiliser une terminologie propriétaire.
+4.  **Optimisation du workflow pour les développeurs : [MOYEN]**
+    *   *Justification :* Les outils CLI s'adressent prioritairement aux utilisateurs techniques qui souhaitent rester dans leur environnement de développement sans passer par une interface web lourde.
+5.  **Assurer la traçabilité de l'impact de chaque tâche : [FAIBLE]**
+    *   *Justification :* C'est une déduction logique de la finalité d'un tel outil, mais sans accès à la documentation technique précise (README), il n'est pas certain que cette fonctionnalité de "traçabilité d'impact" soit explicitement implémentée.
+
+---
+
+### Liste des sources
+
+*   **Analyse sémantique du nom du projet ("goal-cascade-cli")** : Source primaire utilisée pour déduire la fonction et la forme technique. **[HAUT]**
+*   **Concepts de management (Management by Objectives / OKR)** : Référence théorique pour définir le "cascading". **[HAUT]**
+*   **Conventions de nommage des dépôts GitHub/NPM** : Utilisation du suffixe "-cli" pour les outils de productivité. **[HAUT]**
+*   **Documentation technique spécifique** : Aucune source trouvée dans les bases de données publiques majeures (comme une documentation officielle largement indexée) pour un projet unique de ce nom exact. Le draft repose donc sur une analyse structurelle. **[FAIBLE]**
