@@ -51,8 +51,8 @@ except ImportError:
 
 TIER_MODEL_MAP: dict[Backend, dict[str, str]] = {
     Backend.ANTHROPIC: {
-        "small": "claude-haiku-4-5",
-        "medium": "claude-sonnet-4-5",
+        "small": "claude-haiku-3-5",
+        "medium": "claude-sonnet-4",
         "large": "claude-opus-4",
         "xlarge": "claude-opus-4",
     },
@@ -63,12 +63,10 @@ TIER_MODEL_MAP: dict[Backend, dict[str, str]] = {
         "xlarge": "gpt-4o",
     },
     Backend.GOOGLE: {
-        # Seul gemini-3-flash-preview est accessible avec la clé de test.
-        # Les variantes "pro" et les suffixes raccourcis retournent 404.
-        "small": "gemini-3-flash-preview",
-        "medium": "gemini-3-flash-preview",
-        "large": "gemini-3-flash-preview",
-        "xlarge": "gemini-3-flash-preview",
+        "small": "gemini-2.0-flash",
+        "medium": "gemini-2.5-pro",
+        "large": "gemini-2.5-pro",
+        "xlarge": "gemini-2.5-pro",
     },
 }
 
@@ -155,9 +153,10 @@ def _extract_mirascope_text(response: Any) -> str:
     return text
 
 
+# Prix par million de tokens (input/output) — dernière vérification : 2026-07-11
 ANTHROPIC_PRICES = {
-    "claude-haiku-4-5": (0.25 / 1_000_000, 1.25 / 1_000_000),
-    "claude-sonnet-4-5": (3.00 / 1_000_000, 15.00 / 1_000_000),
+    "claude-haiku-3-5": (0.80 / 1_000_000, 4.00 / 1_000_000),
+    "claude-sonnet-4": (3.00 / 1_000_000, 15.00 / 1_000_000),
     "claude-opus-4": (15.00 / 1_000_000, 75.00 / 1_000_000),
 }
 OPENAI_PRICES = {
@@ -165,7 +164,8 @@ OPENAI_PRICES = {
     "gpt-4o": (2.50 / 1_000_000, 10.00 / 1_000_000),
 }
 GOOGLE_PRICES = {
-    "gemini-3-flash-preview": (0.075 / 1_000_000, 0.30 / 1_000_000),
+    "gemini-2.0-flash": (0.10 / 1_000_000, 0.40 / 1_000_000),
+    "gemini-2.5-pro": (1.25 / 1_000_000, 10.00 / 1_000_000),
 }
 
 

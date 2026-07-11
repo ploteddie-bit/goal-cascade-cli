@@ -26,6 +26,7 @@ from ..prompts import PromptLoader
 from ..providers.base import BaseProvider
 from ..schemas.models import (
     CascadeState,
+    GoalOrientedSynthesis,
     IterationRole,
     LLMCallRecord,
     RunReceipt,
@@ -308,6 +309,25 @@ class CascadeExecutor:
                 state.final_verdict = verdict
                 if verdict.decision == "STOP":
                     state.status = "stopped"
+                else:
+                    # CONTINUE : injecter la justification de l'arbitre
+                    # dans last_synthesis pour que l'itération 5 la reçoive.
+                    state.last_synthesis = GoalOrientedSynthesis(
+                        objective=state.objective,
+                        key_decisions=(
+                            state.last_synthesis.key_decisions
+                            if state.last_synthesis
+                            else ["Synthèse arbitre"]
+                        ),
+                        uncertainties=(
+                            state.last_synthesis.uncertainties
+                            if state.last_synthesis
+                            else []
+                        ),
+                        next_instruction=verdict.justification,
+                        iteration_from=4,
+                        iteration_to=5,
+                    )
 
             # Une cinquieme iteration est la limite absolue. Elle peut
             # analyser le point restant, mais ne declenche jamais un 6e appel.
@@ -485,15 +505,21 @@ class CascadeExecutor:
 
         # Sauvegarder le livrable final
         if state.history:
-            arbiter_outputs = [
-                call.raw_output for call in state.history if call.role == "arbiter"
-            ]
             main_outputs = [
                 call.raw_output for call in state.history if call.role != "synthesizer"
             ]
-            final_output = (
-                arbiter_outputs[-1] if arbiter_outputs else main_outputs[-1]
-            )
+            if state.current_iteration > 4:
+                # L'itération 5 a tourné : sa sortie prime sur l'arbitre.
+                final_output = main_outputs[-1]
+            else:
+                arbiter_outputs = [
+                    call.raw_output
+                    for call in state.history
+                    if call.role == "arbiter"
+                ]
+                final_output = (
+                    arbiter_outputs[-1] if arbiter_outputs else main_outputs[-1]
+                )
             final_path = state_manager.save_final_output(state.run_id, final_output)
             journal.record_file("final_output_saved", final_path)
 

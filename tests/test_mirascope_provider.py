@@ -80,9 +80,9 @@ class FakeUsage:
 def test_cost_estimation_uses_known_prices() -> None:
     usage = FakeUsage()
 
-    assert _estimate_cost_anthropic("claude-haiku-4-5", usage) > 0
+    assert _estimate_cost_anthropic("claude-haiku-3-5", usage) > 0
     assert _estimate_cost_openai("gpt-4o-mini", usage) > 0
-    assert _estimate_cost_google("gemini-3-flash-preview", usage) > 0
+    assert _estimate_cost_google("gemini-2.0-flash", usage) > 0
     assert _estimate_cost_anthropic("unknown", usage) == 0
 
 
