@@ -8,7 +8,6 @@ from pydantic import AliasChoices, BaseModel, ConfigDict, Field, model_validator
 
 from .providers.families import PROVIDER_FAMILIES
 from .providers.rate_limiter import RateLimitConfig
-from .orchestrator.budget_tracker import BudgetConfig
 
 logger = logging.getLogger(__name__)
 
@@ -188,6 +187,16 @@ class LoggingConfig(BaseModel):
     level: str = Field(default="INFO", description="Niveau de log (DEBUG, INFO, WARNING, ERROR)")
     format: str = Field(default="structlog", description="Format de log : structlog ou plain")
     file: str | None = Field(default=None, description="Chemin du fichier de log (None = stdout)")
+
+
+class BudgetConfig(BaseModel):
+    """Configuration du budget et du kill switch (spec V2 §9.2)."""
+
+    max_per_run_usd: float = Field(default=0.50, gt=0)
+    max_per_day_usd: float = Field(default=10.00, gt=0)
+    warn_at_percent: int = Field(default=80, ge=10, le=100)
+    hard_stop: bool = True
+    runs_per_day_projection: int = Field(default=10, ge=1)
 
 
 class GoalConfig(BaseModel):

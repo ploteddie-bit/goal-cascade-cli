@@ -59,41 +59,53 @@ def test_budget_config_rejects_warn_above_100() -> None:
 
 def test_is_exceeded_triggers_when_max_per_run_usd_reached(tmp_path: Path) -> None:
     config = BudgetConfig(max_per_run_usd=0.10, max_per_day_usd=10.0)
-    tracker = BudgetTracker(config, tmp_path / "budget.json")
+    tracker = BudgetTracker(config, daily_total_path=tmp_path / "budget.json")
 
-    assert not tracker.is_exceeded(0.05)
-    assert not tracker.is_exceeded(0.099)
-    assert tracker.is_exceeded(0.10)
-    assert tracker.is_exceeded(0.20)
+    assert not tracker.is_exceeded('test-run', 0.05)
+    assert not tracker.is_exceeded('test-run', 0.099)
+    assert tracker.is_exceeded('test-run', 0.10)
+    assert tracker.is_exceeded('test-run', 0.20)
 
 
 def test_is_exceeded_triggers_when_daily_cumulative_reached(tmp_path: Path) -> None:
-    """Si le cumul du jour + courant depasse max_per_day_usd, kill switch."""
-    daily = tmp_path / "budget.json"
-    daily.write_text(json.dumps({
-        "date": date.today().isoformat(),
-        "total": 9.50,
-    }), encoding="utf-8")
-    config = BudgetConfig(max_per_run_usd=1.0, max_per_day_usd=10.0)
-    tracker = BudgetTracker(config, daily)
+    """Si le cout cumule des runs du jour depasse max_per_day_usd, kill switch."""
+    runs_dir = tmp_path / "runs"
+    today = date.today().isoformat()
 
-    assert not tracker.is_exceeded(0.40)  # 9.50 + 0.40 = 9.90
-    assert tracker.is_exceeded(0.60)    # 9.50 + 0.60 = 10.10
+    def _make_run(run_name: str, cost: float) -> None:
+        run_dir = runs_dir / run_name
+        run_dir.mkdir(parents=True, exist_ok=True)
+        (run_dir / "events.jsonl").write_text(
+            json.dumps({"timestamp": f"{today}T10:00:00", "event": "provider_call_completed", "cost_usd": cost}) + "\n",
+            encoding="utf-8",
+        )
+
+    config = BudgetConfig(max_per_run_usd=1.0, max_per_day_usd=10.0)
+
+    # Cas 1 : cumul quotidien < max_per_day_usd -> pas de trigger
+    _make_run("run-under", 9.50)
+    tracker_under = BudgetTracker(config, runs_dir=runs_dir)
+    assert not tracker_under.is_exceeded('test-run', 0.40)  # daily_cost=9.50 < 10.0
+
+    # Cas 2 : cumul quotidien >= max_per_day_usd -> trigger
+    _make_run("run-over", 10.10)
+    tracker_over = BudgetTracker(config, runs_dir=runs_dir)
+    assert tracker_over.is_exceeded('test-run', 0.40)  # daily_cost=19.60 >= 10.0
 
 
 def test_is_exceeded_disabled_when_hard_stop_false(tmp_path: Path) -> None:
     config = BudgetConfig(max_per_run_usd=0.10, hard_stop=False)
-    tracker = BudgetTracker(config, tmp_path / "budget.json")
+    tracker = BudgetTracker(config, daily_total_path=tmp_path / "budget.json")
 
-    assert not tracker.is_exceeded(0.05)
-    assert not tracker.is_exceeded(100.0)
+    assert not tracker.is_exceeded('test-run', 0.05)
+    assert not tracker.is_exceeded('test-run', 100.0)
 
 
 # ---------- BudgetTracker.is_warning ----------
 
 def test_is_warning_at_threshold(tmp_path: Path) -> None:
     config = BudgetConfig(max_per_run_usd=1.0, warn_at_percent=80)
-    tracker = BudgetTracker(config, tmp_path / "budget.json")
+    tracker = BudgetTracker(config, daily_total_path=tmp_path / "budget.json")
 
     assert not tracker.is_warning(0.79)
     assert tracker.is_warning(0.80)
@@ -104,7 +116,7 @@ def test_is_warning_disabled_when_max_per_run_usd_zero(tmp_path: Path) -> None:
     """Configuration defensive : si max_per_run_usd=0 (mal configure), pas de warning."""
     # On contourne le validator Pydantic pour creer ce cas limite.
     config = BudgetConfig.model_construct(max_per_run_usd=0, max_per_day_usd=10.0)
-    tracker = BudgetTracker(config, tmp_path / "budget.json")
+    tracker = BudgetTracker(config, daily_total_path=tmp_path / "budget.json")
 
     assert not tracker.is_warning(5.0)
 
@@ -114,7 +126,7 @@ def test_is_warning_disabled_when_max_per_run_usd_zero(tmp_path: Path) -> None:
 def test_record_increments_daily_total_and_persists(tmp_path: Path) -> None:
     daily = tmp_path / "budget.json"
     config = BudgetConfig()
-    tracker = BudgetTracker(config, daily)
+    tracker = BudgetTracker(config, daily_total_path=daily)
 
     assert tracker.daily_total == 0.0
     tracker.record(0.05)
@@ -136,7 +148,7 @@ def test_record_tolerates_readonly_filesystem(tmp_path: Path) -> None:
     # si on est sous readonly). Strategie : creer le tracker avec un path valide
     # mais faire pointer le path apres coup vers un dossier sans permission.
     daily = tmp_path / "budget.json"
-    tracker = BudgetTracker(config, daily)
+    tracker = BudgetTracker(config, daily_total_path=daily)
 
     # Force _save_daily_total a echouer : on remplace l'attribut par un chemin
     # qui ne peut pas etre cree.
@@ -152,7 +164,7 @@ def test_load_daily_total_ignores_old_date(tmp_path: Path) -> None:
         "total": 999.99,
     }), encoding="utf-8")
     config = BudgetConfig()
-    tracker = BudgetTracker(config, daily)
+    tracker = BudgetTracker(config, daily_total_path=daily)
 
     assert tracker.daily_total == 0.0  # ignore le fichier d'un autre jour
 
@@ -161,7 +173,7 @@ def test_load_daily_total_tolerates_malformed_json(tmp_path: Path) -> None:
     daily = tmp_path / "budget.json"
     daily.write_text("{ pas du json valide", encoding="utf-8")
     config = BudgetConfig()
-    tracker = BudgetTracker(config, daily)
+    tracker = BudgetTracker(config, daily_total_path=daily)
 
     assert tracker.daily_total == 0.0
 
@@ -170,7 +182,7 @@ def test_load_daily_total_tolerates_malformed_json(tmp_path: Path) -> None:
 
 def test_projected_monthly_multiplies_correctly(tmp_path: Path) -> None:
     config = BudgetConfig(runs_per_day_projection=10)
-    tracker = BudgetTracker(config, tmp_path / "budget.json")
+    tracker = BudgetTracker(config, daily_total_path=tmp_path / "budget.json")
 
     # 0.08 * 30 * 10 = 24.0
     assert tracker.projected_monthly(0.08) == 24.0
@@ -178,10 +190,10 @@ def test_projected_monthly_multiplies_correctly(tmp_path: Path) -> None:
 
 def test_explain_returns_human_readable_string(tmp_path: Path) -> None:
     config = BudgetConfig(max_per_run_usd=1.0, max_per_day_usd=10.0)
-    tracker = BudgetTracker(config, tmp_path / "budget.json")
+    tracker = BudgetTracker(config, daily_total_path=tmp_path / "budget.json")
 
     msg = tracker.explain(0.50)
-    assert "cout=0.5000" in msg
+    assert "coût=0.5000" in msg
     assert "max_run=1.00" in msg
     assert "max_jour=10.00" in msg
 

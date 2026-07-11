@@ -204,7 +204,7 @@ class CascadeExecutor:
                 break
 
             # Kill switch budgetaire (section 9 du plan v2)
-            if self._budget is not None and self._budget.is_exceeded(state.accumulated_cost):
+            if self._budget is not None and self._budget.is_exceeded(state.run_id, state.accumulated_cost):
                 state.status = "budget_exceeded"
                 state.final_verdict = Verdict(
                     decision="STOP",
