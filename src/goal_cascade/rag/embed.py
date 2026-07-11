@@ -35,13 +35,15 @@ class OllamaEmbedding:
         self.batch_size = batch_size
 
     def _post(self, inputs: list[str]) -> list[list[float]]:
+        if not self.url.startswith(("http://", "https://")):
+            raise ValueError(f"URL Ollama invalide : {self.url}")
         payload = json.dumps(
             {"model": self.model_name, "input": inputs, "truncate": True}
         ).encode()
         req = urllib.request.Request(
             self.url, data=payload, headers={"Content-Type": "application/json"}
         )
-        with urllib.request.urlopen(req, timeout=TIMEOUT) as resp:
+        with urllib.request.urlopen(req, timeout=TIMEOUT) as resp:  # nosemgrep
             data = json.loads(resp.read())
         embs = data.get("embeddings")
         if not embs:

@@ -93,9 +93,11 @@ def verify_endpoint() -> tuple[str, str]:
     host = os.environ.get("OLLAMA_HOST", DEFAULT_HOST).rstrip("/")
     embed_url = os.environ.get("OLLAMA_EMBED_URL", f"{host}/api/embed")
     model = os.environ.get("OLLAMA_EMBED_MODEL", DEFAULT_MODEL)
+    if not host.startswith(("http://", "https://")):
+        raise ValueError(f"URL Ollama invalide : {host}")
 
     request = urllib.request.Request(f"{host}/api/tags")
-    with urllib.request.urlopen(request, timeout=8) as response:
+    with urllib.request.urlopen(request, timeout=8) as response:  # nosemgrep
         payload = json.loads(response.read())
     models = [item.get("name", "") for item in payload.get("models", [])]
     if not any(model.split(":")[0] in name for name in models):
