@@ -703,10 +703,14 @@ Pour chaque invariant d'interface :
 Produis la version finale du module, intégrant les corrections
 des étapes 2 et 3, ET respectant TOUS les invariants ci-dessus.
 
-─── TEMPS 4 — VERDICT ───
-  🟢 STOP — Module validé. Tous les invariants sont présents.
-  🔴 CONTINUE — Invariant manquant ou contrat violé.
-       Justification obligatoire : "[lequel]".
+─── TEMPS 4 — VERDICT JSON ───
+Termine par exactement un objet JSON, sans texte après et sans
+champ supplémentaire :
+
+  {"decision":"STOP","justification":"Tous les invariants sont présents"}
+
+Utilise "CONTINUE" si un invariant manque ou si un contrat est
+violé, et identifie-le précisément dans "justification".
 
 Règle absolue :
 - Un seul invariant ABSENT ou contrat VIOLÉ → CONTINUE obligatoire.
@@ -750,11 +754,15 @@ Identifie les cas où l'assemblage peut casser :
 ─── TEMPS 3 — ALIGNEMENT OBJECTIF GLOBAL ───
 Vérifie que le système assemblé complet sert l'objectif global.
 
-─── TEMPS 4 — VERDICT ───
-  🟢 STOP — Système validé. Toutes interfaces respectées.
-  🔴 CONTINUE — Interface violée ou intégration cassée.
-       Module responsable : [lequel]
-       Action : retour à la cascade de ce module pour correction.
+─── TEMPS 4 — VERDICT JSON ───
+Termine par exactement un objet JSON, sans texte après et sans
+champ supplémentaire :
+
+  {"decision":"STOP","justification":"Toutes les interfaces sont respectées"}
+
+Utilise "CONTINUE" si une interface est violée ou si l'intégration
+est cassée. Identifie le module responsable et l'action corrective
+dans "justification".
 
 Règle absolue :
 - Un seul contrat violé → CONTINUE obligatoire + identification
@@ -939,4 +947,3 @@ Chaque anti-pattern : **Symptôme → Cause → Parade**.
   Aucun développeur ne code tout un projet seul.<br>
   Aucune cascade ne traite plus que ce qu'elle maîtrise.
 </p>
-

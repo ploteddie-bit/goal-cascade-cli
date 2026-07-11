@@ -14,8 +14,10 @@ Phase ulterieures :
 
 from __future__ import annotations
 
-import re
+import json
 import uuid
+
+from pydantic import ValidationError
 
 from ..audit_journal import AuditJournal, redact_sensitive
 from ..prompts import PromptLoader
@@ -68,12 +70,21 @@ class CascadeExecutor:
     def __init__(
         self,
         provider: BaseProvider,
+        synthesizer_provider: BaseProvider,
         prompt_loader: PromptLoader | None = None,
         rag_bridge=None,
     ):
+        if synthesizer_provider is provider:
+            raise ValueError(
+                "Le synthétiseur exige une instance de provider distincte"
+            )
         self.provider = provider
+        self.synthesizer_provider = synthesizer_provider
         self.prompt_loader = prompt_loader or PromptLoader()
-        self.synthesizer = Synthesizer(self.provider, self.prompt_loader)
+        self.synthesizer = Synthesizer(
+            self.synthesizer_provider,
+            self.prompt_loader,
+        )
         self.rag_bridge = rag_bridge
 
     def init_state(
@@ -107,6 +118,7 @@ class CascadeExecutor:
             objective=state.objective,
             variant=state.variant.value,
             provider=self.provider.name,
+            synthesizer_provider=self.synthesizer_provider.name,
         )
         state_manager.save_state(state)
 
@@ -127,6 +139,7 @@ class CascadeExecutor:
                 "objective": state.objective,
                 "variant": state.variant.value,
                 "provider": self.provider.name,
+                "synthesizer_provider": self.synthesizer_provider.name,
                 "status": state.status,
                 "iterations": state.current_iteration,
                 "verdict": (
@@ -291,7 +304,7 @@ class CascadeExecutor:
                     "provider_call_started",
                     iteration=iteration,
                     role="synthesizer",
-                    provider=self.provider.name,
+                    provider=self.synthesizer_provider.name,
                     tier="small",
                 )
                 try:
@@ -423,19 +436,11 @@ class CascadeExecutor:
         """Construit le prompt pour une iteration donnee."""
         template_name = ROLE_TEMPLATES[state.variant].get(role, "iteration_1.j2")
 
-        # Contexte precedent :
-        # - Pour l'arbitre (iteration 4) : tout l'historique cumule
-        # - Pour les autres : uniquement la derniere sortie
+        # L'arbitre ne reçoit jamais les sorties brutes : uniquement la
+        # synthèse consolidée et les artefacts immuables rendus ci-dessous.
         previous_output = ""
-        if state.history:
-            if role == IterationRole.ARBITER:
-                # L'arbitre voit tout le travail cumule
-                previous_output = "\n\n---\n\n".join(
-                    f"[Iteration {h.iteration} — {h.role}]\n{h.raw_output}"
-                    for h in state.history
-                )
-            else:
-                previous_output = state.history[-1].raw_output
+        if state.history and role != IterationRole.ARBITER:
+            previous_output = state.history[-1].raw_output
 
         last_synthesis = ""
         if state.last_synthesis:
@@ -460,32 +465,52 @@ class CascadeExecutor:
         )
 
     def _parse_verdict(self, text: str) -> Verdict:
-        """Extrait le verdict (STOP/CONTINUE) du texte de l'arbitre."""
-        matches = list(
-            re.finditer(
-                r"^\s*VERDICT\s*:\s*(STOP|CONTINUE)\b",
-                text,
-                re.IGNORECASE | re.MULTILINE,
-            )
-        )
-        if not matches:
-            raise ValueError(
-                "Verdict invalide : ligne 'VERDICT : STOP|CONTINUE' absente"
-            )
-        decision = matches[-1].group(1).upper()
+        """Valide l'objet JSON terminal conforme au schéma Verdict."""
+        stripped = text.rstrip()
+        if not stripped:
+            raise ValueError("Verdict JSON invalide ou absent")
 
-        just_match = re.search(
-            r"^\s*JUSTIFICATION\s*:\s*(.+)$",
-            text,
-            re.IGNORECASE | re.MULTILINE,
-        )
-        justification = (
-            just_match.group(1).strip()[:500]
-            if just_match
-            else "Verdict explicite rendu par l'arbitre"
-        )
+        try:
+            if stripped.endswith("```"):
+                closing_fence = len(stripped) - 3
+                opening_fence = stripped.lower().rfind(
+                    "```json",
+                    0,
+                    closing_fence,
+                )
+                if opening_fence == -1:
+                    raise ValueError("Bloc JSON terminal absent")
+                candidate = stripped[opening_fence + len("```json") : closing_fence]
+                data = json.loads(candidate.strip())
+            else:
+                decoder = json.JSONDecoder()
+                decoded: list[tuple[object, int]] = []
+                cursor = 0
+                while cursor < len(stripped):
+                    start = stripped.find("{", cursor)
+                    if start == -1:
+                        break
+                    try:
+                        value, consumed = decoder.raw_decode(stripped[start:])
+                    except json.JSONDecodeError:
+                        cursor = start + 1
+                        continue
+                    end = start + consumed
+                    decoded.append((value, end))
+                    cursor = end
 
-        return Verdict(
-            decision=decision,
-            justification=justification,
-        )
+                if not decoded:
+                    raise ValueError("Objet JSON terminal absent")
+                data, end = decoded[-1]
+                if stripped[end:].strip():
+                    raise ValueError("Texte présent après le verdict JSON")
+
+            return Verdict.model_validate(data)
+        except (json.JSONDecodeError, ValidationError, TypeError, ValueError) as exc:
+            if isinstance(exc, ValueError) and str(exc).startswith("Verdict JSON"):
+                raise
+            try:
+                details = str(exc)
+            except Exception:
+                details = type(exc).__name__
+            raise ValueError(f"Verdict JSON invalide ou absent : {details}") from exc

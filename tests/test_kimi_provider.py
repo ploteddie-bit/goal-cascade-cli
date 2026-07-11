@@ -43,7 +43,10 @@ def test_each_call_starts_a_new_noninteractive_session(monkeypatch, backend) -> 
         return CompletedProcess(command, 0, stdout=payload, stderr="")
 
     monkeypatch.setattr("goal_cascade.providers.kimi_command.subprocess.run", fake_run)
-    provider = KimiCommandProvider(backend=backend)
+    provider = KimiCommandProvider(
+        backend=backend,
+        model="ia-general/qwen25-14b-1m-q4km",
+    )
 
     response = provider.call("prompt", role="critic")
 
@@ -56,10 +59,13 @@ def test_each_call_starts_a_new_noninteractive_session(monkeypatch, backend) -> 
     assert "-C" not in command
     assert "-p" in command
     assert "stream-json" in command
+    assert "--model" in command
+    assert command[command.index("--model") + 1] == "ia-general/qwen25-14b-1m-q4km"
     assert Path(run_kwargs["cwd"]).name.startswith("goal-kimi-")
     prompt = command[command.index("-p") + 1]
     assert "N'utilise aucun outil" in prompt
     assert "ne modifies et ne supprimes aucun fichier" in prompt
+    assert response.model == "ia-general/qwen25-14b-1m-q4km"
 
 
 def test_nonzero_command_is_reported(monkeypatch) -> None:
@@ -71,3 +77,11 @@ def test_nonzero_command_is_reported(monkeypatch) -> None:
 
     with pytest.raises(ProviderCommandError, match="provider.connection_error"):
         provider.call("prompt", role="producer")
+
+
+@pytest.mark.parametrize("model", [None, "", "   "])
+def test_synthesizer_call_requires_explicit_nonempty_model(model) -> None:
+    provider = KimiCommandProvider(backend=KimiBackend.CODE, model=model)
+
+    with pytest.raises(ProviderCommandError, match="modèle.*synthèse"):
+        provider.call("prompt", role="synthesizer", tier="small")

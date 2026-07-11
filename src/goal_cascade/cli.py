@@ -59,26 +59,59 @@ def run(
         "", "--constraints", "-c",
         help="Contraintes (format, longueur, etc.)"
     ),
+    synthesizer_model: str | None = typer.Option(
+        None,
+        "--synthesizer-model",
+        envvar="GOAL_SYNTHESIZER_MODEL",
+        help="Modèle small/cheap dédié aux synthèses (obligatoire avec Kimi)",
+    ),
 ):
     """Lance une cascade G.O.A.L. complete."""
+
+    if synthesizer_model is not None:
+        synthesizer_model = synthesizer_model.strip()
 
     # Selection du provider. Chaque appel Kimi omet volontairement les
     # options de reprise : une iteration = une nouvelle session.
     if provider == ProviderChoice.MOCK:
         selected_provider = MockProvider()
+        selected_synthesizer_provider = MockProvider()
         provider_label = "Mock (pas d'API)"
+        synthesizer_label = "Mock small (instance isolée)"
     elif provider == ProviderChoice.KIMI_CLI:
+        if not synthesizer_model:
+            raise typer.BadParameter(
+                "requis avec un provider Kimi",
+                param_hint="--synthesizer-model",
+            )
         selected_provider = KimiCommandProvider(
             backend=KimiBackend.CLI,
             work_dir=Path.cwd(),
         )
+        selected_synthesizer_provider = KimiCommandProvider(
+            backend=KimiBackend.CLI,
+            work_dir=Path.cwd(),
+            model=synthesizer_model,
+        )
         provider_label = "Kimi CLI 1.x (sessions non interactives)"
+        synthesizer_label = f"Kimi CLI 1.x / {synthesizer_model}"
     else:
+        if not synthesizer_model:
+            raise typer.BadParameter(
+                "requis avec un provider Kimi",
+                param_hint="--synthesizer-model",
+            )
         selected_provider = KimiCommandProvider(
             backend=KimiBackend.CODE,
             work_dir=Path.cwd(),
         )
+        selected_synthesizer_provider = KimiCommandProvider(
+            backend=KimiBackend.CODE,
+            work_dir=Path.cwd(),
+            model=synthesizer_model,
+        )
         provider_label = "Kimi Code 0.x (sessions non interactives)"
+        synthesizer_label = f"Kimi Code 0.x / {synthesizer_model}"
 
     # Afficher l'en-tete
     header = Panel.fit(
@@ -86,13 +119,18 @@ def run(
         f"Objectif : {objective}\n"
         f"Variante : {variant.value} "
         f"({'redactionnel' if variant == Variant.A else 'technique'})\n"
-        f"Provider : {provider_label}",
+        f"Provider : {provider_label}\n"
+        f"Synthèse : {synthesizer_label}",
         border_style="cyan",
     )
     console.print(header)
 
     # Initialiser et executer
-    executor = CascadeExecutor(provider=selected_provider, rag_bridge=RagBridge())
+    executor = CascadeExecutor(
+        provider=selected_provider,
+        synthesizer_provider=selected_synthesizer_provider,
+        rag_bridge=RagBridge(),
+    )
     state = executor.init_state(objective=objective, variant=variant)
     run_dir = RUNS_DIR / state.run_id
 

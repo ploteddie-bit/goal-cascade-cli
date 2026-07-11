@@ -40,18 +40,24 @@ class KimiCommandProvider(BaseProvider):
         timeout_s: int = 300,
         executable: str | None = None,
         isolate_work_dir: bool = True,
+        model: str | None = None,
     ):
         self.backend = backend
         self.work_dir = work_dir or Path.cwd()
         self.timeout_s = timeout_s
         self.executable = executable or self._default_executable(backend)
         self.isolate_work_dir = isolate_work_dir
+        self.model = model.strip() if model and model.strip() else None
 
     @property
     def name(self) -> str:
         return self.backend.value
 
     def call(self, prompt: str, role: str, tier: str = "medium") -> LLMResponse:
+        if role == "synthesizer" and not self.model:
+            raise ProviderCommandError(
+                "Un modèle de synthèse explicite et non vide est requis"
+            )
         isolated_prompt = f"{self.SAFETY_PREFIX}{prompt}"
         command = self._command(isolated_prompt)
         started = time.monotonic()
@@ -78,7 +84,7 @@ class KimiCommandProvider(BaseProvider):
         return LLMResponse(
             text=text,
             provider=self.backend.value,
-            model=self.backend.value,
+            model=self.model or self.backend.value,
             input_tokens=max(1, len(prompt) // 4),
             output_tokens=max(1, len(text) // 4),
             cost_usd=0.0,
@@ -98,21 +104,22 @@ class KimiCommandProvider(BaseProvider):
 
     def _command(self, prompt: str) -> list[str]:
         if self.backend == KimiBackend.CLI:
-            return [
+            command = [
                 self.executable,
                 "--print",
                 "--output-format",
                 "stream-json",
-                "-p",
-                prompt,
             ]
-        return [
-            self.executable,
-            "-p",
-            prompt,
-            "--output-format",
-            "stream-json",
-        ]
+        else:
+            command = [
+                self.executable,
+                "--output-format",
+                "stream-json",
+            ]
+        if self.model:
+            command.extend(["--model", self.model])
+        command.extend(["-p", prompt])
+        return command
 
     @staticmethod
     def extract_assistant_text(output: str) -> str:

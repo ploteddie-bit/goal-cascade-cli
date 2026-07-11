@@ -4,12 +4,11 @@ version finale du livrable, (2) juger si l'objectif est atteint.
 OBJECTIF INITIAL :
 {{ objective }}
 
-TRAVAIL CUMULE DES ETAPES PRECEDENTES :
-{% if last_synthesis %}
+SYNTHÈSE ORIENTÉE OBJECTIF :
 {{ last_synthesis }}
-{% else %}
-{{ previous_output }}
-{% endif %}
+
+ARTEFACTS IMMUABLES :
+{{ artifacts }}
 
 TEMPS 1 -- EVALUATION DE L'ALIGNEMENT
 Verifie que la version actuelle sert l'objectif initial :
@@ -22,16 +21,19 @@ TEMPS 2 -- PRODUCTION FINALE
 Produis la version finale du livrable, en integrant les
 corrections de l'etape 2 et les angles morts de l'etape 3.
 
-TEMPS 3 -- VERDICT
-Termine par exactement deux lignes, sans autre texte après :
+TEMPS 3 -- VERDICT JSON
+Après le livrable final, termine par exactement un objet JSON dans un bloc
+```json```, sans texte après. Aucun autre champ n'est autorisé :
 
-  VERDICT : STOP
-  JUSTIFICATION : [raison précise]
+```json
+{
+  "decision": "STOP",
+  "justification": "Raison précise"
+}
+```
 
-ou, uniquement si un point documenté exige une passe supplémentaire :
-
-  VERDICT : CONTINUE
-  JUSTIFICATION : [point précis restant à résoudre]
+Utilise "CONTINUE" uniquement si un point documenté exige une passe
+supplémentaire, et décris ce point dans "justification".
 
 Regle absolue : tu ne peux pas repondre CONTINUE sans une
 raison concrete et documentee. Le doute profite au STOP.

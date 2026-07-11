@@ -13,12 +13,15 @@ Vérifie que les bugs critiques sont corrigés, que les cas limites réalistes
 sont couverts et que le résultat reste limité à l'objectif. Produis ensuite
 la version finale complète dans des blocs de code typés.
 
-Termine par exactement deux lignes, sans autre texte après :
+Après le livrable final, termine par exactement un objet JSON dans un bloc
+```json```, sans texte après. Aucun autre champ n'est autorisé :
 
-VERDICT : STOP
-JUSTIFICATION : [raison précise]
+```json
+{
+  "decision": "STOP",
+  "justification": "Raison précise"
+}
+```
 
-ou, uniquement si un défaut concret reste ouvert :
-
-VERDICT : CONTINUE
-JUSTIFICATION : [défaut précis]
+Utilise "CONTINUE" uniquement si un défaut concret reste ouvert, et décris
+ce défaut dans "justification".

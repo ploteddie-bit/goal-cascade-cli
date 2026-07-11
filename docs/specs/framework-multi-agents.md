@@ -718,12 +718,14 @@ TEMPS 2 — PRODUCTION FINALE
 Produis la version finale du livrable, en intégrant les
 corrections de l'étape 2 et les angles morts de l'étape 3.
 
-TEMPS 3 — VERDICT
-Termine par l'un de ces deux verdicts :
+TEMPS 3 — VERDICT JSON
+Après le livrable final, termine par exactement un objet JSON,
+sans texte après et sans champ supplémentaire :
 
-  🟢 STOP — Livrable validé. [Pourquoi]
-  🔴 CONTINUE — Une boucle supplémentaire est justifiée.
-       [Justification précise et obligatoire]
+  {"decision":"STOP","justification":"Raison précise"}
+
+Utilise "CONTINUE" uniquement si une boucle supplémentaire est
+justifiée, avec la raison précise dans "justification".
 
 Règle absolue : tu ne peux pas répondre CONTINUE sans une
 raison concrète et documentée. Le doute profite au STOP.
@@ -831,10 +833,14 @@ TEMPS 2 — PRODUCTION FINALE
 Produis la version finale du code, propre, commentée,
 intégrant les corrections et améliorations.
 
-TEMPS 3 — VERDICT
-  🟢 STOP — Livrable validé. [Pourquoi]
-  🔴 CONTINUE — Une boucle supplémentaire est justifiée.
-       [Justification précise et obligatoire]
+TEMPS 3 — VERDICT JSON
+Après le livrable final, termine par exactement un objet JSON,
+sans texte après et sans champ supplémentaire :
+
+  {"decision":"STOP","justification":"Raison précise"}
+
+Utilise "CONTINUE" uniquement si une boucle supplémentaire est
+justifiée, avec la raison précise dans "justification".
 
 Règle absolue : pas de CONTINUE sans raison concrète.
 Le doute profite au STOP.
@@ -1603,7 +1609,6 @@ Licence MIT
   Chaque technique existe isolément. L'innovation est dans leur combinaison :<br>
   chaque étape corrige la faille de la précédente.
 </p>
-
 
 
 

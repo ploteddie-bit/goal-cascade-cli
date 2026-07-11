@@ -9,7 +9,7 @@ from __future__ import annotations
 from enum import Enum
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class IterationRole(str, Enum):
@@ -72,11 +72,10 @@ class LLMCallRecord(BaseModel):
 
 class Verdict(BaseModel):
     """Verdict de l'iteration 4 (Arbitre)."""
+    model_config = ConfigDict(extra="forbid")
+
     decision: Literal["STOP", "CONTINUE"]
     justification: str
-    alignment_ok: bool = True
-    sources_verified: bool = True
-    blindspots_covered: bool = True
 
 
 class CascadeState(BaseModel):

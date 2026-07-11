@@ -20,8 +20,10 @@ Le jalon actuel fournit une cascade unique avec :
 
 - quatre rôles principaux : producteur, critique, adversaire et arbitre ;
 - une synthèse orientée objectif entre les rôles ;
+- un provider de synthèse distinct avec un modèle small/cheap explicite ;
 - la préservation séparée des blocs de code et autres artefacts techniques ;
-- un verdict explicite `STOP` ou `CONTINUE`, borné à cinq itérations ;
+- un verdict JSON validé par Pydantic (`STOP` ou `CONTINUE`), borné à cinq
+  itérations ;
 - un provider de simulation et deux adaptateurs Kimi non interactifs.
 
 Le multi-provider réel, LangGraph et le multi-cascade ne font pas encore partie
@@ -58,11 +60,17 @@ uv run pytest -p no:cacheprovider -q
 uv run goal run --objective "Auditer un argument" --variant A --provider mock
 
 # Chaque appel ouvre une nouvelle session Kimi CLI non interactive
-uv run goal run --objective "Auditer un argument" --variant A --provider kimi-cli
+uv run goal run --objective "Auditer un argument" --variant A \
+  --provider kimi-cli --synthesizer-model "provider/modele-small"
 
 # Même contrat avec Kimi Code
-uv run goal run --objective "Auditer un argument" --variant A --provider kimi-code
+uv run goal run --objective "Auditer un argument" --variant A \
+  --provider kimi-code --synthesizer-model "provider/modele-small"
 ```
+
+Le modèle de synthèse peut aussi être fourni par la variable
+`GOAL_SYNTHESIZER_MODEL`. Pour un provider Kimi, son absence bloque le run afin
+d'éviter la réutilisation silencieuse du modèle principal.
 
 Les coûts des abonnements Kimi ne sont pas exposés par les flux CLI utilisés.
 Le programme les affiche donc comme **non mesurés**, jamais comme gratuits.

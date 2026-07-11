@@ -38,7 +38,10 @@ class AuditProvider(BaseProvider):
                 ensure_ascii=False,
             )
         elif role == "arbiter":
-            text = "Résultat final\nVERDICT : STOP\nJUSTIFICATION : audit complet."
+            text = (
+                "Résultat final\n"
+                '{"decision":"STOP","justification":"Audit complet."}'
+            )
         else:
             text = f"Sortie visible du rôle {role}"
         return LLMResponse(text=text, provider=self.name, model=f"test-{tier}")
@@ -117,7 +120,10 @@ def test_journal_is_permanent_readable_and_sequential(tmp_path, monkeypatch) -> 
 
 def test_executor_records_all_prompts_outputs_and_terminal_status(tmp_path, monkeypatch) -> None:
     monkeypatch.setattr(state_manager, "RUNS_DIR", tmp_path / "runs")
-    executor = CascadeExecutor(provider=AuditProvider())
+    executor = CascadeExecutor(
+        provider=AuditProvider(),
+        synthesizer_provider=AuditProvider(),
+    )
 
     state = executor.run(
         executor.init_state("Objectif audité", Variant.A),
@@ -138,7 +144,10 @@ def test_executor_records_all_prompts_outputs_and_terminal_status(tmp_path, monk
 
 def test_executor_persists_provider_error_before_raising(tmp_path, monkeypatch) -> None:
     monkeypatch.setattr(state_manager, "RUNS_DIR", tmp_path / "runs")
-    executor = CascadeExecutor(provider=AuditProvider(fail=True))
+    executor = CascadeExecutor(
+        provider=AuditProvider(fail=True),
+        synthesizer_provider=AuditProvider(),
+    )
     state = executor.init_state("Objectif en erreur", Variant.B)
 
     with pytest.raises(RuntimeError, match="provider_error"):
@@ -160,7 +169,10 @@ def test_executor_persists_provider_error_before_raising(tmp_path, monkeypatch) 
 
 def test_invalid_synthesis_response_is_persisted_before_error(tmp_path, monkeypatch) -> None:
     monkeypatch.setattr(state_manager, "RUNS_DIR", tmp_path / "runs")
-    executor = CascadeExecutor(provider=InvalidSynthesisProvider())
+    executor = CascadeExecutor(
+        provider=AuditProvider(),
+        synthesizer_provider=InvalidSynthesisProvider(),
+    )
     state = executor.init_state("Conserver une synthèse invalide", Variant.A)
 
     with pytest.raises(SynthesisError):

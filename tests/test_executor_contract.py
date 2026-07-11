@@ -5,18 +5,24 @@ import json
 from goal_cascade.orchestrator import state_manager
 from goal_cascade.orchestrator.cascade_executor import CascadeExecutor
 from goal_cascade.providers.base import BaseProvider, LLMResponse
-from goal_cascade.schemas.models import Variant
+from goal_cascade.schemas.models import ImmutableArtifact, LLMCallRecord, Variant
 
 
 class RecordingProvider(BaseProvider):
-    def __init__(self, arbiter_decision: str = "STOP", with_code: bool = False):
+    def __init__(
+        self,
+        arbiter_decision: str = "STOP",
+        with_code: bool = False,
+        name: str = "recording",
+    ):
         self.arbiter_decision = arbiter_decision
         self.with_code = with_code
+        self._name = name
         self.calls: list[tuple[str, str]] = []
 
     @property
     def name(self) -> str:
-        return "recording"
+        return self._name
 
     def call(self, prompt: str, role: str, tier: str = "medium") -> LLMResponse:
         self.calls.append((role, prompt))
@@ -37,34 +43,122 @@ class RecordingProvider(BaseProvider):
         elif role == "arbiter":
             text = (
                 "Version finale vérifiée.\n"
-                f"VERDICT : {self.arbiter_decision}\n"
-                "JUSTIFICATION : décision explicite et structurée.\n"
-                "Le doute profite au STOP."
+                "```json\n"
+                + json.dumps(
+                    {
+                        "decision": self.arbiter_decision,
+                        "justification": "Décision explicite et structurée.",
+                    },
+                    ensure_ascii=False,
+                )
+                + "\n```"
             )
         else:
             text = f"Rapport {role}"
         return LLMResponse(text=text, provider=self.name, model=f"test-{tier}")
 
 
-def test_verdict_parser_uses_explicit_marker() -> None:
-    executor = CascadeExecutor(provider=RecordingProvider())
+def test_verdict_parser_uses_structured_json() -> None:
+    executor = CascadeExecutor(
+        provider=RecordingProvider(name="main"),
+        synthesizer_provider=RecordingProvider(name="small"),
+    )
     text = (
-        "CONTINUE est défini dans les consignes.\n"
-        "VERDICT : CONTINUE\n"
-        "JUSTIFICATION : un point précis reste ouvert.\n"
-        "Le doute profite au STOP."
+        "Livrable final.\n"
+        "```json\n"
+        '{"decision":"CONTINUE","justification":"Un point précis reste ouvert."}'
+        "\n```"
     )
 
     verdict = executor._parse_verdict(text)
 
     assert verdict.decision == "CONTINUE"
-    assert "point précis" in verdict.justification
+    assert "point précis" in verdict.justification.lower()
+
+
+def test_executor_rejects_shared_main_and_synthesizer_provider() -> None:
+    provider = RecordingProvider()
+
+    try:
+        CascadeExecutor(provider=provider, synthesizer_provider=provider)
+    except ValueError as error:
+        assert "distincte" in str(error)
+    else:
+        raise AssertionError("Le provider de synthèse doit rester isolé")
+
+
+def test_verdict_parser_rejects_legacy_text_marker() -> None:
+    executor = CascadeExecutor(
+        provider=RecordingProvider(name="main"),
+        synthesizer_provider=RecordingProvider(name="small"),
+    )
+
+    try:
+        executor._parse_verdict(
+            "**Verdict** : STOP\nJUSTIFICATION : ancien format non structuré"
+        )
+    except ValueError as error:
+        assert "JSON" in str(error)
+    else:
+        raise AssertionError("Le format textuel historique ne doit plus être accepté")
+
+
+def test_verdict_parser_rejects_non_terminal_nested_or_extended_json() -> None:
+    executor = CascadeExecutor(
+        provider=RecordingProvider(name="main"),
+        synthesizer_provider=RecordingProvider(name="small"),
+    )
+    invalid_responses = [
+        '{"decision":"STOP","justification":"ok","extra":"interdit"}',
+        '{"wrapper":{"decision":"STOP","justification":"imbriqué"}}',
+        '{"decision":"STOP","justification":"ok"}\ntexte après le verdict',
+    ]
+
+    for response in invalid_responses:
+        try:
+            executor._parse_verdict(response)
+        except ValueError:
+            continue
+        raise AssertionError(f"Verdict invalide accepté : {response}")
+
+
+def test_arbiter_never_receives_raw_history_and_keeps_artifacts() -> None:
+    executor = CascadeExecutor(
+        provider=RecordingProvider(name="main"),
+        synthesizer_provider=RecordingProvider(name="small"),
+    )
+    state = executor.init_state("Objectif immuable", Variant.A)
+    state.history.append(
+        LLMCallRecord(
+            provider="test",
+            model="test",
+            iteration=1,
+            role="producer",
+            raw_output="BROUILLON_BRUT_INTERDIT",
+        )
+    )
+    state.artifacts.append(
+        ImmutableArtifact(
+            artifact_type="code",
+            language="python",
+            content="print('artefact-immuable')",
+            source_iteration=1,
+        )
+    )
+
+    prompt = executor._build_prompt(state, state.role_for_iteration(4))
+
+    assert "BROUILLON_BRUT_INTERDIT" not in prompt
+    assert "print('artefact-immuable')" in prompt
 
 
 def test_terminal_forced_stop_is_persisted(tmp_path, monkeypatch) -> None:
     monkeypatch.setattr(state_manager, "RUNS_DIR", tmp_path / "runs")
-    provider = RecordingProvider(arbiter_decision="CONTINUE")
-    executor = CascadeExecutor(provider=provider)
+    provider = RecordingProvider(arbiter_decision="CONTINUE", name="main")
+    executor = CascadeExecutor(
+        provider=provider,
+        synthesizer_provider=RecordingProvider(name="small"),
+    )
     state = executor.init_state("Tester la limite", Variant.A)
 
     result = executor.run(state, verbose=False)
@@ -79,8 +173,12 @@ def test_terminal_forced_stop_is_persisted(tmp_path, monkeypatch) -> None:
 
 def test_synthesis_runs_in_fresh_provider_calls(tmp_path, monkeypatch) -> None:
     monkeypatch.setattr(state_manager, "RUNS_DIR", tmp_path / "runs")
-    provider = RecordingProvider()
-    executor = CascadeExecutor(provider=provider)
+    provider = RecordingProvider(name="main")
+    synthesizer_provider = RecordingProvider(name="small")
+    executor = CascadeExecutor(
+        provider=provider,
+        synthesizer_provider=synthesizer_provider,
+    )
 
     state = executor.run(
         executor.init_state("Objectif de test", Variant.A),
@@ -90,12 +188,14 @@ def test_synthesis_runs_in_fresh_provider_calls(tmp_path, monkeypatch) -> None:
     roles = [role for role, _ in provider.calls]
     assert roles == [
         "producer",
-        "synthesizer",
         "critic",
-        "synthesizer",
         "adversary",
-        "synthesizer",
         "arbiter",
+    ]
+    assert [role for role, _ in synthesizer_provider.calls] == [
+        "synthesizer",
+        "synthesizer",
+        "synthesizer",
     ]
     assert state.last_synthesis is not None
     critic_prompt = next(prompt for role, prompt in provider.calls if role == "critic")
@@ -105,8 +205,11 @@ def test_synthesis_runs_in_fresh_provider_calls(tmp_path, monkeypatch) -> None:
 
 def test_technical_artifact_is_preserved(tmp_path, monkeypatch) -> None:
     monkeypatch.setattr(state_manager, "RUNS_DIR", tmp_path / "runs")
-    provider = RecordingProvider(with_code=True)
-    executor = CascadeExecutor(provider=provider)
+    provider = RecordingProvider(with_code=True, name="main")
+    executor = CascadeExecutor(
+        provider=provider,
+        synthesizer_provider=RecordingProvider(name="small"),
+    )
 
     state = executor.run(
         executor.init_state("Produire un script", Variant.B),
@@ -116,4 +219,8 @@ def test_technical_artifact_is_preserved(tmp_path, monkeypatch) -> None:
     assert any("preserve-me" in artifact.content for artifact in state.artifacts)
     critic_prompt = next(prompt for role, prompt in provider.calls if role == "critic")
     assert "print('preserve-me')" in critic_prompt
-
+    arbiter_prompt = next(prompt for role, prompt in provider.calls if role == "arbiter")
+    assert "print('preserve-me')" in arbiter_prompt
+    assert "Draft initial" not in arbiter_prompt
+    assert "Rapport critic" not in arbiter_prompt
+    assert "Rapport adversary" not in arbiter_prompt

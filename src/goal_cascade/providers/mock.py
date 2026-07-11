@@ -3,7 +3,7 @@
 La difference avec un mock naif :
 - L'iteration 2 (Critique) lit reellement le draft de l'iteration 1
 - L'iteration 3 (Adversaire) lit reellement les corrections de l'iteration 2
-- L'iteration 4 (Arbitre) lit reellement tout ce qui precede
+- L'iteration 4 (Arbitre) lit la synthese filtree et les artefacts
 
 Chaque transformation est VISIBLE dans le output. On voit la cascade travailler.
 """
@@ -57,9 +57,9 @@ class MockProvider(BaseProvider):
 
     def _extract_objective(self, prompt: str) -> str:
         """Extrait l'objectif du prompt."""
-        for marker in ["OBJECTIF :\n", "OBJECTIF:\n", "Objectif :\n",
+        for marker in ["OBJECTIF INITIAL :\n",
                        "OBJECTIF A GARDER EN TETE :\n",
-                       "OBJECTIF INITIAL :\n"]:
+                       "OBJECTIF :\n", "OBJECTIF:\n", "Objectif :\n"]:
             if marker in prompt:
                 start = prompt.index(marker) + len(marker)
                 # Prendre la ligne suivante comme objectif
@@ -251,9 +251,8 @@ VERDICT DE L'ADVERSAIRE : {len(sections_manquantes) + 3} point(s) faible(s) a ad
         return report
 
     def _arbiter_response(self, prompt: str) -> str:
-        """Iteration 4 : lit tout et rend un verdict base sur le contenu reel."""
+        """Iteration 4 : arbitre le contexte filtré et rend un verdict JSON."""
         objective = self._extract_objective(prompt)
-        # L'arbitre a acces a TOUT le prompt (historique cumule)
         previous = prompt
         prev_hash = self._generate_id(previous[:500])
 
@@ -294,12 +293,13 @@ VERSION FINALE :
 Le livrable integre le draft du producteur, les corrections du critique
 ({corrections_mentioned} points), et les angles morts de l'adversaire
 ({adversary_points} elements). La version finale est produite.
-
-VERDICT : {decision}
-Justification : {reason}
-Le doute profite au STOP.
 """
-        return report
+        verdict = json.dumps(
+            {"decision": decision, "justification": reason},
+            ensure_ascii=False,
+            indent=2,
+        )
+        return f"{report}\n```json\n{verdict}\n```"
 
     def _generic_response(self, prompt: str) -> str:
         objective = self._extract_objective(prompt)
