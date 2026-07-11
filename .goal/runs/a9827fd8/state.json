@@ -1,0 +1,14 @@
+{
+  "run_id": "a9827fd8",
+  "objective": "Écris une phrase de test en français.",
+  "variant": "A",
+  "current_iteration": 1,
+  "max_iterations": 5,
+  "history": [],
+  "last_synthesis": null,
+  "artifacts": [],
+  "final_verdict": null,
+  "status": "failed",
+  "last_error": "404 NOT_FOUND. {'error': {'code': 404, 'message': 'This model models/gemini-2.0-flash-001 is no longer available. Please update your code to use a newer model for the latest features and improvements.', 'status': 'NOT_FOUND'}}",
+  "accumulated_cost": 0.0
+}

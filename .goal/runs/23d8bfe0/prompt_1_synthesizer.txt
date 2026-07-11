@@ -1,0 +1,23 @@
+Tu es un synthétiseur. Produis une synthèse orientée objectif
+strictement conforme au contrat JSON ci-dessous.
+
+OBJECTIF :
+Écris une phrase de test en français.
+
+TRAVAIL DE L'ETAPE PRECEDENTE :
+[Text(type='text', text='Voici un premier jet pour une sélection de phrases de test en français, conçues pour couvrir différents besoins techniques et linguistiques.\n\n***\n\n### Draft : Propositions de phrases de test pour le français\n\n#### 1. Le Pangramme Classique (Test de caractères alphabétiques)\n**Phrase :** « Portez ce vieux vin au juge blond qui fume. »\n*   **Usage :** Vérifier que toutes les lettres de l\'alphabet (A-Z) s\'affichent correctement dans une police donnée.\n*   **Faits :**\n    *   Cette phrase est le pangramme le plus célèbre de la langue française [HAUT].\n    *   Elle contient les 26 lettres de l\'alphabet de base, mais ne couvre pas les accents ou les ligatures [HAUT].\n\n#### 2. Test des Diacritiques et Caractères Spéciaux (Accentuation)\n**Phrase :** « L\'été, près du lac d\'Haÿ-les-Roses, Noël est fêté sous un chêne où l\'on goûte des œufs au maïs et du jus d\'orange à 1€. »\n*   **Usage :** Vérifier le support de l\'UTF-8, des accents (é, è, à, û), des trémas (ÿ, ë, ï), des cédilles (ç), des ligatures (œ) et des symboles monétaires.\n*   **Faits :**\n    *   Le français utilise 5 accents et la cédille : l’accent aigu (é), l’accent grave (à, è, ù), l’accent circonflexe (â, ê, î, ô, û), le tréma (ë, ï, ü, ÿ) et la cédille (ç) [HAUT].\n    *   La ligature « œ » est obligatoire dans certains mots français comme « cœur » ou « œuf » [HAUT].\n    *   Le symbole « € » est le standard monétaire officiel en France depuis 2002 [HAUT].\n\n#### 3. Test de Longueur et d\'Expansion (UI/UX Design)\n**Phrase :** « Ceci est une phrase de test particulièrement longue destinée à vérifier si le texte déborde des cadres prévus dans l\'interface utilisateur. »\n*   **Usage :** Tester le "text wrapping" (retour à la ligne) et l\'élasticité des boutons ou menus.\n*   **Faits :**\n    *   Le français est généralement 15 % à 25 % plus long que l\'anglais pour exprimer la même idée [MOYEN].\n    *   Cette expansion est un défi majeur en localisation de logiciels [HAUT].\n\n#### 4. Test de Grammaire et d\'Accords complexes\n**Phrase :** « Les vieilles forêts que nous avons vues ont été dévastées par les orages violents. »\n*   **Usage :** Tester les correcteurs grammaticaux ou les algorithmes de traitement du langage naturel (NLP).\n*   **Faits :**\n    *   Cette phrase teste l\'accord du participe passé avec le complément d\'objet direct (COD) placé avant le verbe (que = les vieilles forêts) [HAUT].\n    *   L\'accord de l\'adjectif au féminin pluriel est également présent [HAUT].\n\n---\n\n### Sources et niveaux de confiance\n\n1.  **Connaissance commune de la typographie française (Pangrammes) :** L\'usage de la phrase sur le "juge blond" est documenté dans les manuels de typographie et les logiciels de polices de caractères depuis des décennies. **[HAUT]**\n2.  **Règles de l\'Académie française :** Pour l\'usage des accents, des ligatures (œ) et les règles d\'accord grammatical du participe passé. **[HAUT]**\n3.  **Statistiques de localisation (Expansion du texte) :** Observations empiriques courantes dans l\'industrie de la traduction (LISA - Localization Industry Standards Association, bien que l\'organisation n\'existe plus sous sa forme originale). Le chiffre de 15-25% est une estimation standard de l\'industrie. **[MOYEN]**\n4.  **Banque de dépannage linguistique (OQLF) :** Pour la validation des caractères spéciaux utilisés en français. **[HAUT]**')]
+
+Réponds avec UN SEUL objet JSON valide, sans bloc Markdown ni commentaire :
+{
+  "objective": "objectif invariant en une phrase",
+  "key_decisions": ["décision 1", "décision 2", "décision 3"],
+  "uncertainties": ["point restant à vérifier"],
+  "next_instruction": "instruction précise pour l'étape suivante"
+}
+
+Regles :
+- Entre 1 et 5 décisions clés, jamais davantage.
+- Consolide la synthèse précédente avec le nouveau travail.
+- Élimine les tournures et digressions, mais conserve les décisions.
+- Ne recopie pas les blocs de code : ils sont préservés séparément.
+- N'ajoute aucune clé au contrat JSON.

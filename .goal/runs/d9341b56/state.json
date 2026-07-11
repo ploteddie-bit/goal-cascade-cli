@@ -1,0 +1,14 @@
+{
+  "run_id": "d9341b56",
+  "objective": "Écris une phrase de test en français.",
+  "variant": "A",
+  "current_iteration": 0,
+  "max_iterations": 5,
+  "history": [],
+  "last_synthesis": null,
+  "artifacts": [],
+  "final_verdict": null,
+  "status": "running",
+  "last_error": null,
+  "accumulated_cost": 0.0
+}

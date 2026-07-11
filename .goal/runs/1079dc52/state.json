@@ -1,0 +1,14 @@
+{
+  "run_id": "1079dc52",
+  "objective": "Écris une phrase de test en français.",
+  "variant": "A",
+  "current_iteration": 1,
+  "max_iterations": 5,
+  "history": [],
+  "last_synthesis": null,
+  "artifacts": [],
+  "final_verdict": null,
+  "status": "failed",
+  "last_error": "mirascope requis pour les providers réels. Installez avec: pip install goal-cascade[llm]",
+  "accumulated_cost": 0.0
+}

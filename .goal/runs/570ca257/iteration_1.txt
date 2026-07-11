@@ -1,0 +1,27 @@
+Voici un premier jet pour la phrase de présentation de **goal-cascade-cli**.
+
+### Draft de présentation
+
+« **goal-cascade-cli** est un outil d'interface en ligne de commande [HAUT] conçu pour piloter la gestion des objectifs de manière hiérarchique [MOYEN], permettant aux utilisateurs de définir, de visualiser et de suivre la progression de cascades de buts (tels que des OKR ou des KPIs) [MOYEN] directement depuis leur terminal pour une intégration fluide dans les workflows techniques [FAIBLE]. »
+
+---
+
+### Analyse des affirmations et niveaux de confiance
+
+1.  **Nature de l'outil (Interface en ligne de commande) : [HAUT]**
+    *   *Justification :* Le suffixe "-cli" (Command Line Interface) dans le nom du projet est une convention standard de nommage en développement logiciel indiquant que l'outil s'exécute dans un terminal.
+2.  **Fonctionnalité principale (Gestion hiérarchique/cascade) : [MOYEN]**
+    *   *Justification :* Le terme "goal-cascade" fait explicitement référence à la méthodologie de "cascading goals" (objectifs en cascade), une pratique de management où les objectifs de haut niveau sont déclinés en sous-objectifs.
+3.  **Cas d'usage (OKR ou KPIs) : [MOYEN]**
+    *   *Justification :* La "cascade d'objectifs" est le principe fondamental des frameworks de type OKR (Objectives and Key Results). Il est hautement probable que l'outil supporte ce format.
+4.  **Cible et bénéfice (Workflows techniques / Productivité) : [FAIBLE]**
+    *   *Justification :* C'est une déduction logique : les outils CLI s'adressent généralement aux développeurs, DevOps ou administrateurs système pour éviter de quitter l'environnement de code (IDE/Terminal). Cependant, sans documentation spécifique, le bénéfice exact reste une hypothèse.
+
+---
+
+### Sources
+
+*   **Sémantique du nom du projet :** Utilisation des conventions "CLI" et "Goal Cascade". [Niveau de confiance : HAUT]
+*   **Concepts de Management (Cascading Goals) :** Théorie classique du management par objectifs (MBO) et framework OKR. [Niveau de confiance : HAUT]
+*   **Observation des tendances Open-Source :** Analyse de projets similaires sur GitHub (ex: `taskwarrior`, `task-cli`). [Niveau de confiance : MOYEN]
+*   **Documentation technique spécifique :** Aucune source officielle ou dépôt public majeur trouvé sous ce nom exact au moment de la rédaction. [Niveau de confiance : FAIBLE] (L'existence même de l'outil en tant que produit fini et public n'est pas confirmée dans les bases de données généralistes).

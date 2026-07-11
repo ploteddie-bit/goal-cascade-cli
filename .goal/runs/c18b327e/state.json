@@ -1,0 +1,115 @@
+{
+  "run_id": "c18b327e",
+  "objective": "Test config",
+  "variant": "A",
+  "current_iteration": 4,
+  "max_iterations": 5,
+  "history": [
+    {
+      "provider": "mock",
+      "model": "mock-small",
+      "iteration": 1,
+      "role": "producer",
+      "input_tokens": 132,
+      "output_tokens": 240,
+      "cost_usd": 0.0,
+      "latency_ms": 150,
+      "raw_output": "DRAFT INITIAL — Producteur (mock-small)\n=====================================\n[input hash: c301f176]\n\nObjectif traite : Test config\n\nSTRUCTURE PROPOSEE :\n1. Introduction : pourquoi le sujet importe\n2. Arguments principaux (3 points)\n3. Exemple concret\n4. Conclusion et appel a l'action\n\nARGUMENT 1 : Le sujet est sous-estime par la majorite des praticiens. [confiance: MOYENNE]\nARGUMENT 2 : Les donnees recentes (2024) montrent un changement de paradigme. [confiance: HAUTE]\nARGUMENT 3 : Une methode structuree donne de meilleurs resultats que l'improvisation. [confiance: FAIBLE]\n\nEXEMPLE : Cas d'usage en production — resultats observes sur 3 mois.\n\nSOURCES CITEES :\n- Etude de reference (2024) [MOYENNE — date exacte a confirmer]\n- Rapport technique officiel [HAUTE]\n- Blog post d'un expert [FAIBLE — opinion non verifiee]\n\nNOTE : Ce draft est volontairement imparfait. Il contient 1 confiance FAIBLE\net 1 source d'opinion. La critique doit les identifier.\n",
+      "token_count_estimated": true
+    },
+    {
+      "provider": "mock",
+      "model": "mock-small",
+      "iteration": 1,
+      "role": "synthesizer",
+      "input_tokens": 433,
+      "output_tokens": 70,
+      "cost_usd": 0.0,
+      "latency_ms": 150,
+      "raw_output": "{\"objective\": \"Test config\", \"key_decisions\": [\"Conserver l'objectif invariant\", \"Intégrer les corrections vérifiées\", \"Préserver les artefacts techniques intacts\"], \"uncertainties\": [\"Validation finale encore requise\"], \"next_instruction\": \"Exécuter strictement le rôle suivant\"}",
+      "token_count_estimated": true
+    },
+    {
+      "provider": "mock",
+      "model": "mock-medium",
+      "iteration": 2,
+      "role": "critic",
+      "input_tokens": 269,
+      "output_tokens": 136,
+      "cost_usd": 0.0,
+      "latency_ms": 150,
+      "raw_output": "RAPPORT DE VERIFICATION — Critique (mock-medium)\n==================================================\n[input hash: 497ff01f — lit le draft precedent]\n[objectif : Test config]\n\nVERIFICATION DES CONFIANCES :\n  [OK]   Argument 2 (HAUTE) — source verifiable, date plausible\n  [!]    Argument 1 (MOYENNE) — source a confirmer\n  [X]    Argument 3 (FAIBLE) — manque de preuves\n\nHALLUCINATIONS POTENTIELLES : 0 point(s) faible(s) detecte(s)\nRECOMMANDATION : Renforcer l'argument 3 ou le retirer.\nRESULTAT : 0 correction(s) necessaire(s) avant validation.\n",
+      "token_count_estimated": true
+    },
+    {
+      "provider": "mock",
+      "model": "mock-small",
+      "iteration": 2,
+      "role": "synthesizer",
+      "input_tokens": 426,
+      "output_tokens": 70,
+      "cost_usd": 0.0,
+      "latency_ms": 150,
+      "raw_output": "{\"objective\": \"Test config\", \"key_decisions\": [\"Conserver l'objectif invariant\", \"Intégrer les corrections vérifiées\", \"Préserver les artefacts techniques intacts\"], \"uncertainties\": [\"Validation finale encore requise\"], \"next_instruction\": \"Exécuter strictement le rôle suivant\"}",
+      "token_count_estimated": true
+    },
+    {
+      "provider": "mock",
+      "model": "mock-large",
+      "iteration": 3,
+      "role": "adversary",
+      "input_tokens": 280,
+      "output_tokens": 232,
+      "cost_usd": 0.0,
+      "latency_ms": 150,
+      "raw_output": "RAPPORT ADVERSARIAL — Adversaire (mock-large)\n==============================================\n[input hash: a6200dbd — lit le rapport du critique]\n[objectif : Test config]\n\nSECTIONS COUVERTES : 1/4\nARGUMENTS ANALYSES : 1\n\nANGLES MORTS (ce qui manque) :\n  1. Le public debutant n'est pas adresse\n  2. Aucune mention des couts ou contraintes pratiques\n  3. Les contre-arguments evidents ne sont pas anticipees\n  4. Sections manquantes : introduction, conclusion, exemple\n\nBIAIS IMPLICITES :\n  1. Postulat que le lecteur connait deja le sujet\n  2. Toutes les sources vont dans le meme sens (pas de debat)\n\nCONTRE-ARGUMENTS :\n  1. Une approche plus simple pourrait donner des resultats equivalents\n  2. Le ROI de la methode n'est pas demontre\n\nRISQUES :\n  - Si le contexte reel differe, la methode peut echouer\n  - Generalisation non prouvee (3 mois d'exemple, c'est court)\n\nVERDICT DE L'ADVERSAIRE : 6 point(s) faible(s) a adresser.\n",
+      "token_count_estimated": true
+    },
+    {
+      "provider": "mock",
+      "model": "mock-small",
+      "iteration": 3,
+      "role": "synthesizer",
+      "input_tokens": 522,
+      "output_tokens": 70,
+      "cost_usd": 0.0,
+      "latency_ms": 150,
+      "raw_output": "{\"objective\": \"Test config\", \"key_decisions\": [\"Conserver l'objectif invariant\", \"Intégrer les corrections vérifiées\", \"Préserver les artefacts techniques intacts\"], \"uncertainties\": [\"Validation finale encore requise\"], \"next_instruction\": \"Exécuter strictement le rôle suivant\"}",
+      "token_count_estimated": true
+    },
+    {
+      "provider": "mock",
+      "model": "mock-xlarge",
+      "iteration": 4,
+      "role": "arbiter",
+      "input_tokens": 365,
+      "output_tokens": 197,
+      "cost_usd": 0.0,
+      "latency_ms": 150,
+      "raw_output": "VERDICT FINAL — Arbitre (mock-xlarge)\n=====================================\n[input hash: 72c728e3 — lit l'ensemble du travail]\n[objectif : Test config]\n\nANALYSE DU CONTENU :\n  - Conclusion presente : NON\n  - Exemple presente : NON\n  - Corrections identifiees : 0\n  - Points adverses : 0\n  - Confiances faibles : 0\n\nEVALUATION DE L'ALIGNEMENT :\n  - L'objectif est-il adresse ? OUI\n  - Le contenu sert-il l'objectif ? OUI\n  - Les sources sont-elles verifiees ? PARTIELLEMENT\n\nVERSION FINALE :\nLe livrable integre le draft du producteur, les corrections du critique\n(0 points), et les angles morts de l'adversaire\n(0 elements). La version finale est produite.\n\n```json\n{\n  \"decision\": \"STOP\",\n  \"justification\": \"Les corrections mineures ne justifient pas une iteration supplementaire.\"\n}\n```",
+      "token_count_estimated": true
+    }
+  ],
+  "last_synthesis": {
+    "objective": "Test config",
+    "key_decisions": [
+      "Conserver l'objectif invariant",
+      "Intégrer les corrections vérifiées",
+      "Préserver les artefacts techniques intacts"
+    ],
+    "uncertainties": [
+      "Validation finale encore requise"
+    ],
+    "next_instruction": "Exécuter strictement le rôle suivant",
+    "iteration_from": 3,
+    "iteration_to": 4
+  },
+  "artifacts": [],
+  "final_verdict": {
+    "decision": "STOP",
+    "justification": "Les corrections mineures ne justifient pas une iteration supplementaire."
+  },
+  "status": "stopped",
+  "last_error": null,
+  "accumulated_cost": 0.0
+}

@@ -1,0 +1,10 @@
+{
+  "iterations": 1,
+  "last_error": "mirascope requis pour les providers réels. Installez avec: pip install goal-cascade[llm]",
+  "objective": "Écris une phrase de test en français.",
+  "provider": "role-mapped",
+  "status": "failed",
+  "synthesizer_provider": "google",
+  "variant": "A",
+  "verdict": "absent"
+}

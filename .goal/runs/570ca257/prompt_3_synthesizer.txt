@@ -1,0 +1,61 @@
+Tu es un synthétiseur. Produis une synthèse orientée objectif
+strictement conforme au contrat JSON ci-dessous.
+
+OBJECTIF :
+Rédiger une phrase de présentation de goal-cascade-cli
+
+SYNTHÈSE CUMULÉE PRÉCÉDENTE :
+{
+  "objective": "Rédiger une phrase de présentation synthétique et précise pour l'outil goal-cascade-cli.",
+  "key_decisions": [
+    "Reconnaître l'impossibilité de localiser l'outil goal-cascade-cli sur les registres publics (GitHub, npm, PyPI).",
+    "Invalider les attributions fonctionnelles précédentes (OKR, KPI, optimisation de workflow) qualifiées d'hallucinations.",
+    "Restreindre la synthèse à un état de projet non vérifiable ou spéculatif.",
+    "Suspendre la rédaction d'une phrase de présentation définitive faute de données factuelles."
+  ],
+  "uncertainties": [
+    "Existence réelle, code source, manuel utilisateur et finalité concrète de l'outil."
+  ],
+  "next_instruction": "Fournir impérativement une source primaire (dépôt, documentation, binaire) ou clarifier le contexte d'utilisation pour valider l'existence du projet.",
+  "iteration_from": 2,
+  "iteration_to": 3
+}
+TRAVAIL DE L'ETAPE PRECEDENTE :
+Voici une analyse critique et contradictoire de ton état de travail actuel sur `goal-cascade-cli`. Ma mission est de fragiliser ta position actuelle (le refus de statuer) pour t'obliger à considérer des alternatives.
+
+### 1. ANGLES MORTS (Ce qui n'est pas traité)
+*   **L'inférence sémantique :** Tu ignores la charge descriptive du nom lui-même. En informatique, un outil nommé `goal-cascade-cli` possède une fonction prédictible à 90 % : une interface en ligne de commande pour la gestion descendante d'objectifs (cascading goals). Refuser de définir l'outil sous prétexte d'absence de binaire, c'est ignorer la logique de nommage technique.
+*   **Le contexte de création interne/privé :** Tu considères les registres publics (GitHub, npm) comme l'alpha et l'oméga de l'existence. L'outil peut être un projet "in-house" (propriétaire), un projet en cours de spécification (avant codage), ou un outil sous un autre nom de package mais dont le binaire est `goal-cascade-cli`.
+*   **L'intention de l'utilisateur :** L'auteur de la demande cherche peut-être précisément à *définir* ce que l'outil devrait faire à partir de ce nom, plutôt qu'à décrire un outil existant. Tu bloques le processus créatif en restant sur une posture purement documentaire.
+
+### 2. BIAIS IMPLICITES (Postulats non démontrés)
+*   **Biais de "Vérité par l'Indexation" :** Tu présumes que "Si ce n'est pas indexé sur le Web public, cela n'existe pas ou c'est une hallucination". C'est un biais de disponibilité.
+*   **Biais de Sévérité (Over-correction) :** Suite à une erreur précédente (les "hallucinations" mentionnées), tu as basculé dans un biais de prudence extrême qui paralyse l'action. Tu préfères l'échec par omission (ne rien produire) à l'échec par commission (produire une hypothèse).
+*   **Postulat de la "Source Unique" :** Tu considères qu'une "source primaire" est la seule base de travail légitime, excluant la synthèse logique ou la proposition de valeur théorique.
+
+### 3. CONTRE-ARGUMENTS (Objections à ta thèse de "suspension")
+*   **L'utilité de la "Placebo-description" :** Même si l'outil est imaginaire, rédiger une phrase type ("Un outil CLI conçu pour synchroniser les objectifs stratégiques à travers les différents niveaux hiérarchiques d'une organisation") permet de valider ou d'infirmer le concept avec l'utilisateur. En refusant de rédiger, tu prives l'utilisateur d'un support de réaction.
+*   **L'argument du prototypage linguistique :** Souvent, le nom d'un CLI précède sa fonction exacte. En proposant une définition, tu aides l'utilisateur à structurer son projet. Ta posture actuelle est celle d'un archiviste, pas d'un assistant à la rédaction.
+*   **La probabilité statistique :** La structure "Goal Cascade" est intrinsèquement liée aux méthodologies OKR ou MBO (Management by Objectives). Qualifier ces liens d'hallucinations est intellectuellement paresseux : ce sont des déductions logiques basées sur la terminologie métier standard.
+
+### 4. RISQUES (Pourquoi ta méthode va échouer)
+*   **Risque d'impasse (Deadlock) :** Si l'utilisateur est lui-même en phase de conception et n'a pas encore de "source primaire", ton exigence crée un cercle vicieux où rien ne peut être rédigé tant que le projet n'est pas terminé, alors que l'utilisateur a besoin de la phrase pour commencer.
+*   **Risque d'obsolescence de la tâche :** En itérant indéfiniment sur la validation de l'existence, tu perds de vue l'objectif initial (rédiger une phrase synthétique). Tu transformes une tâche de rédaction en une tâche d'investigation de cybersécurité.
+*   **Risque de désengagement :** L'utilisateur peut percevoir ton refus comme une incapacité technique ou une rigidité bureaucratique, le poussant à abandonner l'outil de travail actuel pour un outil moins "scrupuleux" mais plus productif.
+
+**Conclusion du contradicteur :** Ta décision de suspendre la rédaction est une solution de facilité déguisée en rigueur. Tu devrais plutôt proposer des **scénarios de définition** (ex: "Si cet outil suit la méthode OKR, voici la phrase... Si c'est un outil de gestion de workflow, voici la phrase...") au lieu d'exiger une preuve d'existence qui n'arrivera peut-être jamais.
+
+Réponds avec UN SEUL objet JSON valide, sans bloc Markdown ni commentaire :
+{
+  "objective": "objectif invariant en une phrase",
+  "key_decisions": ["décision 1", "décision 2", "décision 3"],
+  "uncertainties": ["point restant à vérifier"],
+  "next_instruction": "instruction précise pour l'étape suivante"
+}
+
+Regles :
+- Entre 1 et 5 décisions clés, jamais davantage.
+- Consolide la synthèse précédente avec le nouveau travail.
+- Élimine les tournures et digressions, mais conserve les décisions.
+- Ne recopie pas les blocs de code : ils sont préservés séparément.
+- N'ajoute aucune clé au contrat JSON.

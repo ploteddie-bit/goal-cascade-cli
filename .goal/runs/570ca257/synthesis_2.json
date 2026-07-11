@@ -1,0 +1,13 @@
+{
+  "objective": "Rédiger une phrase de présentation synthétique et précise pour l'outil goal-cascade-cli.",
+  "key_decisions": [
+    "Reconnaître l'impossibilité de localiser l'outil goal-cascade-cli sur les registres publics (GitHub, npm, PyPI).",
+    "Invalider les attributions fonctionnelles précédentes (OKR, KPI, optimisation de workflow) qualifiées d'hallucinations.",
+    "Restreindre la synthèse à un état de projet non vérifiable ou spéculatif.",
+    "Suspendre la rédaction d'une phrase de présentation définitive faute de données factuelles."
+  ],
+  "uncertainties": [
+    "Existence réelle, code source, manuel utilisateur et finalité concrète de l'outil."
+  ],
+  "next_instruction": "Fournir impérativement une source primaire (dépôt, documentation, binaire) ou clarifier le contexte d'utilisation pour valider l'existence du projet."
+}

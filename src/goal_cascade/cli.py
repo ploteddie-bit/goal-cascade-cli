@@ -83,7 +83,10 @@ def _print_config_summary(config_path: Path, providers: ProvidersConfig) -> None
 
 
 def _build_provider(
-    provider_id: str, *, synthesizer_model: str | None = None
+    provider_id: str,
+    *,
+    synthesizer_model: str | None = None,
+    config: "GoalConfig | None" = None,
 ) -> BaseProvider:
     """Construit l'instance de provider effective pour un identifiant résolu.
 
@@ -105,9 +108,34 @@ def _build_provider(
             work_dir=Path.cwd(),
             model=synthesizer_model,
         )
+    if provider_id in {"anthropic", "openai", "google"}:
+        try:
+            from .providers.mirascope_provider import (
+                Backend,
+                MirascopeProvider,
+                RateLimitConfig,
+            )
+        except ImportError as exc:
+            raise typer.BadParameter(
+                "Les providers réels nécessitent l'extra llm. "
+                "Installez avec: pip install goal-cascade[llm]"
+            ) from exc
+        available_backends: set[Backend] | None = None
+        if config is not None:
+            available_backends = {
+                Backend(name)
+                for name in config.providers.enabled
+                if name in {"anthropic", "openai", "google"}
+            }
+        return MirascopeProvider(
+            backend=Backend(provider_id),
+            rate_limit_config=RateLimitConfig(),
+            enable_cache=True,
+            available_backends=available_backends,
+        )
     raise typer.BadParameter(
         f"Provider {provider_id!r} configuré mais non implémenté dans ce jalon. "
-        "Providers disponibles : mock, kimi-cli, kimi-code."
+        "Providers disponibles : mock, kimi-cli, kimi-code, anthropic, openai, google."
     )
 
 

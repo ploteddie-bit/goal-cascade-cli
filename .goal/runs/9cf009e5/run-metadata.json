@@ -1,0 +1,10 @@
+{
+  "iterations": 4,
+  "last_error": "aucune",
+  "objective": "Test config",
+  "provider": "role-mapped",
+  "status": "stopped",
+  "synthesizer_provider": "mock",
+  "variant": "A",
+  "verdict": "STOP"
+}

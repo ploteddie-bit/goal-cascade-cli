@@ -1,0 +1,10 @@
+{
+  "iterations": 1,
+  "last_error": "[Errno 32] Broken pipe",
+  "objective": "Test role_mapping extras",
+  "provider": "role-mapped",
+  "status": "failed",
+  "synthesizer_provider": "mock",
+  "variant": "A",
+  "verdict": "absent"
+}

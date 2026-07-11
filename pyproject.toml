@@ -17,6 +17,7 @@ dependencies = [
 # Provider real APIs (install when ready to use real LLMs)
 llm = [
     "mirascope>=1.0",
+    "structlog>=24.0",
 ]
 # Mock mode needs no extra deps — pure Python simulation
 

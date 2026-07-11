@@ -142,3 +142,38 @@ def test_mapping_rows_preserve_configured_and_effective_values() -> None:
     assert rows["critic"].auto_switched is True
     assert rows["synthesizer"].configured == "anthropic"
     assert rows["synthesizer"].effective == "anthropic"
+
+
+def test_require_diversity_rejects_same_provider_family() -> None:
+    with pytest.raises(ValidationError) as error:
+        ProvidersConfig(
+            enabled=["kimi-cli", "kimi-code", "mock"],
+            role_mapping={
+                "producer": "kimi-cli",
+                "critic": "kimi-code",
+                "adversary": "mock",
+                "arbiter": "mock",
+            },
+            synthesizer="kimi-cli",
+            require_diversity=True,
+        )
+
+    assert "même famille" in str(error.value)
+    assert "moonshot" in str(error.value)
+
+
+def test_non_strict_same_family_is_allowed_but_degraded(caplog: pytest.LogCaptureFixture) -> None:
+    config = ProvidersConfig(
+        enabled=["kimi-cli", "kimi-code", "mock"],
+        role_mapping={
+            "producer": "kimi-cli",
+            "critic": "kimi-code",
+            "adversary": "mock",
+            "arbiter": "mock",
+        },
+        synthesizer="kimi-cli",
+        require_diversity=False,
+    )
+
+    assert config.degraded is True
+    assert any("Diversité réduite" in record.message for record in caplog.records)

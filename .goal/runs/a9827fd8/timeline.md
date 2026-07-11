@@ -1,0 +1,161 @@
+# Traçabilité G.O.A.L. — run a9827fd8
+
+## Résumé
+
+- iterations: 1
+- last_error: 404 NOT_FOUND. {'error': {'code': 404, 'message': 'This model models/gemini-2.0-flash-001 is no longer available. Please update your code to use a newer model for the latest features and improvements.', 'status': 'NOT_FOUND'}}
+- objective: Écris une phrase de test en français.
+- provider: role-mapped
+- status: failed
+- synthesizer_provider: google
+- variant: A
+- verdict: absent
+
+## Événements
+
+### 1 — run_started (2026-07-11T06:09:45.866733+00:00)
+
+```json
+{
+  "event": "run_started",
+  "objective": "Écris une phrase de test en français.",
+  "provider": "role-mapped",
+  "run_id": "a9827fd8",
+  "sequence": 1,
+  "synthesizer_provider": "google",
+  "timestamp_utc": "2026-07-11T06:09:45.866733+00:00",
+  "variant": "A"
+}
+```
+
+### 2 — prompt_saved (2026-07-11T06:09:45.878788+00:00)
+
+```json
+{
+  "bytes": 556,
+  "event": "prompt_saved",
+  "iteration": 1,
+  "path": "/home/eddie/.goal/runs/a9827fd8/prompt_1_producer.txt",
+  "role": "producer",
+  "run_id": "a9827fd8",
+  "sequence": 2,
+  "sha256": "b13d801d98aa184251abd12166d114b44a7c5d4896a2b697fedde1c8e0093d7e",
+  "timestamp_utc": "2026-07-11T06:09:45.878788+00:00"
+}
+```
+
+### 3 — provider_call_started (2026-07-11T06:09:45.878999+00:00)
+
+```json
+{
+  "event": "provider_call_started",
+  "iteration": 1,
+  "provider": "role-mapped",
+  "role": "producer",
+  "run_id": "a9827fd8",
+  "sequence": 3,
+  "tier": "small",
+  "timestamp_utc": "2026-07-11T06:09:45.878999+00:00"
+}
+```
+
+### 4 — error (2026-07-11T06:09:53.852124+00:00)
+
+```json
+{
+  "error_type": "NotFoundError",
+  "event": "error",
+  "message": "404 NOT_FOUND. {'error': {'code': 404, 'message': 'This model models/gemini-2.0-flash-001 is no longer available. Please update your code to use a newer model for the latest features and improvements.', 'status': 'NOT_FOUND'}}",
+  "run_id": "a9827fd8",
+  "sequence": 4,
+  "timestamp_utc": "2026-07-11T06:09:53.852124+00:00",
+  "traceback": "Traceback (most recent call last):\n  File \"/mnt/c/Users/eddie/ZCodeProject/goal-cascade-cli/.venv/lib/python3.12/site-packages/mirascope/llm/providers/base/base_provider.py\", line 97, in _wrap_errors\n    yield\n  File \"/mnt/c/Users/eddie/ZCodeProject/goal-cascade-cli/.venv/lib/python3.12/site-packages/mirascope/llm/providers/base/base_provider.py\", line 204, in call\n    return self._call(\n           ^^^^^^^^^^^\n  File \"/mnt/c/Users/eddie/ZCodeProject/goal-cascade-cli/.venv/lib/python3.12/site-packages/mirascope/llm/providers/google/provider.py\", line 91, in _call\n    google_response = self.client.models.generate_content(**kwargs)\n                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/mnt/c/Users/eddie/ZCodeProject/goal-cascade-cli/.venv/lib/python3.12/site-packages/google/genai/models.py\", line 6331, in generate_content\n    response = self._generate_content(\n               ^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/mnt/c/Users/eddie/ZCodeProject/goal-cascade-cli/.venv/lib/python3.12/site-packages/google/genai/models.py\", line 4767, in _generate_content\n    response = self._api_client.request(\n               ^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/mnt/c/Users/eddie/ZCodeProject/goal-cascade-cli/.venv/lib/python3.12/site-packages/google/genai/_api_client.py\", line 1605, in request\n    response = self._request(http_request, http_options, stream=False)\n               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/mnt/c/Users/eddie/ZCodeProject/goal-cascade-cli/.venv/lib/python3.12/site-packages/google/genai/_api_client.py\", line 1398, in _request\n    return self._retry(self._request_once, http_request, stream)  # type: ignore[no-any-return]\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/mnt/c/Users/eddie/ZCodeProject/goal-cascade-cli/.venv/lib/python3.12/site-packages/tenacity/__init__.py\", line 470, in __call__\n    do = self.iter(retry_state=retry_state)\n         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/mnt/c/Users/eddie/ZCodeProject/goal-cascade-cli/.venv/lib/python3.12/site-packages/tenacity/__init__.py\", line 371, in iter\n    result = action(retry_state)\n             ^^^^^^^^^^^^^^^^^^^\n  File \"/mnt/c/Users/eddie/ZCodeProject/goal-cascade-cli/.venv/lib/python3.12/site-packages/tenacity/__init__.py\", line 413, in exc_check\n    raise retry_exc.reraise()\n          ^^^^^^^^^^^^^^^^^^^\n  File \"/mnt/c/Users/eddie/ZCodeProject/goal-cascade-cli/.venv/lib/python3.12/site-packages/tenacity/__init__.py\", line 184, in reraise\n    raise self.last_attempt.result()\n          ^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/eddie/.local/share/uv/python/cpython-3.12.13-linux-x86_64-gnu/lib/python3.12/concurrent/futures/_base.py\", line 449, in result\n    return self.__get_result()\n           ^^^^^^^^^^^^^^^^^^^\n  File \"/home/eddie/.local/share/uv/python/cpython-3.12.13-linux-x86_64-gnu/lib/python3.12/concurrent/futures/_base.py\", line 401, in __get_result\n    raise self._exception\n  File \"/mnt/c/Users/eddie/ZCodeProject/goal-cascade-cli/.venv/lib/python3.12/site-packages/tenacity/__init__.py\", line 473, in __call__\n    result = fn(*args, **kwargs)\n             ^^^^^^^^^^^^^^^^^^^\n  File \"/mnt/c/Users/eddie/ZCodeProject/goal-cascade-cli/.venv/lib/python3.12/site-packages/google/genai/_api_client.py\", line 1375, in _request_once\n    errors.APIError.raise_for_response(response)\n  File \"/mnt/c/Users/eddie/ZCodeProject/goal-cascade-cli/.venv/lib/python3.12/site-packages/google/genai/errors.py\", line 155, in raise_for_response\n    cls.raise_error(response.status_code, response_json, response)\n  File \"/mnt/c/Users/eddie/ZCodeProject/goal-cascade-cli/.venv/lib/python3.12/site-packages/google/genai/errors.py\", line 184, in raise_error\n    raise ClientError(status_code, response_json, response)\ngoogle.genai.errors.ClientError: 404 NOT_FOUND. {'error': {'code': 404, 'message': 'This model models/gemini-2.0-flash-001 is no longer available. Please update your code to use a newer model for the latest features and improvements.', 'status': 'NOT_FOUND'}}\n\nThe above exception was the direct cause of the following exception:\n\nTraceback (most recent call last):\n  File \"/mnt/c/Users/eddie/ZCodeProject/goal-cascade-cli/src/goal_cascade/orchestrator/cascade_executor.py\", line 129, in run\n    state = self._run_loop(state, audience, constraints, verbose, journal)\n            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/mnt/c/Users/eddie/ZCodeProject/goal-cascade-cli/src/goal_cascade/orchestrator/cascade_executor.py\", line 219, in _run_loop\n    response = self.provider.call(prompt, role=role.value, tier=tier)\n               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/mnt/c/Users/eddie/ZCodeProject/goal-cascade-cli/src/goal_cascade/providers/router.py\", line 30, in call\n    return provider.call(prompt, role=role, tier=tier)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/mnt/c/Users/eddie/ZCodeProject/goal-cascade-cli/src/goal_cascade/providers/mirascope_provider.py\", line 185, in call\n    return asyncio.run(self._call_with_retry(prompt, role, tier))\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/eddie/.local/share/uv/python/cpython-3.12.13-linux-x86_64-gnu/lib/python3.12/asyncio/runners.py\", line 195, in run\n    return runner.run(main)\n           ^^^^^^^^^^^^^^^^\n  File \"/home/eddie/.local/share/uv/python/cpython-3.12.13-linux-x86_64-gnu/lib/python3.12/asyncio/runners.py\", line 118, in run\n    return self._loop.run_until_complete(task)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/eddie/.local/share/uv/python/cpython-3.12.13-linux-x86_64-gnu/lib/python3.12/asyncio/base_events.py\", line 691, in run_until_complete\n    return future.result()\n           ^^^^^^^^^^^^^^^\n  File \"/mnt/c/Users/eddie/ZCodeProject/goal-cascade-cli/src/goal_cascade/providers/mirascope_provider.py\", line 194, in _call_with_retry\n    response = await self._call_backend(self._backend, prompt, role, tier)\n               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/mnt/c/Users/eddie/ZCodeProject/goal-cascade-cli/src/goal_cascade/providers/mirascope_provider.py\", line 279, in _call_backend\n    response = await self._call_google(prompt, model)\n               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/mnt/c/Users/eddie/ZCodeProject/goal-cascade-cli/src/goal_cascade/providers/mirascope_provider.py\", line 292, in _call_google\n    return await self._call_mirascope_v2(Backend.GOOGLE, prompt, prompt_model)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/mnt/c/Users/eddie/ZCodeProject/goal-cascade-cli/src/goal_cascade/providers/mirascope_provider.py\", line 314, in _call_mirascope_v2\n    response = await asyncio.to_thread(_sync_call)\n               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/eddie/.local/share/uv/python/cpython-3.12.13-linux-x86_64-gnu/lib/python3.12/asyncio/threads.py\", line 25, in to_thread\n    return await loop.run_in_executor(None, func_call)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/eddie/.local/share/uv/python/cpython-3.12.13-linux-x86_64-gnu/lib/python3.12/concurrent/futures/thread.py\", line 59, in run\n    result = self.fn(*self.args, **self.kwargs)\n             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/mnt/c/Users/eddie/ZCodeProject/goal-cascade-cli/src/goal_cascade/providers/mirascope_provider.py\", line 311, in _sync_call\n    return _prompt()\n           ^^^^^^^^^\n  File \"/mnt/c/Users/eddie/ZCodeProject/goal-cascade-cli/.venv/lib/python3.12/site-packages/mirascope/llm/calls/calls.py\", line 90, in __call__\n    return self.call(*args, **kwargs)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/mnt/c/Users/eddie/ZCodeProject/goal-cascade-cli/.venv/lib/python3.12/site-packages/mirascope/llm/calls/calls.py\", line 104, in call\n    return self.prompt.call(self.model, *args, **kwargs)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/mnt/c/Users/eddie/ZCodeProject/goal-cascade-cli/.venv/lib/python3.12/site-packages/mirascope/llm/prompts/prompts.py\", line 124, in call\n    return model.call(messages, tools=self.toolkit, format=self.format)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/mnt/c/Users/eddie/ZCodeProject/goal-cascade-cli/.venv/lib/python3.12/site-packages/mirascope/llm/models/models.py\", line 207, in call\n    return self.provider.call(\n           ^^^^^^^^^^^^^^^^^^^\n  File \"/mnt/c/Users/eddie/ZCodeProject/goal-cascade-cli/.venv/lib/python3.12/site-packages/mirascope/llm/providers/base/base_provider.py\", line 203, in call\n    with self._wrap_errors():\n         ^^^^^^^^^^^^^^^^^^^\n  File \"/home/eddie/.local/share/uv/python/cpython-3.12.13-linux-x86_64-gnu/lib/python3.12/contextlib.py\", line 158, in __exit__\n    self.gen.throw(value)\n  File \"/mnt/c/Users/eddie/ZCodeProject/goal-cascade-cli/.venv/lib/python3.12/site-packages/mirascope/llm/providers/base/base_provider.py\", line 123, in _wrap_errors\n    raise error from e\nmirascope.llm.exceptions.NotFoundError: 404 NOT_FOUND. {'error': {'code': 404, 'message': 'This model models/gemini-2.0-flash-001 is no longer available. Please update your code to use a newer model for the latest features and improvements.', 'status': 'NOT_FOUND'}}\n"
+}
+```
+
+### 5 — run_finished (2026-07-11T06:09:53.856310+00:00)
+
+```json
+{
+  "event": "run_finished",
+  "iterations": 1,
+  "last_error": "404 NOT_FOUND. {'error': {'code': 404, 'message': 'This model models/gemini-2.0-flash-001 is no longer available. Please update your code to use a newer model for the latest features and improvements.', 'status': 'NOT_FOUND'}}",
+  "objective": "Écris une phrase de test en français.",
+  "provider": "role-mapped",
+  "run_id": "a9827fd8",
+  "sequence": 5,
+  "status": "failed",
+  "synthesizer_provider": "google",
+  "timestamp_utc": "2026-07-11T06:09:53.856310+00:00",
+  "variant": "A",
+  "verdict": "absent"
+}
+```
+
+### 6 — rag_sync_started (2026-07-11T06:09:53.857073+00:00)
+
+```json
+{
+  "embedding_host": "ia-general",
+  "embedding_model": "bge-m3:latest",
+  "event": "rag_sync_started",
+  "run_id": "a9827fd8",
+  "sequence": 6,
+  "timeline": "/home/eddie/.goal/runs/a9827fd8/timeline.md",
+  "timestamp_utc": "2026-07-11T06:09:53.857073+00:00"
+}
+```
+
+### 7 — rag_sync_failed (2026-07-11T06:09:54.029200+00:00)
+
+```json
+{
+  "document_id": 2863,
+  "error_type": "RuntimeError",
+  "event": "rag_sync_failed",
+  "message": "Endpoint refusé : les embeddings G.O.A.L. doivent provenir de ia-general",
+  "postgres_indexed": true,
+  "returncode": 1,
+  "run_id": "a9827fd8",
+  "sequence": 7,
+  "timestamp_utc": "2026-07-11T06:09:54.029200+00:00"
+}
+```
+
+### 8 — error (2026-07-11T06:09:54.239056+00:00)
+
+```json
+{
+  "error_type": "RagSyncError",
+  "event": "error",
+  "message": "Endpoint refusé : les embeddings G.O.A.L. doivent provenir de ia-general",
+  "run_id": "a9827fd8",
+  "sequence": 8,
+  "timestamp_utc": "2026-07-11T06:09:54.239056+00:00",
+  "traceback": "Traceback (most recent call last):\n  File \"/mnt/c/Users/eddie/ZCodeProject/goal-cascade-cli/.venv/lib/python3.12/site-packages/mirascope/llm/providers/base/base_provider.py\", line 97, in _wrap_errors\n    yield\n  File \"/mnt/c/Users/eddie/ZCodeProject/goal-cascade-cli/.venv/lib/python3.12/site-packages/mirascope/llm/providers/base/base_provider.py\", line 204, in call\n    return self._call(\n           ^^^^^^^^^^^\n  File \"/mnt/c/Users/eddie/ZCodeProject/goal-cascade-cli/.venv/lib/python3.12/site-packages/mirascope/llm/providers/google/provider.py\", line 91, in _call\n    google_response = self.client.models.generate_content(**kwargs)\n                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/mnt/c/Users/eddie/ZCodeProject/goal-cascade-cli/.venv/lib/python3.12/site-packages/google/genai/models.py\", line 6331, in generate_content\n    response = self._generate_content(\n               ^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/mnt/c/Users/eddie/ZCodeProject/goal-cascade-cli/.venv/lib/python3.12/site-packages/google/genai/models.py\", line 4767, in _generate_content\n    response = self._api_client.request(\n               ^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/mnt/c/Users/eddie/ZCodeProject/goal-cascade-cli/.venv/lib/python3.12/site-packages/google/genai/_api_client.py\", line 1605, in request\n    response = self._request(http_request, http_options, stream=False)\n               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/mnt/c/Users/eddie/ZCodeProject/goal-cascade-cli/.venv/lib/python3.12/site-packages/google/genai/_api_client.py\", line 1398, in _request\n    return self._retry(self._request_once, http_request, stream)  # type: ignore[no-any-return]\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/mnt/c/Users/eddie/ZCodeProject/goal-cascade-cli/.venv/lib/python3.12/site-packages/tenacity/__init__.py\", line 470, in __call__\n    do = self.iter(retry_state=retry_state)\n         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/mnt/c/Users/eddie/ZCodeProject/goal-cascade-cli/.venv/lib/python3.12/site-packages/tenacity/__init__.py\", line 371, in iter\n    result = action(retry_state)\n             ^^^^^^^^^^^^^^^^^^^\n  File \"/mnt/c/Users/eddie/ZCodeProject/goal-cascade-cli/.venv/lib/python3.12/site-packages/tenacity/__init__.py\", line 413, in exc_check\n    raise retry_exc.reraise()\n          ^^^^^^^^^^^^^^^^^^^\n  File \"/mnt/c/Users/eddie/ZCodeProject/goal-cascade-cli/.venv/lib/python3.12/site-packages/tenacity/__init__.py\", line 184, in reraise\n    raise self.last_attempt.result()\n          ^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/eddie/.local/share/uv/python/cpython-3.12.13-linux-x86_64-gnu/lib/python3.12/concurrent/futures/_base.py\", line 449, in result\n    return self.__get_result()\n           ^^^^^^^^^^^^^^^^^^^\n  File \"/home/eddie/.local/share/uv/python/cpython-3.12.13-linux-x86_64-gnu/lib/python3.12/concurrent/futures/_base.py\", line 401, in __get_result\n    raise self._exception\n  File \"/mnt/c/Users/eddie/ZCodeProject/goal-cascade-cli/.venv/lib/python3.12/site-packages/tenacity/__init__.py\", line 473, in __call__\n    result = fn(*args, **kwargs)\n             ^^^^^^^^^^^^^^^^^^^\n  File \"/mnt/c/Users/eddie/ZCodeProject/goal-cascade-cli/.venv/lib/python3.12/site-packages/google/genai/_api_client.py\", line 1375, in _request_once\n    errors.APIError.raise_for_response(response)\n  File \"/mnt/c/Users/eddie/ZCodeProject/goal-cascade-cli/.venv/lib/python3.12/site-packages/google/genai/errors.py\", line 155, in raise_for_response\n    cls.raise_error(response.status_code, response_json, response)\n  File \"/mnt/c/Users/eddie/ZCodeProject/goal-cascade-cli/.venv/lib/python3.12/site-packages/google/genai/errors.py\", line 184, in raise_error\n    raise ClientError(status_code, response_json, response)\ngoogle.genai.errors.ClientError: 404 NOT_FOUND. {'error': {'code': 404, 'message': 'This model models/gemini-2.0-flash-001 is no longer available. Please update your code to use a newer model for the latest features and improvements.', 'status': 'NOT_FOUND'}}\n\nThe above exception was the direct cause of the following exception:\n\nTraceback (most recent call last):\n  File \"/mnt/c/Users/eddie/ZCodeProject/goal-cascade-cli/src/goal_cascade/orchestrator/cascade_executor.py\", line 129, in run\n    state = self._run_loop(state, audience, constraints, verbose, journal)\n            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/mnt/c/Users/eddie/ZCodeProject/goal-cascade-cli/src/goal_cascade/orchestrator/cascade_executor.py\", line 219, in _run_loop\n    response = self.provider.call(prompt, role=role.value, tier=tier)\n               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/mnt/c/Users/eddie/ZCodeProject/goal-cascade-cli/src/goal_cascade/providers/router.py\", line 30, in call\n    return provider.call(prompt, role=role, tier=tier)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/mnt/c/Users/eddie/ZCodeProject/goal-cascade-cli/src/goal_cascade/providers/mirascope_provider.py\", line 185, in call\n    return asyncio.run(self._call_with_retry(prompt, role, tier))\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/eddie/.local/share/uv/python/cpython-3.12.13-linux-x86_64-gnu/lib/python3.12/asyncio/runners.py\", line 195, in run\n    return runner.run(main)\n           ^^^^^^^^^^^^^^^^\n  File \"/home/eddie/.local/share/uv/python/cpython-3.12.13-linux-x86_64-gnu/lib/python3.12/asyncio/runners.py\", line 118, in run\n    return self._loop.run_until_complete(task)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/eddie/.local/share/uv/python/cpython-3.12.13-linux-x86_64-gnu/lib/python3.12/asyncio/base_events.py\", line 691, in run_until_complete\n    return future.result()\n           ^^^^^^^^^^^^^^^\n  File \"/mnt/c/Users/eddie/ZCodeProject/goal-cascade-cli/src/goal_cascade/providers/mirascope_provider.py\", line 194, in _call_with_retry\n    response = await self._call_backend(self._backend, prompt, role, tier)\n               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/mnt/c/Users/eddie/ZCodeProject/goal-cascade-cli/src/goal_cascade/providers/mirascope_provider.py\", line 279, in _call_backend\n    response = await self._call_google(prompt, model)\n               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/mnt/c/Users/eddie/ZCodeProject/goal-cascade-cli/src/goal_cascade/providers/mirascope_provider.py\", line 292, in _call_google\n    return await self._call_mirascope_v2(Backend.GOOGLE, prompt, prompt_model)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/mnt/c/Users/eddie/ZCodeProject/goal-cascade-cli/src/goal_cascade/providers/mirascope_provider.py\", line 314, in _call_mirascope_v2\n    response = await asyncio.to_thread(_sync_call)\n               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/eddie/.local/share/uv/python/cpython-3.12.13-linux-x86_64-gnu/lib/python3.12/asyncio/threads.py\", line 25, in to_thread\n    return await loop.run_in_executor(None, func_call)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/home/eddie/.local/share/uv/python/cpython-3.12.13-linux-x86_64-gnu/lib/python3.12/concurrent/futures/thread.py\", line 59, in run\n    result = self.fn(*self.args, **self.kwargs)\n             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/mnt/c/Users/eddie/ZCodeProject/goal-cascade-cli/src/goal_cascade/providers/mirascope_provider.py\", line 311, in _sync_call\n    return _prompt()\n           ^^^^^^^^^\n  File \"/mnt/c/Users/eddie/ZCodeProject/goal-cascade-cli/.venv/lib/python3.12/site-packages/mirascope/llm/calls/calls.py\", line 90, in __call__\n    return self.call(*args, **kwargs)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/mnt/c/Users/eddie/ZCodeProject/goal-cascade-cli/.venv/lib/python3.12/site-packages/mirascope/llm/calls/calls.py\", line 104, in call\n    return self.prompt.call(self.model, *args, **kwargs)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/mnt/c/Users/eddie/ZCodeProject/goal-cascade-cli/.venv/lib/python3.12/site-packages/mirascope/llm/prompts/prompts.py\", line 124, in call\n    return model.call(messages, tools=self.toolkit, format=self.format)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/mnt/c/Users/eddie/ZCodeProject/goal-cascade-cli/.venv/lib/python3.12/site-packages/mirascope/llm/models/models.py\", line 207, in call\n    return self.provider.call(\n           ^^^^^^^^^^^^^^^^^^^\n  File \"/mnt/c/Users/eddie/ZCodeProject/goal-cascade-cli/.venv/lib/python3.12/site-packages/mirascope/llm/providers/base/base_provider.py\", line 203, in call\n    with self._wrap_errors():\n         ^^^^^^^^^^^^^^^^^^^\n  File \"/home/eddie/.local/share/uv/python/cpython-3.12.13-linux-x86_64-gnu/lib/python3.12/contextlib.py\", line 158, in __exit__\n    self.gen.throw(value)\n  File \"/mnt/c/Users/eddie/ZCodeProject/goal-cascade-cli/.venv/lib/python3.12/site-packages/mirascope/llm/providers/base/base_provider.py\", line 123, in _wrap_errors\n    raise error from e\nmirascope.llm.exceptions.NotFoundError: 404 NOT_FOUND. {'error': {'code': 404, 'message': 'This model models/gemini-2.0-flash-001 is no longer available. Please update your code to use a newer model for the latest features and improvements.', 'status': 'NOT_FOUND'}}\n\nDuring handling of the above exception, another exception occurred:\n\nTraceback (most recent call last):\n  File \"/mnt/c/Users/eddie/ZCodeProject/goal-cascade-cli/src/goal_cascade/orchestrator/cascade_executor.py\", line 153, in run\n    self.rag_bridge.sync_run(state.run_id, journal=journal)\n  File \"/mnt/c/Users/eddie/ZCodeProject/goal-cascade-cli/src/goal_cascade/rag_bridge.py\", line 135, in sync_run\n    raise RagSyncError(message)\ngoal_cascade.rag_bridge.RagSyncError: Endpoint refusé : les embeddings G.O.A.L. doivent provenir de ia-general\n"
+}
+```
+
+## Données persistées
+
+### prompt_1_producer.txt
+
+Chemin : `/home/eddie/.goal/runs/a9827fd8/prompt_1_producer.txt`
+
+```text
+Tu es un redacteur. Produis un premier jet du livrable suivant.
+
+OBJECTIF :
+Écris une phrase de test en français.
+
+CONTRAINTES :
+- Sois exhaustif sur le fond, mais ne vise pas la perfection.
+  Ce draft sert de base de travail, pas de livrable final.
+- Pour chaque source, statistique ou affirmation factuelle,
+  indique ton niveau de confiance : [HAUT] / [MOYEN] / [FAIBLE].
+- Ne fabrique aucune source. Si tu n'es pas sur, marque [FAIBLE].
+- A la fin, liste explicitement toutes tes sources avec leur
+  niveau de confiance.
+
+Produis le draft maintenant.
+```

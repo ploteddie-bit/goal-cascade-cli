@@ -1,0 +1,10 @@
+{
+  "iterations": 3,
+  "last_error": "404 NOT_FOUND. {'error': {'code': 404, 'message': 'This model models/gemini-3-pro-preview is no longer available. Please update your code to use a newer model for the latest features and improvements.', 'status': 'NOT_FOUND'}}",
+  "objective": "Rédiger une phrase de présentation de goal-cascade-cli",
+  "provider": "role-mapped",
+  "status": "failed",
+  "synthesizer_provider": "google",
+  "variant": "A",
+  "verdict": "absent"
+}

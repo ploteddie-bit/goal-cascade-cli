@@ -1,0 +1,10 @@
+{
+  "iterations": 1,
+  "last_error": "The 'google' packages are required to use GoogleProvider. Install them with: `uv add 'mirascope[google]'`. Or use `uv add 'mirascope[all]'` to support all optional features.",
+  "objective": "Écris une phrase de test en français.",
+  "provider": "role-mapped",
+  "status": "failed",
+  "synthesizer_provider": "google",
+  "variant": "A",
+  "verdict": "absent"
+}

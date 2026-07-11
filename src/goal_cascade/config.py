@@ -6,6 +6,8 @@ from pathlib import Path
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from .providers.families import PROVIDER_FAMILIES
+
 logger = logging.getLogger(__name__)
 
 DEFAULT_CONFIG_PATH = Path.home() / ".goal" / "config.toml"
@@ -90,6 +92,41 @@ class ProvidersConfig(BaseModel):
             )
 
         degraded = bool(adaptations) or len(available) < MIN_OPTIMAL_PROVIDERS
+
+        families_used: dict[str, list[str]] = {}
+        for role_name, provider_name in resolved.items():
+            family = PROVIDER_FAMILIES.get(provider_name, provider_name)
+            families_used.setdefault(family, []).append(role_name)
+        synthesizer_family = PROVIDER_FAMILIES.get(resolved_synthesizer, resolved_synthesizer)
+        families_used.setdefault(synthesizer_family, []).append("synthesizer")
+
+        providers_by_family: dict[str, set[str]] = {}
+        all_assigned = dict(resolved)
+        all_assigned["synthesizer"] = resolved_synthesizer
+        for provider_name in all_assigned.values():
+            family = PROVIDER_FAMILIES.get(provider_name, provider_name)
+            providers_by_family.setdefault(family, set()).add(provider_name)
+
+        same_family = {
+            family: roles
+            for family, roles in families_used.items()
+            if len(roles) > 1
+            and family != "mock"
+            and len(providers_by_family.get(family, set())) > 1
+        }
+        if same_family:
+            degraded = True
+            details = "; ".join(
+                f"{family}: {', '.join(roles)}"
+                for family, roles in same_family.items()
+            )
+            if self.require_diversity:
+                raise ValueError(
+                    "require_diversity=true : plusieurs rôles dans la même famille. "
+                    f"{details}"
+                )
+            logger.warning("Diversité réduite : mêmes familles détectées. %s", details)
+
         if self.require_diversity and degraded:
             raise ValueError(
                 "require_diversity=true interdit le mode dégradé : "

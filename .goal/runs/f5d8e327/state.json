@@ -1,0 +1,14 @@
+{
+  "run_id": "f5d8e327",
+  "objective": "Écris une phrase de test en français.",
+  "variant": "A",
+  "current_iteration": 1,
+  "max_iterations": 5,
+  "history": [],
+  "last_synthesis": null,
+  "artifacts": [],
+  "final_verdict": null,
+  "status": "failed",
+  "last_error": "404 NOT_FOUND. {'error': {'code': 404, 'message': 'This model models/gemini-2.5-pro is no longer available to new users. Please update your code to use a newer model for the latest features and improvements.', 'status': 'NOT_FOUND'}}",
+  "accumulated_cost": 0.0
+}

@@ -1,0 +1,14 @@
+{
+  "document_id": 2800,
+  "embedding_host": "ia-general",
+  "embedding_model": "bge-m3:latest",
+  "error_type": "RuntimeError",
+  "message": "Endpoint refusé : les embeddings G.O.A.L. doivent provenir de ia-general",
+  "postgres_indexed": true,
+  "returncode": 1,
+  "run_id": "67c5f28d",
+  "sha256": "30945eff7b828252b1b338abe39d6d214ed7dc1f4746e199ef1261479f8e78c4",
+  "source": ".goal/runs/67c5f28d/timeline.md",
+  "status": "indexed_pending_embedding",
+  "updated_at_utc": "2026-07-11T03:04:24.537949+00:00"
+}

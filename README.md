@@ -110,7 +110,13 @@ Quand un provider configuré n'est pas disponible dans `enabled`, le CLI dupliqu
 
 `require_diversity = true` est destiné au dev/CI : la config est rejetée si elle passe en mode dégradé.
 
-> Note de jalon : ce chantier ajoute la résolution TOML. Les vrais providers Anthropic/OpenAI/Google via Mirascope restent un chantier séparé ; le code actuel sait exécuter `mock`, `kimi-cli` et `kimi-code`.
+> Note S2 : `anthropic`, `openai` et `google` sont disponibles via Mirascope après installation de l'extra `llm` : `pip install goal-cascade[llm]`. Sans cet extra, le mode local `mock` et les providers CLI Kimi restent disponibles. Les credentials restent gérés par les SDKs/providers via les variables d'environnement usuelles ; aucun secret ne doit être placé dans `config.toml`.
+
+### Résilience providers
+
+Les providers Mirascope appliquent un backoff exponentiel sur les rate limits puis basculent vers un backend de fallback disponible, en conservant le même tier (`small`, `medium`, `large`, `xlarge`). `require_diversity = true` bloque aussi les mappings qui réutilisent plusieurs providers d'une même famille.
+
+Sont volontairement hors périmètre de ce jalon : LangGraph, budget tracker, dérive cosinus, multi-cascade et CI/CD hook.
 
 ## Traçabilité permanente
 

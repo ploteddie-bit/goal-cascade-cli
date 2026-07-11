@@ -1,0 +1,14 @@
+{
+  "objective": "Rédiger une phrase de présentation synthétique et précise pour l'outil goal-cascade-cli.",
+  "key_decisions": [
+    "Définition technique de l'outil comme une interface en ligne de commande (CLI).",
+    "Positionnement sur l'alignement stratégique par la décomposition d'objectifs (vision vers opérationnel).",
+    "Mise en avant des bénéfices de visualisation et de cohérence d'exécution.",
+    "Adoption d'une terminologie liée au management de la performance (OKR/MBO)."
+  ],
+  "uncertainties": [
+    "Identification de l'implémentation spécifique parmi les multiples dépôts existants.",
+    "Formats de données et fonctionnalités techniques détaillées non documentés."
+  ],
+  "next_instruction": "Finaliser et valider la phrase de présentation auprès des parties prenantes."
+}

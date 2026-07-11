@@ -1,0 +1,27 @@
+RAPPORT ADVERSARIAL — Adversaire (mock-large)
+==============================================
+[input hash: a6200dbd — lit le rapport du critique]
+[objectif : Test config]
+
+SECTIONS COUVERTES : 1/4
+ARGUMENTS ANALYSES : 1
+
+ANGLES MORTS (ce qui manque) :
+  1. Le public debutant n'est pas adresse
+  2. Aucune mention des couts ou contraintes pratiques
+  3. Les contre-arguments evidents ne sont pas anticipees
+  4. Sections manquantes : introduction, conclusion, exemple
+
+BIAIS IMPLICITES :
+  1. Postulat que le lecteur connait deja le sujet
+  2. Toutes les sources vont dans le meme sens (pas de debat)
+
+CONTRE-ARGUMENTS :
+  1. Une approche plus simple pourrait donner des resultats equivalents
+  2. Le ROI de la methode n'est pas demontre
+
+RISQUES :
+  - Si le contexte reel differe, la methode peut echouer
+  - Generalisation non prouvee (3 mois d'exemple, c'est court)
+
+VERDICT DE L'ADVERSAIRE : 6 point(s) faible(s) a adresser.

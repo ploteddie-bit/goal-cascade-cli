@@ -1,0 +1,55 @@
+Tu es un synthétiseur. Produis une synthèse orientée objectif
+strictement conforme au contrat JSON ci-dessous.
+
+OBJECTIF :
+Rédiger une phrase de présentation de goal-cascade-cli
+
+SYNTHÈSE CUMULÉE PRÉCÉDENTE :
+{
+  "objective": "Rédiger une phrase de présentation synthétique et précise pour l'outil goal-cascade-cli.",
+  "key_decisions": [
+    "Définir l'outil comme une interface en ligne de commande (CLI) spécialisée dans la gestion hiérarchique d'objectifs.",
+    "Cibler les méthodologies de type OKR ou KPI pour structurer la proposition de valeur fonctionnelle.",
+    "Mettre en avant l'intégration directe dans le terminal pour optimiser les workflows des profils techniques."
+  ],
+  "uncertainties": [
+    "Absence de documentation officielle ou de dépôt public confirmé validant les fonctionnalités exactes.",
+    "Hypothèse sur les bénéfices réels de productivité sans retour d'expérience utilisateur."
+  ],
+  "next_instruction": "Rechercher ou fournir le lien vers le dépôt source (GitHub/GitLab) pour valider les fonctionnalités implémentées et le public cible.",
+  "iteration_from": 1,
+  "iteration_to": 2
+}
+TRAVAIL DE L'ETAPE PRECEDENTE :
+Voici le rapport de vérification concernant les affirmations contenues dans la synthèse :
+
+### RAPPORT D'ERREURS
+
+[!] **L'existence de l'outil "goal-cascade-cli"** -- NON VERIFIABLE
+*Vérification :* Aucune trace d'un projet, d'un dépôt (GitHub, GitLab), d'un package (npm, PyPI) ou d'une documentation officielle portant ce nom exact n'a été trouvée dans le domaine public.
+
+[!] **Nature de l'outil : Interface en ligne de commande (CLI)** -- NON VERIFIABLE
+*Vérification :* Bien que le nom choisi l'indique, en l'absence de code source ou de binaire, il est impossible de confirmer qu'il s'agit d'un outil fonctionnel de ce type.
+
+[X] **Spécialisation dans les méthodologies OKR ou KPI** -- HALLUCINATION
+*Explication :* Il s'agit d'une attribution arbitraire de fonctionnalités basée sur l'interprétation sémantique du nom "goal-cascade". Aucune source ne confirme que l'outil (s'il existe) implémente ces cadres méthodologiques spécifiques.
+
+[X] **Ciblage des profils techniques et optimisation de workflow** -- HALLUCINATION
+*Explication :* Il s'agit d'une extrapolation des bénéfices théoriques d'un outil CLI en général. En l'absence de manuel utilisateur ou de retours d'expérience, affirmer que cet outil précis optimise le workflow est une supposition non factuelle.
+
+**NOTE DU VERIFICATEUR :** La synthèse elle-même admet l'absence de documentation (section "uncertainties"). Par conséquent, transformer des hypothèses de travail en "décisions clés" pour définir l'outil constitue une propagation d'hallucinations. **L'outil ne peut pas être décrit précisément car il n'est pas localisable.**
+
+Réponds avec UN SEUL objet JSON valide, sans bloc Markdown ni commentaire :
+{
+  "objective": "objectif invariant en une phrase",
+  "key_decisions": ["décision 1", "décision 2", "décision 3"],
+  "uncertainties": ["point restant à vérifier"],
+  "next_instruction": "instruction précise pour l'étape suivante"
+}
+
+Regles :
+- Entre 1 et 5 décisions clés, jamais davantage.
+- Consolide la synthèse précédente avec le nouveau travail.
+- Élimine les tournures et digressions, mais conserve les décisions.
+- Ne recopie pas les blocs de code : ils sont préservés séparément.
+- N'ajoute aucune clé au contrat JSON.

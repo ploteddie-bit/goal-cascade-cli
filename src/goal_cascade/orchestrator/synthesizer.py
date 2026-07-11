@@ -108,15 +108,23 @@ class Synthesizer:
         iteration_from: int,
         iteration_to: int,
     ) -> GoalOrientedSynthesis:
-        fenced = JSON_FENCE_RE.search(text)
-        if fenced:
-            candidate = fenced.group(1)
-        else:
-            start = text.find("{")
-            end = text.rfind("}")
-            if start == -1 or end <= start:
-                raise SynthesisError("Le synthétiseur n'a retourné aucun objet JSON")
-            candidate = text[start : end + 1]
+        # Premier essai : le texte brut est déjà du JSON valide.
+        candidate: str | None = None
+        stripped = text.strip()
+        if stripped.startswith("{") or stripped.startswith("["):
+            candidate = stripped
+
+        # Sinon, extraire d'un bloc ```json ... ``` ou du premier objet JSON.
+        if candidate is None:
+            fenced = JSON_FENCE_RE.search(text)
+            if fenced:
+                candidate = fenced.group(1)
+            else:
+                start = text.find("{")
+                end = text.rfind("}")
+                if start == -1 or end <= start:
+                    raise SynthesisError("Le synthétiseur n'a retourné aucun objet JSON")
+                candidate = text[start : end + 1]
 
         try:
             data = json.loads(candidate)

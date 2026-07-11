@@ -1,0 +1,15 @@
+Tu es un redacteur. Produis un premier jet du livrable suivant.
+
+OBJECTIF :
+Review smoke
+
+CONTRAINTES :
+- Sois exhaustif sur le fond, mais ne vise pas la perfection.
+  Ce draft sert de base de travail, pas de livrable final.
+- Pour chaque source, statistique ou affirmation factuelle,
+  indique ton niveau de confiance : [HAUT] / [MOYEN] / [FAIBLE].
+- Ne fabrique aucune source. Si tu n'es pas sur, marque [FAIBLE].
+- A la fin, liste explicitement toutes tes sources avec leur
+  niveau de confiance.
+
+Produis le draft maintenant.

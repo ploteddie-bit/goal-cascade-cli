@@ -1,0 +1,3 @@
+{"event": "run_started", "objective": "Écris une phrase de test en français.", "provider": "role-mapped", "run_id": "d9341b56", "sequence": 1, "synthesizer_provider": "google", "timestamp_utc": "2026-07-11T06:05:14.598124+00:00", "variant": "A"}
+{"bytes": 556, "event": "prompt_saved", "iteration": 1, "path": "/home/eddie/.goal/runs/d9341b56/prompt_1_producer.txt", "role": "producer", "run_id": "d9341b56", "sequence": 2, "sha256": "b13d801d98aa184251abd12166d114b44a7c5d4896a2b697fedde1c8e0093d7e", "timestamp_utc": "2026-07-11T06:05:14.610617+00:00"}
+{"event": "provider_call_started", "iteration": 1, "provider": "role-mapped", "role": "producer", "run_id": "d9341b56", "sequence": 3, "tier": "small", "timestamp_utc": "2026-07-11T06:05:14.610827+00:00"}

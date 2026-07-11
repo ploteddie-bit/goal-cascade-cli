@@ -1,0 +1,13 @@
+RAPPORT DE VERIFICATION — Critique (mock-medium)
+==================================================
+[input hash: 497ff01f — lit le draft precedent]
+[objectif : Test config]
+
+VERIFICATION DES CONFIANCES :
+  [OK]   Argument 2 (HAUTE) — source verifiable, date plausible
+  [!]    Argument 1 (MOYENNE) — source a confirmer
+  [X]    Argument 3 (FAIBLE) — manque de preuves
+
+HALLUCINATIONS POTENTIELLES : 0 point(s) faible(s) detecte(s)
+RECOMMANDATION : Renforcer l'argument 3 ou le retirer.
+RESULTAT : 0 correction(s) necessaire(s) avant validation.

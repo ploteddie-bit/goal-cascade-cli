@@ -1,0 +1,14 @@
+{
+  "run_id": "d9624410",
+  "objective": "Smoke test degraded",
+  "variant": "A",
+  "current_iteration": 1,
+  "max_iterations": 5,
+  "history": [],
+  "last_synthesis": null,
+  "artifacts": [],
+  "final_verdict": null,
+  "status": "failed",
+  "last_error": "[Errno 32] Broken pipe",
+  "accumulated_cost": 0.0
+}

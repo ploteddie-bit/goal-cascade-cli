@@ -1,0 +1,58 @@
+Tu es un synthétiseur. Produis une synthèse orientée objectif
+strictement conforme au contrat JSON ci-dessous.
+
+OBJECTIF :
+Rédiger une phrase de présentation de goal-cascade-cli
+
+SYNTHÈSE CUMULÉE PRÉCÉDENTE :
+{
+  "objective": "Rédiger une phrase de présentation synthétique et précise pour l'outil goal-cascade-cli.",
+  "key_decisions": [
+    "Définition technique de l'outil comme une interface en ligne de commande (CLI).",
+    "Positionnement sur l'alignement stratégique par la décomposition d'objectifs (vision vers opérationnel).",
+    "Mise en avant des bénéfices de visualisation et de cohérence d'exécution.",
+    "Adoption d'une terminologie liée au management de la performance (OKR/MBO)."
+  ],
+  "uncertainties": [
+    "Identification de l'implémentation spécifique parmi les multiples dépôts existants.",
+    "Formats de données et fonctionnalités techniques détaillées non documentés."
+  ],
+  "next_instruction": "Finaliser et valider la phrase de présentation auprès des parties prenantes.",
+  "iteration_from": 1,
+  "iteration_to": 2
+}
+TRAVAIL DE L'ETAPE PRECEDENTE :
+Voici le rapport de vérification des faits concernant la synthèse fournie :
+
+[X]  **"goal-cascade-cli"** -- **HALLUCINATION**
+*(Explication : Après recherche sur les registres de paquets (NPM, PyPI), les dépôts GitHub et les moteurs de recherche, aucun outil public nommé exactement "goal-cascade-cli" n'existe. L'outil semble être une invention ou une confusion avec le concept théorique de "Goal Cascading".)*
+
+[!]  **"Interface en ligne de commande (CLI)"** -- **NON VERIFIABLE**
+*(Explication : Étant donné que l'outil lui-même n'a pas pu être localisé, sa nature technique exacte en tant que CLI ne peut être confirmée, bien que le nom suggéré par l'étape précédente l'implique.)*
+
+[OK] **"Alignement stratégique par la décomposition d'objectifs (vision vers opérationnel)"** -- **VERIFIEE**
+*(Explication : C'est la définition exacte et standard du concept de management "Goal Cascading" dans la littérature professionnelle.)*
+
+[!]  **"Bénéfices de visualisation et de cohérence d'exécution"** -- **NON VERIFIABLE**
+*(Explication : Ces bénéfices sont supposés pour un outil de ce type, mais sans accès à une documentation ou un code source réel, ils ne peuvent être validés comme des fonctionnalités existantes.)*
+
+[OK] **"Terminologie liée au management de la performance (OKR/MBO)"** -- **VERIFIEE**
+*(Explication : OKR (Objectives and Key Results) et MBO (Management by Objectives) sont effectivement les cadres de référence réels et existants pour la gestion de la performance et l'alignement des objectifs.)*
+
+[!]  **"Identification de l'implémentation spécifique parmi les multiples dépôts existants"** -- **NON VERIFIABLE**
+*(Explication : Il existe des dépôts traitant de "goal cascade" (souvent des projets personnels ou de formation), mais aucun ne semble être une référence "CLI" établie ou faisant autorité permettant de valider les fonctionnalités citées.)*
+
+Réponds avec UN SEUL objet JSON valide, sans bloc Markdown ni commentaire :
+{
+  "objective": "objectif invariant en une phrase",
+  "key_decisions": ["décision 1", "décision 2", "décision 3"],
+  "uncertainties": ["point restant à vérifier"],
+  "next_instruction": "instruction précise pour l'étape suivante"
+}
+
+Regles :
+- Entre 1 et 5 décisions clés, jamais davantage.
+- Consolide la synthèse précédente avec le nouveau travail.
+- Élimine les tournures et digressions, mais conserve les décisions.
+- Ne recopie pas les blocs de code : ils sont préservés séparément.
+- N'ajoute aucune clé au contrat JSON.

@@ -1,0 +1,13 @@
+{
+  "objective": "Rédiger une phrase de présentation synthétique et précise pour l'outil goal-cascade-cli.",
+  "key_decisions": [
+    "Définir l'outil comme une interface en ligne de commande (CLI) spécialisée dans la gestion hiérarchique d'objectifs.",
+    "Cibler les méthodologies de type OKR ou KPI pour structurer la proposition de valeur fonctionnelle.",
+    "Mettre en avant l'intégration directe dans le terminal pour optimiser les workflows des profils techniques."
+  ],
+  "uncertainties": [
+    "Absence de documentation officielle ou de dépôt public confirmé validant les fonctionnalités exactes.",
+    "Hypothèse sur les bénéfices réels de productivité sans retour d'expérience utilisateur."
+  ],
+  "next_instruction": "Rechercher ou fournir le lien vers le dépôt source (GitHub/GitLab) pour valider les fonctionnalités implémentées et le public cible."
+}

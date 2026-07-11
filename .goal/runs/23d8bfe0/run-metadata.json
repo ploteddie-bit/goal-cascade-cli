@@ -1,0 +1,10 @@
+{
+  "iterations": 1,
+  "last_error": "Synthèse JSON invalide : Expecting property name enclosed in double quotes: line 1 column 2 (char 1)",
+  "objective": "Écris une phrase de test en français.",
+  "provider": "role-mapped",
+  "status": "failed",
+  "synthesizer_provider": "google",
+  "variant": "A",
+  "verdict": "absent"
+}

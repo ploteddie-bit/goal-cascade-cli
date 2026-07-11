@@ -1,0 +1,40 @@
+Tu es un synthétiseur. Produis une synthèse orientée objectif
+strictement conforme au contrat JSON ci-dessous.
+
+OBJECTIF :
+Rédiger une phrase de présentation de goal-cascade-cli
+
+TRAVAIL DE L'ETAPE PRECEDENTE :
+Voici un premier jet pour la phrase de présentation de **goal-cascade-cli**.
+
+### Le Draft
+
+**goal-cascade-cli** est un outil d'interface en ligne de commande [HAUT] conçu pour structurer et piloter l'alignement stratégique [MOYEN] en déclinant des objectifs de haut niveau (vision) en paliers tactiques et tâches opérationnelles [MOYEN], permettant ainsi de visualiser la progression et d'assurer la cohérence de l'exécution au sein d'un projet ou d'une organisation [MOYEN].
+
+---
+
+### Sources et niveaux de confiance
+
+1.  **Nomenclature technique (-cli) :** Le suffixe "-cli" désigne universellement une *Command Line Interface* (interface en ligne de commande).
+    *   *Confiance :* **[HAUT]**
+2.  **Méthodologie "Goal Cascade" :** Ce terme renvoie à une pratique de management (souvent liée aux OKR ou au MBO) consistant à diviser les objectifs stratégiques en sous-objectifs pour les équipes et individus. L'outil est présumé implémenter cette logique.
+    *   *Confiance :* **[MOYEN]** (Basé sur la sémantique standard du nom, sans accès à une documentation officielle spécifique et unique qui dominerait le marché).
+3.  **Fonctionnalités de suivi et d'alignement :** Par déduction, un outil de "cascade d'objectifs" a pour fonction première de maintenir le lien entre la vision globale et l'exécution quotidienne.
+    *   *Confiance :* **[MOYEN]**
+4.  **Existence d'un dépôt spécifique :** Il existe plusieurs projets mineurs ou scripts personnels nommés ainsi sur des plateformes comme GitHub (ex: outils de gestion de tâches hiérarchiques), mais aucun ne s'impose comme un standard industriel mondial (type Git ou Docker).
+    *   *Confiance :* **[FAIBLE]** (L'usage exact peut varier selon la version spécifique du logiciel visée).
+
+Réponds avec UN SEUL objet JSON valide, sans bloc Markdown ni commentaire :
+{
+  "objective": "objectif invariant en une phrase",
+  "key_decisions": ["décision 1", "décision 2", "décision 3"],
+  "uncertainties": ["point restant à vérifier"],
+  "next_instruction": "instruction précise pour l'étape suivante"
+}
+
+Regles :
+- Entre 1 et 5 décisions clés, jamais davantage.
+- Consolide la synthèse précédente avec le nouveau travail.
+- Élimine les tournures et digressions, mais conserve les décisions.
+- Ne recopie pas les blocs de code : ils sont préservés séparément.
+- N'ajoute aucune clé au contrat JSON.

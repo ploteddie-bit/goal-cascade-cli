@@ -1,0 +1,13 @@
+{
+  "objective": "Rédiger une phrase de présentation synthétique et précise pour l'outil goal-cascade-cli.",
+  "key_decisions": [
+    "Intégrer l'inférence sémantique du nom : un outil en ligne de commande dédié à la gestion descendante (cascading) d'objectifs.",
+    "Passer d'une posture de validation documentaire stricte à une posture de prototypage conceptuel et fonctionnel.",
+    "Accepter l'hypothèse d'un projet en phase de spécification, privé ou de type 'in-house'.",
+    "Adopter une approche par scénarios de définition basés sur les standards métier (OKR, MBO) pour débloquer la rédaction."
+  ],
+  "uncertainties": [
+    "Cadre méthodologique spécifique (OKR, KPI, MBO) ou workflow technique exact privilégié par l'outil."
+  ],
+  "next_instruction": "Proposer des variantes de phrases de présentation structurées selon différents modèles de gestion de performance (stratégique, opérationnel, technique) pour validation."
+}
