@@ -1403,5 +1403,79 @@ def resume(
     console.print(f"Livrable : {run_dir / 'final_output.md'}")
 
 
+@app.command(name="cascade-run")
+def cascade_run(
+    plan_path: str = typer.Argument(..., help="Chemin vers le fichier plan.json"),
+    verbose: bool = typer.Option(False, "--verbose", "-v", help="Logs détaillés"),
+) -> None:
+    """Exécute toutes les cascades d'un plan.json.
+
+    Multi-cascade : exécuteur topologique + intégration finale.
+    """
+    import json as _json
+    from .multicascade.module_graph import ModuleGraph
+    from .multicascade.multi_executor import MultiCascadeExecutor
+
+    plan_file = Path(plan_path)
+    if not plan_file.exists():
+        console.print(f"[red]Fichier plan introuvable : {plan_path}[/red]")
+        raise typer.Exit(1)
+
+    try:
+        graph = ModuleGraph.from_plan_file(plan_file)
+    except Exception as exc:
+        console.print(f"[red]Plan invalide : {exc}[/red]")
+        raise typer.Exit(1)
+
+    plan_data = _json.loads(plan_file.read_text(encoding="utf-8"))
+    module_count = len(plan_data.get("modules", []))
+    batch_count = len(graph.parallel_batches())
+
+    console.print(f"[blue]Exécution du plan : {module_count} modules, {batch_count} batches[/blue]")
+    console.print(f"  Ordre topologique : {graph.topological_order()}")
+    for i, batch in enumerate(graph.parallel_batches()):
+        console.print(f"  Batch {i+1} : {batch}")
+
+    # Construire l'exécuteur avec MockProvider comme fallback sûr
+    provider = MockProvider()
+    synthesizer_provider = MockProvider()
+    cascade_executor = CascadeExecutor(
+        provider=provider,
+        synthesizer_provider=synthesizer_provider,
+    )
+
+    multi_executor = MultiCascadeExecutor(
+        module_graph=graph,
+        cascade_executor=cascade_executor,
+    )
+
+    try:
+        module_results = multi_executor.run_all()
+    except Exception as exc:
+        console.print(f"[red]Échec d'un module : {exc}[/red]")
+        raise typer.Exit(1)
+
+    console.print("\n[blue]Cascade d'intégration...[/blue]")
+    try:
+        integration_state = multi_executor.run_integration(module_results)
+    except Exception as exc:
+        console.print(f"[red]Intégration échouée : {exc}[/red]")
+        raise typer.Exit(1)
+
+    total_cost = sum(s.accumulated_cost for s in module_results.values())
+    total_cost += integration_state.accumulated_cost
+    total_iterations = sum(s.current_iteration for s in module_results.values())
+    total_iterations += integration_state.current_iteration
+
+    console.print(f"\n[green]Multi-cascade terminée[/green]")
+    console.print(f"  Modules : {len(module_results)}")
+    console.print(f"  Itérations totales : {total_iterations}")
+    console.print(f"  Coût total : ${total_cost:.4f}")
+    console.print(
+        f"  Intégration : "
+        f"{integration_state.final_verdict.decision if integration_state.final_verdict else 'N/A'}"
+    )
+
+
 if __name__ == "__main__":
     app()
