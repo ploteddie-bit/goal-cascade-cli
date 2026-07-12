@@ -2,252 +2,225 @@
 
 [![CI](https://github.com/ploteddie-bit/goal-cascade-cli/actions/workflows/ci.yml/badge.svg)](https://github.com/ploteddie-bit/goal-cascade-cli/actions/workflows/ci.yml)
 
-Prototype exécutable du framework **Goal-Oriented Agentic Loop**.
+Framework **Goal-Oriented Agentic Loop** : cascade multi-agents pour produire des livrables de haute qualité avec transparence radicale des coûts, sécurité E2E et résilience provider.
 
-## Contrat production V2
+## État — version `0.3.0`
 
-La source de vérité du produit est la [spécification d'implémentation V2](docs/specs/goal-cascade-implementation-v2.md), complétée par :
+La source de vérité du produit est la [spécification d'implémentation V2](docs/specs/goal-cascade-implementation-v2.md). Les jalons S1 à S6 sont implémentés et testés (273 tests passent) :
 
-- le [cadre multi-agents](docs/specs/framework-multi-agents.md) ;
-- le [guide multi-cascade](docs/specs/goal-cascade-multi-cascade.md) ;
-- le [plan chirurgical de référence](docs/specs/reference-qwen-plan-chirurgical.md) ;
-- l'[addendum normatif du chef d'orchestre IA](docs/specs/addendum-chef-orchestre-ia.md).
+- **S1 Fondations** : cascade unique 4 rôles (producteur, critique, adversaire, arbitre), synthèse orientée objectif, artefacts immuables séparés, verdict JSON validé, borne stricte de 5 itérations.
+- **S2 Multi-provider** : `anthropic`, `openai`, `google` via Mirascope, plus `mock`, `kimi-cli`, `kimi-code`. Rate limit configurable, chaîne de fallback respectant la diversité de familles (Pilier 1).
+- **S3 Qualité synthèse** : détection de dérive cosinus (`bge-m3`), mode `--no-synth`, mesure de couverture synthèse vs sortie brute.
+- **S4 LangGraph + budget** : graphe d'états à 6 nœuds, checkpoints SQLite, kill switch budgétaire (`[budget]` TOML), `goal resume`.
+- **S5 Cache + versioning** : cache sémantique SQLite + embeddings, `goal versions` / `goal diff` / `goal inspect`.
+- **S6 Multi-cascade + CI/CD** : `goal plan` (LLM ou squelettique), `goal cascade-run` (exécuteur topologique), `--enrich-frozen-specs` (2e appel LLM via `frozen_spec_gen.j2`), hook CI/CD déterministe câblé dans la cascade unique.
 
-La version actuelle `0.1.0` est une **fondation partielle**. Elle n'est ni la
-V2 complète ni un livrable de production. Le chef d'orchestre IA persistant,
-LangGraph/SQLite, le multi-provider réel, les budgets, la dérive, le
-versionnage, la découverte guidée et le multi-cascade restent à implémenter.
+**Sécurité** (audits A-F passés, voir [Security](#security)) : pas de secrets dans les logs, traces en `0o700`, `.gitignore` complet, hook déterministe avant LLM, STOP par défaut, diversité providers validée au démarrage.
 
-Le jalon actuel fournit une cascade unique avec :
+## Quick start
 
-- quatre rôles principaux : producteur, critique, adversaire et arbitre ;
-- une synthèse orientée objectif entre les rôles ;
-- un provider de synthèse distinct avec un modèle small/cheap explicite ;
-- la préservation séparée des blocs de code et autres artefacts techniques ;
-- un verdict JSON validé par Pydantic (`STOP` ou `CONTINUE`), borné à cinq
-  itérations ;
-- un provider de simulation et deux adaptateurs Kimi non interactifs.
+```bash
+# 1. Installation (mode dev)
+uv sync --dev
 
-Le multi-provider réel, LangGraph et le multi-cascade ne font pas encore partie
-de ce jalon.
+# 2. Smoke test (aucune clé API requise)
+uv run goal run --objective "Auditer un argument" --provider mock --variant A
 
-## Installation de développement
+# 3. Avec un vrai provider (installer l'extra llm)
+uv pip install -e '.[llm]'
+export ANTHROPIC_API_KEY=sk-ant-...
+uv run goal run --objective "..." --provider anthropic
+
+# 4. Multi-cascade
+uv run goal plan spec.md --enrich-frozen-specs
+uv run goal cascade-run plan.json
+```
+
+L'installation comme commande utilisateur est documentée plus bas.
+
+## Installation
+
+### Développement
 
 ```bash
 uv sync --dev
+uv run goal --help
 ```
 
-## Installation comme commande utilisateur
-
-Sous WSL, la commande peut être installée dans `~/.local/bin/goal` :
+### Commande utilisateur (WSL)
 
 ```bash
 uv tool install --force --editable /mnt/c/Users/eddie/ZCodeProject/goal-cascade-cli
 goal --help
 ```
 
-Le mode éditable garantit que la commande exécute le code du projet visible au
-chemin ci-dessus.
-
-## RAG et traces d'exécution
-
-Chaque run produit une trace dans `~/.goal/runs/<run_id>/` :
-
-- `timeline.md` : manifeste complet de la cascade
-- `events.jsonl` : événements structurés
-- `rag-status.json` : preuve d'indexation PostgreSQL + embeddings
-
-Pour synchroniser un run dans le RAG PostgreSQL local :
+### Extra `llm` (providers réels)
 
 ```bash
-# Ollama local avec bge-m3:latest
-goal rag-sync <run_id>
-
-# Ollama distant (par exemple serveur-io-ia)
-export OLLAMA_HOST=http://10.0.0.1:11434
-goal rag-sync <run_id>
+pip install 'goal-cascade[llm]'
+# Ajoute : mirascope>=1.0, anthropic>=0.40, structlog>=24.0
 ```
 
-Variables d'environnement :
+Sans cet extra, seuls `mock`, `kimi-cli`, `kimi-code` sont disponibles.
 
-| Variable | Défaut | Description |
-|---|---|---|
-| `OLLAMA_HOST` | `http://127.0.0.1:11434` | URL de l'API Ollama |
-| `OLLAMA_EMBED_URL` | `$OLLAMA_HOST/api/embed` | Endpoint embeddings |
-| `OLLAMA_EMBED_MODEL` | `bge-m3:latest` | Modèle d'embeddings |
+## Commandes principales
 
-Le worker RAG versionné se trouve dans `src/goal_cascade/rag/worker.py`. En production, il est utilisé en priorité ; sinon le pont retombe sur `~/.kimi/kimi-rag/goal-run-ingest.py`.
+| Commande | Rôle |
+|---|---|
+| `goal run --objective "..."` | Lance une cascade unique |
+| `goal plan spec.md` | Génère un plan multi-cascade depuis un spec |
+| `goal cascade-run plan.json` | Exécute toutes les cascades d'un plan |
+| `goal resume <run_id>` | Reprend un run interrompu (checkpoint SQLite) |
+| `goal status / list / inspect` | Consultation des runs |
+| `goal versions / diff` | Versioning et diff entre runs |
+| `goal rag-status / rag-sync` | Synchronisation RAG PostgreSQL |
 
-## Tests
+Options globales utiles :
 
-```bash
-uv run pytest -p no:cacheprovider -q
-```
+| Option | Effet |
+|---|---|
+| `--provider` | `mock`, `kimi-cli`, `kimi-code`, `anthropic`, `openai`, `google` |
+| `--config PATH` | Charger `~/.goal/config.toml` (résout providers par rôle + budget + rate limit) |
+| `--variant A\|B` | A = rédactionnel, B = technique |
+| `--no-synth` | Désactiver la synthèse orientée objectif (debug) |
+| `--enrich-frozen-specs` | 2e appel LLM pour enrichir les frozen specs (opt-in) |
 
-## Exemples
+## Configuration TOML
 
-```bash
-# Test local déterministe
-uv run goal run --objective "Auditer un argument" --variant A --provider mock
-
-# Chaque appel ouvre une nouvelle session Kimi CLI non interactive
-uv run goal run --objective "Auditer un argument" --variant A \
-  --provider kimi-cli --synthesizer-model "provider/modele-small"
-
-# Même contrat avec Kimi Code
-uv run goal run --objective "Auditer un argument" --variant A \
-  --provider kimi-code --synthesizer-model "provider/modele-small"
-```
-
-Le modèle de synthèse peut aussi être fourni par la variable
-`GOAL_SYNTHESIZER_MODEL`. Pour un provider Kimi, son absence bloque le run afin
-d'éviter la réutilisation silencieuse du modèle principal.
-
-Les coûts des abonnements Kimi ne sont pas exposés par les flux CLI utilisés.
-Le programme les affiche donc comme **non mesurés**, jamais comme gratuits.
-
-## Config TOML des providers
-
-Si `~/.goal/config.toml` existe, `goal run` l'utilise pour résoudre les providers par rôle. Le mode CLI historique `--provider mock|kimi-cli|kimi-code` reste disponible quand aucun fichier de config n'est chargé.
+Si `~/.goal/config.toml` existe, `goal run` l'utilise pour résoudre les providers par rôle, le budget, le rate limit et le cache. Sinon, le mode CLI historique (`--provider mock|kimi-cli|kimi-code`) reste disponible.
 
 ```toml
 [providers]
-# Liste des providers réellement disponibles pour ce run.
 enabled = ["anthropic", "openai", "google"]
-
-# Mapping idéal. Il est utilisé tel quel si tous les providers sont disponibles.
 role_mapping = { producer = "anthropic", critic = "openai", adversary = "google", arbiter = "google" }
-
-# Provider dédié au synthesizer.
 synthesizer = "anthropic"
-
-# Mode strict opt-in pour dev/CI : refuse tout mode dégradé.
 require_diversity = false
+
+[ratelimit]
+max_retries = 3
+initial_backoff_s = 1.0
+backoff_multiplier = 2.0
+
+[budget]
+max_per_run_usd = 0.50
+max_per_day_usd = 10.00
+warn_at_percent = 80
+hard_stop = true
+runs_per_day_projection = 10
+
+[cache]
+provider = "exact"
+enable_semantic = false
+ttl_seconds = 3600
+
+[logging]
+level = "INFO"
+format = "structlog"
 ```
 
-Quand un provider configuré n'est pas disponible dans `enabled`, le CLI duplique le provider effectif du tier immédiatement inférieur. Si seul un provider est disponible, tous les rôles utilisent ce provider et le démarrage affiche un warning explicite.
+Règles de validation :
 
-```text
-✅ Config chargée — ~/.goal/config.toml
-⚠️  Mode dégradé : 1/3 provider(s) disponible(s)
-   Mapping effectif :
-     producer    → anthropic (configuré: anthropic ✓)
-     critic      → anthropic (configuré: openai ✗ → auto-switch)
-     adversary   → anthropic (configuré: google ✗ → auto-switch)
-     arbiter     → anthropic (configuré: google ✗ → auto-switch)
-     synthesizer → anthropic (configuré: anthropic ✓)
-   La diversité multi-provider est réduite. Les erreurs seront corrélées.
-```
+- **Diversité** : `require_diversity = true` refuse tout mode dégradé. La CLI refuse aussi de démarrer si tous les rôles résolvent vers la même famille de provider.
+- **Rate limit** : `[ratelimit]` (canonique) ou `[rate_limit]` (alias historique).
+- **Secrets** : ne JAMAIS mettre de clé API dans `config.toml`. Utiliser les variables d'environnement des SDKs (`ANTHROPIC_API_KEY`, etc.).
 
-`require_diversity = true` est destiné au dev/CI : la config est rejetée si elle passe en mode dégradé.
+## Sécurité
 
-> Note S2 : `anthropic`, `openai` et `google` sont disponibles via Mirascope après installation de l'extra `llm` : `pip install goal-cascade[llm]`. Sans cet extra, le mode local `mock` et les providers CLI Kimi restent disponibles. Les credentials restent gérés par les SDKs/providers via les variables d'environnement usuelles ; aucun secret ne doit être placé dans `config.toml`.
+Le projet applique une grille de sécurité issue des audits A-F (cahier de tests `tests/test_*_security.py`) :
 
-### Résilience providers
-
-Les providers Mirascope appliquent un backoff exponentiel sur les rate limits puis basculent vers un backend de fallback disponible, en conservant le même tier (`small`, `medium`, `large`, `xlarge`). `require_diversity = true` bloque aussi les mappings qui réutilisent plusieurs providers d'une même famille.
-
-La logique de résilience (rate limit + chaîne de fallback) est isolée dans `src/goal_cascade/providers/rate_limiter.py` sous la forme d'une fonction `call_with_retry_and_fallback` testable indépendamment. Le provider ne fait plus qu'injecter sa méthode d'appel backend dans cette fonction.
-
-### Diversité des familles au runtime (Pilier 1)
-
-Le fallback refuse explicitement les backends qui appartiennent à la même famille que le backend primaire (via `PROVIDER_FAMILIES`). Si tous les fallbacks sont dans la même famille (cas théorique mais explicitement défendu), `ProviderExhaustedError` est levée comme si tous les backends avaient échoué. Le log `provider_fallback_skipped reason=same_family` trace chaque refus.
-
-### Configuration `[ratelimit]` dans le TOML
-
-Les valeurs `RateLimitConfig` (max_retries, initial_backoff_s, backoff_multiplier) peuvent être surchargées via la section `[ratelimit]` du TOML (`[rate_limit]` reste accepté comme alias historique). `_build_provider` reconstruit un `RateLimitConfig` neuf via `model_dump()` (copie défensive), avec fallback sur les défauts si aucune config n'est chargée.
-
-Sont volontairement hors périmètre de ce jalon : LangGraph, dérive cosinus, multi-cascade et CI/CD hook. Le **budget tracker** et le **reçu détaillé** sont en revanche implémentés (voir section "Transparence des coûts" plus bas).
+| Audit | Critère | Implémentation |
+|---|---|---|
+| A1-A6 | Hook CI/CD déterministe | `src/goal_cascade/orchestrator/cicd_hook.py`, câblé dans `cascade_executor` après chaque synthèse. Pas de `shell=True`, timeout 30s, contenu passé par stdin/tempfile, jamais dans la commande. |
+| B1-B5 | PromptLoader durci | Pas de traversal (`..`, `/`), Jinja2 sandbox, PromptNotFoundError explicite, hiérarchie projet > user > package. |
+| C1-C6 | MultiCascadeExecutor | Validation acyclicité, budget par module, arrêts propres, parallélisme contrôlé (synchrone v1), contrats vérifiés après chaque batch. |
+| E1 | Pas de secrets dans les logs | `redact_sensitive()` masque Bearer, api_key, password, tokens avant toute persistance. |
+| E2 | Traces isolées | `~/.goal/runs/<run_id>/` permissions `0o700` (garanti au démarrage du module). |
+| E3 | Cache sémantique local | `Path.home() / ".goal" / "semantic_cache.db"` permissions `0o700`. |
+| E4 | `.gitignore` complet | `.goal/runs/`, `.goal/semantic_cache.db`, `.goal/checkpoints.db`, `.goal/budget_daily.json`. |
+| F1 | Pas de cache sémantique intra-cascade | `SemanticCache.lookup()` jamais appelé dans `CascadeExecutor` ni `Synthesizer.process()`. |
+| F2 | Historique brut jamais transmis | Templates utilisent `last_synthesis` (mode normal), `previous_output` uniquement en `--no-synth`. |
+| F3 | Limite absolue 5 itérations | `max_iterations=5` enforced dans `_run_loop`. |
+| F4 | STOP par défaut | `_parse_verdict` catch → verdict STOP automatique, jamais `failed` silencieux. |
+| F5 | Diversité providers validée | CLI refuse de démarrer si tous les rôles → même famille (hors `mock`). |
 
 ## Transparence des coûts
 
-Chaque run produit un reçu détaillé dans `<run_dir>/receipt.json` et un récapitulatif affiché en fin de CLI. Le reçu contient :
+Chaque run produit `<run_dir>/receipt.json` :
 
-- `total_cost_usd` : somme des coûts de tous les appels LLM
-- `cache_hit_rate` : `cache_read_tokens / total_input_tokens`
-- `projected_monthly_cost` : projection basée sur `runs_per_day_projection`
-- `calls` : liste complète des `LLMCallRecord` (input_tokens, output_tokens, cost_usd, latency_ms)
-- `final_verdict` : `STOP` / `CONTINUE` / `absent`
-- `total_duration_s` : durée du run
+- `total_cost_usd` : somme des coûts de tous les appels LLM.
+- `cache_hit_rate` : `cache_read_tokens / total_input_tokens`.
+- `projected_monthly_cost` : projection basée sur `runs_per_day_projection`.
+- `calls` : liste complète des `LLMCallRecord` (input/output tokens, cost, latency).
+- `final_verdict` : `STOP` / `CONTINUE` / `absent`.
+- `total_duration_s`.
 
 ### Kill switch budgétaire
 
-Pour activer un plafond de coût automatique, ajouter une section `[budget]` dans `~/.goal/config.toml` :
-
-```toml
-[budget]
-max_per_run = 0.50      # un run ne peut pas dépasser $0.50
-max_per_day = 10.00     # plafond journalier
-warn_at_percent = 80    # alerte à 80% du budget run
-hard_stop = true        # stopper net, pas juste avertir
-runs_per_day_projection = 10  # base du calcul de projection mensuelle
-```
-
-Quand `hard_stop=true` et que le coût courant dépasse `max_per_run` (ou que le cumul du jour + courant dépasse `max_per_day`), la cascade s'arrête avec le statut `budget_exceeded` et un verdict `STOP` documentant le coût atteint. Le reçu final est conservé.
-
-Le cumul quotidien est persisté dans `<GOAL_HOME>/budget_daily.json` et remis à zéro automatiquement à chaque changement de date.
-
-### Cache exact Anthropic (préparation)
-
-Le module `src/goal_cascade/providers/anthropic_cache.py` prépare l'infrastructure pour le prompt-caching Anthropic (`cache_control.ephemeral` sur le préfixe stable objectif + frozen spec). Il détecte la disponibilité du SDK `anthropic` et dégrade gracieusement si absent.
-
-**Limitation actuelle** : Mirascope v2 (`mirascope.llm.call`) n'expose pas `cache_control` via son API publique. Quand cette limitation sera levée (côté mirascope ou via appel direct à `anthropic` SDK), le câblage est prêt : `_call_mirascope_v2` logge déjà `cache_intent` avec les métadonnées utiles, et `build_cached_messages(...)` produit la structure de messages compatible.
-
-Pour activer le SDK dès aujourd'hui :
-
-```bash
-pip install 'goal-cascade[llm]'   # ajoute anthropic>=0.40 à mirascope
-```
+Quand `hard_stop=true` et que le coût courant dépasse `max_per_run_usd` (ou le cumul journalier dépasse `max_per_day_usd`), la cascade s'arrête avec statut `budget_exceeded`. Le reçu final est conservé. Le cumul quotidien est dans `<GOAL_HOME>/budget_daily.json` (permissions `0o600`).
 
 ## Traçabilité permanente
 
-Chaque run est conservé sous `~/.goal/runs/<run_id>/`. La commande affiche ce
-chemin dès le démarrage. Le dossier contient notamment :
+Chaque run est conservé sous `~/.goal/runs/<run_id>/` (permissions `0o700`). Le dossier contient :
 
-- `events.jsonl` : événements append-only, horodatés et numérotés ;
-- `prompt_<iteration>_<role>.txt` : chaque prompt envoyé ;
-- `iteration_<n>.txt` et `synthesis_<n>.json` : chaque résultat brut ;
-- `state.json` et `final_output.md` : état et livrable final ;
-- `timeline.md` : manifeste humain complet, destiné au RAG ;
-- `rag-status.json` : reçu observable de l'indexation et de l'embedding.
+- `events.jsonl` : événements append-only horodatés et numérotés.
+- `prompt_<iteration>_<role>.txt` : chaque prompt envoyé.
+- `iteration_<n>.txt` et `synthesis_<n>.json` : résultats bruts.
+- `state.json` et `final_output.md` : état et livrable.
+- `timeline.md` : manifeste humain pour le RAG.
+- `rag-status.json` : reçu observable d'indexation + embedding.
+- `receipt.json` : transparence des coûts.
 
-Les formes usuelles de mots de passe, jetons, clés API et en-têtes
-d'autorisation sont masquées avant persistance. Elles ne doivent jamais être
-placées volontairement dans un objectif ou une contrainte.
+## RAG PostgreSQL et embeddings
 
-## RAG PostgreSQL et embeddings ia-general
-
-À la fin de chaque run, `timeline.md` est envoyé de manière ciblée dans la
-catégorie PostgreSQL `goal-cascade`. Aucun scan global des credentials n'est
-effectué. Les embeddings sont exclusivement demandés à
-`ia-general` (`localhost:11434`) avec `bge-m3:latest`, dimension 1024.
+À chaque run, `timeline.md` est indexé dans la catégorie PostgreSQL `goal-cascade`. Les embeddings sont demandés à `ia-general` (`localhost:11434`) avec `bge-m3:latest` (dimension 1024).
 
 ```bash
 goal rag-status <run_id>
 goal rag-sync <run_id>
 ```
 
-Signification des statuts :
+Statuts possibles : `pending`, `indexing`, `indexed_pending_embedding`, `embedded`, `failed`. Une indisponibilité d'`ia-general` reste enregistrée et n'est jamais transformée en faux succès.
 
-- `pending` : manifeste local créé, synchronisation pas encore tentée ;
-- `indexing` : synchronisation en cours ;
-- `indexed_pending_embedding` : contenu identique présent dans PostgreSQL,
-  mais aucun vecteur n'a encore été validé sur ia-general ;
-- `embedded` : chunks 1024D écrits et relecture vectorielle réussie ;
-- `failed` : échec avant confirmation de l'indexation PostgreSQL.
+Variables d'environnement :
 
-Une indisponibilité de `ia-general` reste enregistrée dans `events.jsonl`,
-`timeline.md`, `rag-status.json` et PostgreSQL. Elle n'est jamais transformée
-en faux succès ; `goal rag-sync <run_id>` reprend la tentative.
+| Variable | Défaut | Description |
+|---|---|---|
+| `OLLAMA_HOST` | `http://127.0.0.1:11434` | URL Ollama |
+| `OLLAMA_EMBED_URL` | `$OLLAMA_HOST/api/embed` | Endpoint embeddings |
+| `OLLAMA_EMBED_MODEL` | `bge-m3:latest` | Modèle |
 
-## Statut
+## Tests
 
-Cascade unique testée et installée comme commande utilisateur. La traçabilité
-locale, l'indexation PostgreSQL, le budget tracker avec kill switch, le reçu
-détaillé et l'infrastructure de cache exact Anthropic (en attente de l'API
-mirascope) sont intégrés. Le multi-provider API, LangGraph, la détection de
-dérive cosinus et le multi-cascade ne font pas encore partie de ce jalon. Le
-statut `embedded` dépend de la disponibilité réelle de `ia-general`.
+```bash
+# Suite complète (273 tests, 1 skip intégration vrai provider)
+uv run pytest -p no:cacheprovider -q
+
+# Tests d'intégration avec un vrai provider LLM
+GOAL_RUN_INTEGRATION=1 \
+GOAL_INTEGRATION_PROVIDER=anthropic \
+ANTHROPIC_API_KEY=sk-ant-... \
+uv run pytest -p no:cacheprovider tests/integration/test_real_provider_smoke.py -v
+```
+
+Le smoke test vrai provider est skip par défaut pour éviter les coûts accidentels en CI.
+
+## Exemples
+
+```bash
+# Mock local (zéro coût, zéro dépendance)
+uv run goal run --objective "Auditer un argument" --variant A --provider mock
+
+# Kimi CLI non interactif (sessions jetables)
+uv run goal run --objective "Auditer un argument" --variant A \
+  --provider kimi-cli --synthesizer-model "moonshot/kimi-k2-0711-preview"
+
+# Vrai provider avec config TOML
+uv run goal run --objective "Refactor ce module" --variant B --config ~/.goal/config.toml
+
+# Multi-cascade avec enrichissement LLM
+uv run goal plan spec.md --enrich-frozen-specs --output plan.json
+uv run goal cascade-run plan.json
+```
 
 ## Licence
 
