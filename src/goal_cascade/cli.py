@@ -1017,6 +1017,40 @@ def init(
     console.print(f"  └── README.md")
 
 
+def _print_enrichment_summary(stats: dict) -> None:
+    """Affiche le résumé de l'enrichissement LLM des frozen specs.
+
+    Tous les invariants générés restent verified=False — l'humain DOIT
+    valider avant goal cascade run.
+    """
+    enriched = stats.get("modules_enriched", 0)
+    generated = stats.get("invariants_generated", 0)
+    failed = stats.get("modules_failed", [])
+
+    lines = [
+        f"Modules enrichis    : {enriched}",
+        f"Invariants générés  : {generated}",
+        f"Statut              : tous verified=False",
+    ]
+    if failed:
+        lines.append(
+            f"Modules en échec    : {len(failed)} ({', '.join(failed)})"
+        )
+
+    console.print(
+        Panel.fit(
+            "\n".join(lines),
+            border_style="yellow",
+            title="Enrichissement LLM des frozen specs",
+        )
+    )
+    console.print(
+        "[yellow]⚠️  Aucun invariant llm-generated n'est marqué verified=True "
+        "automatiquement. Validez chaque invariant avant "
+        "[bold]goal cascade run[/bold].[/yellow]"
+    )
+
+
 @app.command(name="plan")
 def cascade_plan(
     spec: Path = typer.Argument(
@@ -1044,6 +1078,15 @@ def cascade_plan(
         "--synthesizer-model",
         envvar="GOAL_SYNTHESIZER_MODEL",
         help="Modèle small/cheap dédié aux synthèses (obligatoire avec Kimi)",
+    ),
+    enrich_frozen_specs: bool = typer.Option(
+        False,
+        "--enrich-frozen-specs",
+        help=(
+            "Active un 2e appel LLM par module (frozen_spec_gen.j2) pour "
+            "générer 3-5 invariants llm-generated. Tous restent verified=False "
+            "— validation humaine obligatoire avant goal cascade run."
+        ),
     ),
 ):
     """Génère un plan de découpage modulaire depuis un fichier de spécification."""
@@ -1117,7 +1160,11 @@ def cascade_plan(
     )
 
     try:
-        graph, plan = ModuleGraph.from_spec(spec_path, selected_provider)
+        graph, plan, enrichment_stats = ModuleGraph.from_spec(
+            spec_path,
+            selected_provider,
+            enrich=enrich_frozen_specs,
+        )
     except Exception as exc:
         console.print(
             f"[bold red]Erreur lors de la planification : {exc}[/bold red]"
@@ -1149,40 +1196,36 @@ def cascade_plan(
     modules_table.add_column("Invariants", justify="right")
 
     for mod in plan.modules:
-        deps = ", ".join(mod.dependencies) if mod.dependencies else "—"
+        # Dépendances du module depuis le plan
+        mod_deps = [
+            dep for dep in plan.dependencies
+            if dep.producer == mod.id or dep.consumer == mod.id
+        ]
+        deps = (
+            ", ".join(f"{d.producer}→{d.consumer}" for d in mod_deps)
+            if mod_deps else "—"
+        )
+        # Comptage depuis la frozen spec du graphe (peut avoir été enrichie).
+        frozen = graph._specs.get(mod.id)
+        invariants_count = len(frozen.invariants) if frozen else 0
         modules_table.add_row(
-            mod.module_id,
-            mod.module_name,
+            mod.id,
+            mod.name,
             str(mod.estimated_lines),
             deps,
-            str(len(mod.invariants)),
-        )
-
-    if plan.integration_module:
-        im = plan.integration_module
-        deps = ", ".join(im.dependencies) if im.dependencies else "—"
-        modules_table.add_row(
-            f"[bold]{im.module_id}[/bold]",
-            f"[bold]{im.module_name}[/bold]",
-            str(im.estimated_lines),
-            deps,
-            str(len(im.invariants)),
+            str(invariants_count),
         )
 
     console.print(modules_table)
 
     # Résumé global
     summary_lines = [
-        f"Modules        : {len(plan.modules)}"
-        + (f" + intégration" if plan.integration_module else ""),
-        f"Dépendances    : {len(plan.contracts)}",
+        f"Modules        : {len(plan.modules)}",
+        f"Dépendances    : {len(plan.dependencies)}",
         f"Batches        : {len(batches)}",
         f"Ordre topo     : {' → '.join(topo_order)}",
         f"Total lignes   : {total_lines:,}",
     ]
-    if plan.integration_module:
-        total_lines_all = total_lines + plan.integration_module.estimated_lines
-        summary_lines.append(f"Avec intégr.   : {total_lines_all:,} lignes")
 
     console.print(
         Panel.fit(
@@ -1192,16 +1235,19 @@ def cascade_plan(
         )
     )
 
+    # Résumé de l'enrichissement LLM (si activé)
+    if enrichment_stats is not None:
+        _print_enrichment_summary(enrichment_stats)
+
     # Contrats
-    if plan.contracts:
+    if plan.dependencies:
         contracts_table = Table(title="Contrats d'interface")
-        contracts_table.add_column("ID", style="cyan")
         contracts_table.add_column("Producteur")
         contracts_table.add_column("Consommateur")
-        contracts_table.add_column("Format")
-        for c in plan.contracts:
+        contracts_table.add_column("Description")
+        for dep in plan.dependencies:
             contracts_table.add_row(
-                c.contract_id, c.producer, c.consumer, c.exchange_format
+                dep.producer, dep.consumer, dep.interface_description,
             )
         console.print(contracts_table)
 

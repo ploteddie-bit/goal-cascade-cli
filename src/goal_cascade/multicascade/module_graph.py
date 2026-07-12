@@ -258,14 +258,21 @@ class ModuleGraph:
         cls,
         spec_path: str | Path,
         provider: object,
-    ) -> tuple[ModuleGraph, CascadePlan]:
+        *,
+        enrich: bool = False,
+    ) -> tuple[ModuleGraph, CascadePlan, dict | None]:
         """Construit un ModuleGraph et son CascadePlan depuis un fichier spec.
 
         ⚠️ FROZEN SPECS SQUELETTIQUES : Les frozen specs générées automatiquement
         contiennent UN SEUL invariant (la responsabilité du module) avec
-        verified=False et category="functional". Elles sont conçues comme
-        point de départ à enrichir manuellement ou via --enrich-frozen-specs
-        (passage LLM dédié avec frozen_spec_gen.j2, non implémenté en V1).
+        verified=False et source="auto-from-planning". Elles sont conçues comme
+        point de départ à enrichir manuellement ou via enrich=True
+        (passage LLM dédié avec frozen_spec_gen.j2).
+
+        Si enrich=True, un 2e appel LLM est effectué par module pour générer
+        3–5 invariants supplémentaires (source="llm-generated", verified=False).
+        Aucun invariant llm-generated ne passe en verified=True automatiquement :
+        l'humain DOIT valider avant goal cascade run.
 
         Ne lancez PAS goal cascade run sans avoir validé et enrichi les
         invariants. Un invariant unique = protection minimale contre la
@@ -279,14 +286,21 @@ class ModuleGraph:
         5. Création du CascadePlan.
         6. Validation des contraintes (modules, dépendances, cycles).
         7. Construction du ModuleGraph avec frozen specs squelettiques.
-        8. Calcul ordre topologique + batches parallèles.
+        8. (Optionnel) Enrichissement LLM par module (prompts/frozen_spec_gen.j2).
+        9. Calcul ordre topologique + batches parallèles.
 
         Args:
             spec_path: Chemin vers le fichier de spécification.
             provider: Provider LLM (doit avoir une méthode ``call(prompt, role, tier)``).
+            enrich: Si True, effectue un 2e appel LLM par module pour générer
+                des invariants llm-generated (verified=False).
 
         Returns:
-            Tuple (ModuleGraph, CascadePlan).
+            Tuple (ModuleGraph, CascadePlan, enrichment_stats).
+            enrichment_stats est None si enrich=False, sinon un dict avec :
+              - modules_enriched (int)
+              - invariants_generated (int)
+              - modules_failed (list[str])  # IDs des modules où l'appel a échoué
 
         Raises:
             ValueError: si le plan est invalide ou la réponse LLM illisible.
@@ -298,7 +312,7 @@ class ModuleGraph:
         # 1. Prompt
         prompt = cls._build_planning_prompt(spec_content)
 
-        # 2. Appel LLM
+        # 2. Appel LLM (planification)
         response = provider.call(prompt, role="producer", tier="medium")
         logger.info("Réponse LLM reçue (%d caractères)", len(response.text))
 
@@ -334,11 +348,12 @@ class ModuleGraph:
         for mod in plan.modules:
             # ⚠️ INVARIANT SQUELETTIQUE — un seul invariant = la responsabilité.
             # verified=False → l'humain DOIT valider avant run.
-            # Enrichir manuellement ou via --enrich-frozen-specs (V2).
+            # Enrichir manuellement ou via enrich=True.
             skeletal_invariant = Invariant(
                 description=mod.responsibility,
                 category="functional",
                 verified=False,
+                source="auto-from-planning",
             )
             frozen = FrozenSpec(
                 module_name=mod.name,
@@ -370,12 +385,170 @@ class ModuleGraph:
         # 7. Validation acyclicité
         graph.validate_acyclic()
 
+        # 8. Enrichissement LLM (optionnel)
+        enrichment_stats: dict | None = None
+        if enrich:
+            enrichment_stats = cls._enrich_frozen_specs(graph, plan, provider)
+
         logger.info(
             "Graphe construit : %d modules, ordre=%s",
             len(graph._specs),
             graph.topological_order(),
         )
-        return graph, plan
+        return graph, plan, enrichment_stats
+
+    # ------------------------------------------------------------------
+    # Enrichissement LLM des frozen specs (--enrich-frozen-specs)
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _build_enrichment_prompt(
+        module_name: str,
+        responsibility: str,
+        objective: str,
+    ) -> str:
+        """Construit le prompt d'enrichissement pour un module donné."""
+        try:
+            from jinja2 import Environment, FileSystemLoader, select_autoescape
+
+            from ..prompts import PromptLoader
+
+            # Utilise PromptLoader pour respecter la hiérarchie de surcharge
+            loader = PromptLoader()
+            return loader.load(
+                "frozen_spec_gen",
+                module_name=module_name,
+                responsibility=responsibility,
+                objective=objective,
+            )
+        except Exception:
+            # Fallback inline si Jinja2 ou PromptLoader indisponible
+            return (
+                "Tu es un architecte logiciel rigoureux. Pour le module ci-dessous,\n"
+                "propose entre 3 et 5 invariants vérifiables.\n\n"
+                f"MODULE : {module_name}\n"
+                f"RESPONSABILITÉ : {responsibility}\n"
+                f"OBJECTIF GLOBAL : {objective}\n\n"
+                "Réponds STRICTEMENT avec un objet JSON : "
+                '{"invariants": [{"description": "...", "category": '
+                '"functional|structural|non_negotiable", "test_hint": "..."}]}'
+            )
+
+    @staticmethod
+    def _parse_enrichment_response(text: str) -> list[dict]:
+        """Extrait la liste d'invariants de la réponse LLM.
+
+        Returns:
+            Liste de dicts {description, category, test_hint}.
+
+        Raises:
+            ValueError: si la réponse ne contient pas de JSON exploitable.
+        """
+        match = re.search(r"```(?:json)?\s*\n(.*?)\n```", text, re.DOTALL)
+        if match:
+            return json.loads(match.group(1)).get("invariants", [])
+
+        match = re.search(r"\{.*\}", text, re.DOTALL)
+        if match:
+            return json.loads(match.group(0)).get("invariants", [])
+
+        raise ValueError(
+            "Impossible d'extraire le JSON d'invariants de la réponse LLM."
+        )
+
+    @classmethod
+    def _enrich_frozen_specs(
+        cls,
+        graph: "ModuleGraph",
+        plan: CascadePlan,
+        provider: object,
+    ) -> dict:
+        """Enrichit chaque frozen spec avec un 2e appel LLM dédié.
+
+        Pour chaque module, génère 3-5 invariants (source="llm-generated",
+        verified=False). En cas d'échec sur un module, conserve l'invariant
+        squelettique et logue un warning.
+
+        Returns:
+            Dict avec modules_enriched, invariants_generated, modules_failed.
+        """
+        modules_enriched = 0
+        invariants_generated = 0
+        modules_failed: list[str] = []
+
+        for mod in plan.modules:
+            prompt = cls._build_enrichment_prompt(
+                module_name=mod.name,
+                responsibility=mod.responsibility,
+                objective=plan.objective,
+            )
+            try:
+                response = provider.call(prompt, role="producer", tier="medium")
+                raw_inv = cls._parse_enrichment_response(response.text)
+            except Exception as exc:
+                logger.warning(
+                    "frozen_spec_enrich_failed module=%s error=%s action=keep_skeletal",
+                    mod.id, exc,
+                )
+                modules_failed.append(mod.id)
+                continue
+
+            # Construit les nouveaux invariants typés
+            new_invariants: list[Invariant] = []
+            for inv_data in raw_inv:
+                if not isinstance(inv_data, dict):
+                    continue
+                description = inv_data.get("description")
+                if not description:
+                    continue
+                category = inv_data.get("category", "functional")
+                if category not in ("functional", "structural", "non_negotiable"):
+                    category = "functional"
+                new_invariants.append(
+                    Invariant(
+                        description=description,
+                        category=category,  # type: ignore[arg-type]
+                        verified=False,
+                        source="llm-generated",
+                    )
+                )
+
+            if not new_invariants:
+                logger.warning(
+                    "frozen_spec_enrich_empty module=%s action=keep_skeletal",
+                    mod.id,
+                )
+                modules_failed.append(mod.id)
+                continue
+
+            # Remplace la frozen spec du module par la version enrichie.
+            # On GARDE l'invariant squelettique en premier pour traçabilité,
+            # puis on ajoute les llm-generated derrière.
+            existing = graph._specs[mod.id]
+            merged = [*existing.invariants, *new_invariants]
+            enriched = FrozenSpec(
+                module_name=existing.module_name,
+                objective=existing.objective,
+                invariants=merged,
+                max_lines=existing.max_lines,
+            )
+            graph._specs[mod.id] = enriched
+            modules_enriched += 1
+            invariants_generated += len(new_invariants)
+
+            logger.info(
+                "frozen_spec_enriched module=%s added_invariants=%d "
+                "total_invariants=%d source=llm-generated",
+                mod.id,
+                len(new_invariants),
+                len(merged),
+            )
+
+        return {
+            "modules_enriched": modules_enriched,
+            "invariants_generated": invariants_generated,
+            "modules_failed": modules_failed,
+        }
 
     def to_plan_dict(self) -> dict:
         """Exporte le graphe sous forme de dictionnaire sérialisable."""

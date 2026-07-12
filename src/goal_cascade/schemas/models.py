@@ -189,6 +189,7 @@ class Invariant(BaseModel):
     description: str
     category: Literal["functional", "structural", "non_negotiable"] = "functional"
     verified: bool | None = None
+    source: Literal["manual", "auto-from-planning", "llm-generated"] = "manual"
 
 
 class FrozenSpec(BaseModel):

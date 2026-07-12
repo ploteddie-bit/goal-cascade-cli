@@ -1,0 +1,31 @@
+Tu es un architecte logiciel rigoureux. Pour le module ci-dessous,
+propose entre 3 et 5 invariants vérifiables que toute implémentation
+devra respecter.
+
+MODULE : {{ module_name }}
+RESPONSABILITÉ : {{ responsibility }}
+OBJECTIF GLOBAL : {{ objective }}
+
+Chaque invariant doit être :
+- Vérifiable par un test concret (unitaire, intégration, ou contract test).
+- Atomique : une seule propriété mesurable par invariant.
+- Indépendant du contexte d'exécution (pas de "selon la configuration").
+
+Réponds STRICTEMENT avec un objet JSON valide (sans Markdown, sans
+commentaire) respectant ce contrat :
+
+{
+  "invariants": [
+    {
+      "description": "Propriété mesurable et testable",
+      "category": "functional | structural | non_negotiable",
+      "test_hint": "Indication courte du test qui prouverait l'invariant"
+    }
+  ]
+}
+
+Règles strictes :
+- Aucun invariant ne doit être vague ou générique.
+- Évite les doublons entre invariants.
+- N'invente pas de bibliothèques ou d'APIs non mentionnées dans l'objectif.
+- Entre 3 et 5 invariants, jamais davantage.
