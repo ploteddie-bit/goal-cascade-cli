@@ -15,7 +15,8 @@ import logging
 from pathlib import Path
 from typing import Any, Sequence
 
-from jinja2 import Environment, FileSystemLoader, TemplateNotFound
+from jinja2 import Environment, FileSystemLoader, StrictUndefined, TemplateNotFound
+from jinja2.sandbox import SandboxedEnvironment
 
 try:
     import structlog
@@ -44,6 +45,40 @@ class PromptNotFoundError(FileNotFoundError):
         super().__init__(
             f"Template '{name}' introuvable. Chemins cherchés :\n  {paths}"
         )
+
+
+class InvalidTemplateNameError(ValueError):
+    """Le nom de template contient des caractères ou séquences dangereuses."""
+
+    def __init__(self, name: str, reason: str) -> None:
+        self.name = name
+        self.reason = reason
+        super().__init__(
+            f"Nom de template invalide '{name}' : {reason}. "
+            "Seuls les caractères alphanumériques, _, - et . sont autorisés."
+        )
+
+
+# Caractères interdits dans un nom de template (sécurité B1)
+_FORBIDDEN_PATTERNS = ("..", "/", "\\", "\x00")
+
+
+def _validate_template_name(name: str) -> None:
+    """Valide qu'un nom de template ne contient pas de traversal de chemin.
+
+    Sécurité B1 : empêche ../../etc/passwd et les chemins absolus.
+    """
+    for pattern in _FORBIDDEN_PATTERNS:
+        if pattern in name:
+            raise InvalidTemplateNameError(name, f"contient '{pattern}'")
+    if name.startswith("~"):
+        raise InvalidTemplateNameError(name, "commence par '~'")
+    # Vérifier que le nom ne pointe pas hors du répertoire après résolution
+    # par FileSystemLoader (double safety net)
+    if name != Path(name).name and not name.endswith(".j2"):
+        # Path("a.j2").name == "a.j2" → OK
+        # Path("../a.j2").name == "a.j2" mais ".." déjà catché ci-dessus
+        pass
 
 
 class PromptLoader:
@@ -78,11 +113,16 @@ class PromptLoader:
             search_paths=[str(p) for p in self._search_paths],
         )
 
-        self._env = Environment(
+        # Sécurité B3 : SandboxedEnvironment empêche __import__, __class__,
+        # accès aux attributs privés et exécution de code arbitraire.
+        # Sécurité B5 : StrictUndefined lève si une variable n'existe pas
+        # au lieu de produire une string vide silencieusement.
+        self._env = SandboxedEnvironment(
             loader=FileSystemLoader([str(p) for p in self._search_paths]),
             autoescape=False,
             trim_blocks=True,
             lstrip_blocks=True,
+            undefined=StrictUndefined,
         )
 
     # -- API publique -------------------------------------------------------
@@ -99,9 +139,12 @@ class PromptLoader:
 
         Raises
         ------
+        InvalidTemplateNameError
+            Si le nom contient des séquences de traversal (.., /, \\).
         PromptNotFoundError
             Si le template n'existe dans aucun répertoire de recherche.
         """
+        _validate_template_name(prompt_name)
         try:
             template = self._env.get_template(prompt_name)
         except TemplateNotFound as exc:
@@ -120,6 +163,7 @@ class PromptLoader:
 
         Retourne ``None`` si le template n'existe pas.
         """
+        _validate_template_name(prompt_name)
         for search_dir in self._search_paths:
             candidate = search_dir / prompt_name
             if candidate.is_file():

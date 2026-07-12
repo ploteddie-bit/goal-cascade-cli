@@ -15,7 +15,15 @@ from goal_cascade.orchestrator.prompt_loader import PromptLoader, PromptNotFound
 def test_load_from_package() -> None:
     """Charger iteration_1.j2 depuis le package et vérifier la présence de l'objectif."""
     loader = PromptLoader()
-    result = loader.load("iteration_1.j2", objective="Écrire un poème sur Python")
+    result = loader.load(
+        "iteration_1.j2",
+        objective="Écrire un poème sur Python",
+        previous_output="",
+        last_synthesis="",
+        audience="Débutants",
+        constraints="",
+        artifacts="",
+    )
     assert "Écrire un poème sur Python" in result
 
 
