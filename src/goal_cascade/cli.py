@@ -4,6 +4,9 @@ Usage:
     goal run --objective "..." [--provider mock|kimi-cli|kimi-code]
     goal status [run_id]
     goal list
+    goal versions <run_id>
+    goal diff <run_id_1> <run_id_2>
+    goal inspect <run_id>
 """
 
 from __future__ import annotations
@@ -11,6 +14,7 @@ from __future__ import annotations
 from enum import Enum
 from pathlib import Path
 
+import datetime as _dt
 import json
 
 import typer
@@ -30,6 +34,7 @@ from .providers.mock import MockProvider
 from .providers.router import RoleMappedProvider
 from .rag_bridge import RagBridge, RagSyncError
 from .schemas.models import Variant
+from .schemas.versioning import RunVersion, VersionDiff
 
 app = typer.Typer(
     name="goal",
@@ -45,6 +50,9 @@ __all__ = [
     "run",
     "status",
     "list_cmd",
+    "versions",
+    "diff",
+    "inspect_run",
     "rag_status",
     "rag_sync",
     "init",
@@ -448,6 +456,74 @@ def run(
         console.print(table)
 
 
+def _print_velocity_dashboard(
+    history: list[LLMCallRecord], run_id: str
+) -> None:
+    """Affiche un dashboard ASCII de vitesse de la cascade.
+
+    Barre horizontale par itération : rôle, coût, indicateur visuel.
+    █ pour les itérations coûteuses, ░ pour les légères.
+    Le coût maximum sert de référence pour la largeur des barres.
+    """
+    if not history:
+        return
+
+    # Déterminer la métrique : coût si dispo, sinon tokens
+    max_cost = max((c.cost_usd for c in history), default=0.0)
+    use_tokens = max_cost <= 0.0
+    if use_tokens:
+        max_value = float(
+            max((c.input_tokens + c.output_tokens for c in history), default=1)
+        )
+    else:
+        max_value = max_cost
+
+    if max_value <= 0:
+        return
+
+    bar_width = 30
+    separator = "─" * 78
+
+    console.print()
+    console.print("[bold]Dashboard de vitesse[/bold]")
+    console.print(separator)
+
+    for call in history:
+        value = (
+            float(call.input_tokens + call.output_tokens)
+            if use_tokens
+            else call.cost_usd
+        )
+        ratio = min(value / max_value, 1.0)
+        filled = max(1, int(ratio * bar_width)) if value > 0 else 0
+        empty = bar_width - filled
+        bar = "█" * filled + "░" * empty
+
+        if use_tokens:
+            metric_str = f"{call.input_tokens + call.output_tokens} tok"
+        else:
+            metric_str = f"${call.cost_usd:.4f}"
+
+        console.print(
+            f"{call.iteration:>2}  {call.role:<10} {metric_str:>9}  {bar}"
+        )
+
+    console.print(separator)
+
+    # Cache hit rate depuis receipt.json
+    from .schemas.models import RunReceipt
+
+    receipt_path = RUNS_DIR / run_id / "receipt.json"
+    if receipt_path.exists():
+        try:
+            receipt_data = json.loads(receipt_path.read_text(encoding="utf-8"))
+            receipt = RunReceipt.model_validate(receipt_data)
+            rate = receipt.cache_hit_rate
+            console.print(f"  Cache hit rate : {rate:.0%}")
+        except (OSError, json.JSONDecodeError, Exception):
+            pass
+
+
 @app.command()
 def status(
     run_id: str = typer.Argument(None, help="ID du run a inspecter"),
@@ -504,12 +580,334 @@ def status(
 
         console.print(table)
 
+    # Dashboard de vitesse
+    _print_velocity_dashboard(state.history, state.run_id)
+
     if state.final_verdict:
         color = "green" if state.final_verdict.decision == "STOP" else "yellow"
         console.print(
             f"\nVerdict : [{color}]{state.final_verdict.decision}[/{color}]"
         )
         console.print(f"  {state.final_verdict.justification}")
+
+
+@app.command(name="versions")
+def versions(
+    run_id: str = typer.Argument(..., help="ID du run dont lister les versions"),
+):
+    """Liste les versions d'un run depuis le répertoire ~/.goal/runs/<run_id>/."""
+    run_dir = RUNS_DIR / run_id
+    if not run_dir.exists():
+        console.print(f"[red]Run '{run_id}' introuvable : {run_dir}[/red]")
+        raise typer.Exit(1)
+
+    state_file = run_dir / "state.json"
+    receipt_file = run_dir / "receipt.json"
+
+    if not state_file.exists():
+        console.print(f"[red]Aucun state.json pour le run '{run_id}'.[/red]")
+        raise typer.Exit(1)
+
+    state_data = json.loads(state_file.read_text(encoding="utf-8"))
+    receipt_data: dict | None = None
+    if receipt_file.exists():
+        receipt_data = json.loads(receipt_file.read_text(encoding="utf-8"))
+
+    iterations = state_data.get("current_iteration", 0)
+    status_val = state_data.get("status", "unknown")
+    objective = state_data.get("objective", "")
+
+    # Chaque itération = une "version" du run
+    versions_list: list[RunVersion] = []
+    for it in range(1, iterations + 1):
+        iter_file = run_dir / f"iteration_{it}.txt"
+        if iter_file.exists():
+            iter_stat = iter_file.stat()
+            created_at = _dt.datetime.fromtimestamp(
+                iter_stat.st_mtime, tz=_dt.timezone.utc
+            ).isoformat()
+        else:
+            created_at = ""
+
+        # Coût par itération depuis l'historique
+        cost_for_iter = 0.0
+        for call in state_data.get("history", []):
+            if call.get("iteration") == it:
+                cost_for_iter += call.get("cost_usd", 0.0)
+
+        # Durée par itération depuis le receipt
+        duration_s = 0.0
+        if receipt_data:
+            for call in receipt_data.get("calls", []):
+                if call.get("iteration") == it:
+                    duration_s += call.get("latency_ms", 0) / 1000.0
+
+        verdict_val = (
+            state_data.get("final_verdict", {}).get("decision", "CONTINUE")
+            if it == iterations
+            else "CONTINUE"
+        )
+
+        versions_list.append(
+            RunVersion(
+                version_id=f"v{it}",
+                run_id=run_id,
+                created_at=created_at,
+                iteration_count=it,
+                final_verdict=verdict_val,
+                total_cost_usd=cost_for_iter,
+                status=status_val if it == iterations else "running",
+                objective=objective,
+            )
+        )
+
+    if not versions_list:
+        console.print(
+            f"[yellow]Aucune version trouvée pour le run '{run_id}'.[/yellow]"
+        )
+        return
+
+    table = Table(title=f"Versions du run {run_id}")
+    table.add_column("Version", style="cyan")
+    table.add_column("Itération", justify="right")
+    table.add_column("Statut")
+    table.add_column("Coût (USD)", justify="right")
+    table.add_column("Verdict")
+    table.add_column("Durée (s)", justify="right")
+
+    for v in versions_list:
+        verdict_color = "green" if v.final_verdict == "STOP" else "yellow"
+        cost_display = f"${v.total_cost_usd:.4f}" if v.total_cost_usd > 0 else "—"
+        duration_display = (
+            f"{receipt_data['total_duration_s']:.1f}"
+            if receipt_data and v.version_id == f"v{iterations}"
+            else "—"
+        )
+        table.add_row(
+            v.version_id,
+            str(v.iteration_count),
+            v.status,
+            cost_display,
+            f"[{verdict_color}]{v.final_verdict}[/{verdict_color}]",
+            duration_display,
+        )
+
+    console.print(table)
+
+
+@app.command(name="diff")
+def diff(
+    run_id_1: str = typer.Argument(..., help="Premier run ID à comparer"),
+    run_id_2: str = typer.Argument(..., help="Deuxième run ID à comparer"),
+):
+    """Compare deux runs : delta coûts, delta itérations, verdict changé."""
+    state_1 = load_state(run_id_1)
+    state_2 = load_state(run_id_2)
+
+    if not state_1:
+        console.print(f"[red]Run '{run_id_1}' introuvable.[/red]")
+        raise typer.Exit(1)
+    if not state_2:
+        console.print(f"[red]Run '{run_id_2}' introuvable.[/red]")
+        raise typer.Exit(1)
+
+    cost_delta = state_2.accumulated_cost - state_1.accumulated_cost
+    iter_delta = state_2.current_iteration - state_1.current_iteration
+
+    verdict_a = (
+        state_1.final_verdict.decision if state_1.final_verdict else state_1.status
+    )
+    verdict_b = (
+        state_2.final_verdict.decision if state_2.final_verdict else state_2.status
+    )
+    verdict_changed = verdict_a != verdict_b
+
+    # Artefacts
+    artifacts_1 = len(state_1.artifacts)
+    artifacts_2 = len(state_2.artifacts)
+    new_artifacts = max(0, artifacts_2 - artifacts_1)
+    removed_artifacts = max(0, artifacts_1 - artifacts_2)
+
+    summary_parts = []
+    summary_parts.append(
+        f"Coût : {'+' if cost_delta >= 0 else ''}{cost_delta:.4f} USD"
+    )
+    summary_parts.append(
+        f"Itérations : {'+' if iter_delta >= 0 else ''}{iter_delta}"
+    )
+    if verdict_changed:
+        summary_parts.append(f"Verdict changé : {verdict_a} → {verdict_b}")
+    else:
+        summary_parts.append(f"Verdict inchangé : {verdict_a}")
+    if new_artifacts or removed_artifacts:
+        summary_parts.append(
+            f"Artefacts : +{new_artifacts}/-{removed_artifacts}"
+        )
+
+    version_diff = VersionDiff(
+        run_id=f"{run_id_1}..{run_id_2}",
+        version_a=run_id_1,
+        version_b=run_id_2,
+        cost_delta_usd=cost_delta,
+        iteration_delta=iter_delta,
+        verdict_changed=verdict_changed,
+        verdict_a=verdict_a,
+        verdict_b=verdict_b,
+        new_artifacts=new_artifacts,
+        removed_artifacts=removed_artifacts,
+        summary=", ".join(summary_parts),
+    )
+
+    # Affichage
+    panel = Panel.fit(
+        f"[bold]Diff : {run_id_1} vs {run_id_2}[/bold]\n"
+        f"Coût Δ : {'[green]' if cost_delta <= 0 else '[red]'}"
+        f"{'+' if cost_delta >= 0 else ''}{cost_delta:.4f} USD[/]\n"
+        f"Itérations Δ : {'+' if iter_delta >= 0 else ''}{iter_delta}\n"
+        f"Verdict : "
+        f"{'[red]' if verdict_changed else '[green]'}"
+        f"{verdict_a} → {verdict_b}{' (changé)' if verdict_changed else ' (inchangé)'}[/]\n"
+        f"Artefacts : +{new_artifacts}/-{removed_artifacts}",
+        border_style="cyan",
+        title="Comparaison",
+    )
+    console.print(panel)
+    console.print(f"\n[dim]{version_diff.summary}[/dim]")
+
+
+@app.command(name="inspect")
+def inspect_run(
+    run_id: str = typer.Argument(..., help="ID du run à inspecter"),
+):
+    """Affiche les détails complets d'un run : état, appels, artefacts, synthèse."""
+    state = load_state(run_id)
+    if not state:
+        console.print(f"[red]Run '{run_id}' introuvable.[/red]")
+        raise typer.Exit(1)
+
+    run_dir = RUNS_DIR / run_id
+
+    # ── État ─────────────────────────────────────────────────────
+    status_color = {
+        "running": "yellow",
+        "stopped": "green",
+        "forced_stop": "yellow",
+        "failed": "red",
+        "budget_exceeded": "red",
+    }.get(state.status, "white")
+
+    header_lines = [
+        f"[bold]Run #{state.run_id}[/bold]",
+        f"Statut       : [{status_color}]{state.status}[/{status_color}]",
+        f"Objectif     : {state.objective}",
+        f"Variante     : {state.variant.value}",
+        f"Itérations   : {state.current_iteration}/{state.max_iterations}",
+        f"Coût total   : ${state.accumulated_cost:.4f}",
+    ]
+    if state.final_verdict:
+        v_color = "green" if state.final_verdict.decision == "STOP" else "yellow"
+        header_lines.append(
+            f"Verdict      : [{v_color}]{state.final_verdict.decision}[/{v_color}]"
+        )
+        header_lines.append(f"Justification: {state.final_verdict.justification}")
+    if state.last_error:
+        header_lines.append(f"Erreur       : [red]{state.last_error}[/red]")
+
+    console.print(
+        Panel.fit("\n".join(header_lines), border_style="cyan", title="État")
+    )
+
+    # ── Historique des appels ────────────────────────────────────
+    if state.history:
+        table = Table(title="Historique des appels LLM")
+        table.add_column("#", style="cyan")
+        table.add_column("Rôle")
+        table.add_column("Provider")
+        table.add_column("Modèle")
+        table.add_column("In tok", justify="right")
+        table.add_column("Out tok", justify="right")
+        table.add_column("Coût", justify="right")
+        table.add_column("Latence", justify="right")
+
+        for call in state.history:
+            cost_str = (
+                f"${call.cost_usd:.4f}" if call.cost_usd > 0 else "—"
+            )
+            in_tok = (
+                f"~{call.input_tokens}"
+                if call.token_count_estimated
+                else str(call.input_tokens)
+            )
+            out_tok = (
+                f"~{call.output_tokens}"
+                if call.token_count_estimated
+                else str(call.output_tokens)
+            )
+            table.add_row(
+                str(call.iteration),
+                call.role,
+                call.provider,
+                call.model,
+                in_tok,
+                out_tok,
+                cost_str,
+                f"{call.latency_ms}ms",
+            )
+        console.print(table)
+    else:
+        console.print("[dim]Aucun appel LLM enregistré.[/dim]")
+
+    # ── Artefacts ────────────────────────────────────────────────
+    if state.artifacts:
+        console.print()
+        console.print(Panel("[bold]Artefacts immuables[/bold]", border_style="blue"))
+        for i, art in enumerate(state.artifacts, 1):
+            art_type = art.artifact_type
+            lang = f" ({art.language})" if art.language else ""
+            content_preview = art.content[:120].replace("\n", " ")
+            if len(art.content) > 120:
+                content_preview += "…"
+            console.print(
+                f"  [{i}] {art_type}{lang} — itération {art.source_iteration}"
+            )
+            console.print(f"      {content_preview}")
+    else:
+        console.print("[dim]Aucun artefact.[/dim]")
+
+    # ── Synthèse ─────────────────────────────────────────────────
+    if state.last_synthesis:
+        synth = state.last_synthesis
+        synth_lines = [
+            f"Objectif   : {synth.objective}",
+            f"Décisions  : {'; '.join(synth.key_decisions)}",
+        ]
+        if synth.uncertainties:
+            synth_lines.append(
+                f"Incertain  : {'; '.join(synth.uncertainties)}"
+            )
+        synth_lines.append(
+            f"Itérations : {synth.iteration_from} → {synth.iteration_to}"
+        )
+        synth_lines.append(f"Prochaine  : {synth.next_instruction}")
+        console.print()
+        console.print(
+            Panel.fit(
+                "\n".join(synth_lines),
+                border_style="green",
+                title="Dernière synthèse",
+            )
+        )
+    else:
+        console.print("[dim]Aucune synthèse enregistrée.[/dim]")
+
+    # ── Fichiers du run ──────────────────────────────────────────
+    if run_dir.exists():
+        files = sorted(p.name for p in run_dir.iterdir() if p.is_file())
+        if files:
+            console.print()
+            console.print(Panel("[bold]Fichiers du run[/bold]", border_style="dim"))
+            for f in files:
+                console.print(f"  {f}")
 
 
 @app.command(name="list")
