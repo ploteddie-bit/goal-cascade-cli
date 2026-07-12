@@ -8,11 +8,16 @@ et de batches parallèles.
 from __future__ import annotations
 
 import json
+import logging
+import re
 from pathlib import Path
 
 import networkx as nx
 
 from goal_cascade.schemas.models import FrozenSpec, InterfaceContract
+from goal_cascade.schemas.plan import CascadePlan, DependencySpec, ModuleSpec
+
+logger = logging.getLogger(__name__)
 
 
 class ModuleGraph:
@@ -166,6 +171,183 @@ class ModuleGraph:
 
         graph.validate_acyclic()
         return graph
+
+    # ------------------------------------------------------------------
+    # Planification LLM
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _build_planning_prompt(spec_content: str) -> str:
+        """Construit le prompt de découpage modulaire pour le LLM.
+
+        Le prompt demande au LLM d'analyser le spec et de produire
+        un découpage en modules indépendants avec leurs dépendances
+        et contrats d'interface.
+
+        Args:
+            spec_content: Contenu brut du fichier spec.
+
+        Returns:
+            Le prompt complet à envoyer au provider.
+        """
+        return (
+            "Tu es un architecte logiciel expert en découpage modulaire.\n"
+            "Analyse la spécification suivante et décompose-la en modules "
+            "indépendants avec leurs contrats d'interface.\n\n"
+            "=== SPÉCIFICATION ===\n"
+            f"{spec_content}\n"
+            "=== FIN SPÉCIFICATION ===\n\n"
+            "Retourne UNIQUEMENT un objet JSON (pas de commentaire, pas de markdown) "
+            "avec cette structure :\n"
+            "{\n"
+            '  "modules": [\n'
+            "    {\n"
+            '      "id": "identifiant_unique",\n'
+            '      "name": "Nom lisible",\n'
+            '      "responsibility": "Responsabilité précise du module",\n'
+            '      "estimated_lines": 500\n'
+            "    }\n"
+            "  ],\n"
+            '  "contracts": [\n'
+            "    {\n"
+            '      "producer": "id_producteur",\n'
+            '      "consumer": "id_consommateur",\n'
+            '      "interface_description": "Description de l\'interface"\n'
+            "    }\n"
+            "  ]\n"
+            "}\n\n"
+            "Contraintes :\n"
+            "- Chaque module doit avoir estimated_lines entre 100 et 10000.\n"
+            "- Les contracts doivent référencer des ids de modules existants.\n"
+            "- Le graphe ne doit pas contenir de cycle.\n"
+        )
+
+    @staticmethod
+    def _parse_plan_response(text: str) -> dict:
+        """Extrait le JSON de la réponse LLM.
+
+        Gère les cas où le LLM entoure le JSON de balises markdown
+        (```json ... ```) ou renvoie du texte avant/après.
+
+        Args:
+            text: Réponse brute du LLM.
+
+        Returns:
+            Le dictionnaire parsé.
+
+        Raises:
+            ValueError: si aucun JSON valide n'est trouvé.
+        """
+        # Essai 1 : bloc de code markdown
+        match = re.search(r"```(?:json)?\s*\n(.*?)\n```", text, re.DOTALL)
+        if match:
+            return json.loads(match.group(1))
+
+        # Essai 2 : premier objet JSON dans le texte
+        match = re.search(r"\{.*\}", text, re.DOTALL)
+        if match:
+            return json.loads(match.group(0))
+
+        raise ValueError(
+            "Impossible d'extraire un JSON de la réponse LLM. "
+            f"Début de la réponse : {text[:200]!r}"
+        )
+
+    @classmethod
+    def from_spec(
+        cls,
+        spec_path: str | Path,
+        provider: object,
+    ) -> tuple[ModuleGraph, CascadePlan]:
+        """Construit un ModuleGraph et son CascadePlan depuis un fichier spec.
+
+        Pipeline :
+        1. Lecture du fichier spec.
+        2. Construction du prompt de découpage (_build_planning_prompt).
+        3. Appel LLM via provider.call().
+        4. Parsing de la réponse (_parse_plan_response).
+        5. Création du CascadePlan.
+        6. Validation des contraintes (modules, dépendances, cycles).
+        7. Construction du ModuleGraph.
+        8. Calcul ordre topologique + batches parallèles.
+
+        Args:
+            spec_path: Chemin vers le fichier de spécification.
+            provider: Provider LLM (doit avoir une méthode ``call(prompt, role, tier)``).
+
+        Returns:
+            Tuple (ModuleGraph, CascadePlan).
+
+        Raises:
+            ValueError: si le plan est invalide ou la réponse LLM illisible.
+        """
+        path = Path(spec_path)
+        spec_content = path.read_text(encoding="utf-8")
+        logger.info("Spec lue depuis %s (%d caractères)", path, len(spec_content))
+
+        # 1. Prompt
+        prompt = cls._build_planning_prompt(spec_content)
+
+        # 2. Appel LLM
+        response = provider.call(prompt, role="producer", tier="medium")
+        logger.info("Réponse LLM reçue (%d caractères)", len(response.text))
+
+        # 3. Parsing
+        plan_data = cls._parse_plan_response(response.text)
+
+        # 4. CascadePlan
+        modules_raw = plan_data.get("modules", [])
+        deps_raw = plan_data.get("contracts", [])
+
+        modules = [ModuleSpec(**m) for m in modules_raw]
+        deps = [DependencySpec(**d) for d in deps_raw]
+
+        total_lines = sum(m.estimated_lines for m in modules)
+
+        plan = CascadePlan(
+            objective=spec_content[:200],
+            modules=modules,
+            dependencies=deps,
+            total_estimated_lines=total_lines,
+        )
+
+        # 5. Validation des contraintes
+        constraint_errors = plan.validate_constraints()
+        if constraint_errors:
+            raise ValueError(
+                "Plan invalide : " + "; ".join(constraint_errors)
+            )
+
+        # 6. Construction du graphe
+        graph = cls()
+
+        for mod in plan.modules:
+            frozen = FrozenSpec(
+                module_name=mod.name,
+                objective=mod.responsibility,
+                invariants=[{"description": mod.responsibility}],
+            )
+            graph.add_module(mod.id, frozen)
+
+        for dep in plan.dependencies:
+            iface = InterfaceContract(
+                contract_id=f"c-{dep.producer}-{dep.consumer}",
+                producer_module=dep.producer,
+                consumer_module=dep.consumer,
+                output_description=dep.interface_description,
+                input_description=dep.interface_description,
+            )
+            graph.add_dependency(dep.producer, dep.consumer, iface)
+
+        # 7. Validation acyclicité
+        graph.validate_acyclic()
+
+        logger.info(
+            "Graphe construit : %d modules, ordre=%s",
+            len(graph._specs),
+            graph.topological_order(),
+        )
+        return graph, plan
 
     def to_plan_dict(self) -> dict:
         """Exporte le graphe sous forme de dictionnaire sérialisable."""

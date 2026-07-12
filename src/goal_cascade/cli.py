@@ -33,7 +33,9 @@ from .providers.kimi_command import KimiBackend, KimiCommandProvider
 from .providers.mock import MockProvider
 from .providers.router import RoleMappedProvider
 from .rag_bridge import RagBridge, RagSyncError
+from .multicascade.module_graph import ModuleGraph
 from .schemas.models import Variant
+from .schemas.plan import CascadePlan
 from .schemas.versioning import RunVersion, VersionDiff
 
 app = typer.Typer(
@@ -56,6 +58,7 @@ __all__ = [
     "rag_status",
     "rag_sync",
     "init",
+    "cascade_plan",
 ]
 
 
@@ -1000,6 +1003,197 @@ def init(
     console.print(f"  ├── .goal/       (config locale)")
     console.print(f"  ├── output/      (livrables)")
     console.print(f"  └── README.md")
+
+
+@app.command(name="plan")
+def cascade_plan(
+    spec: Path = typer.Argument(
+        ..., help="Chemin vers le fichier de spécification (JSON/TOML/Markdown)"
+    ),
+    config: Path | None = typer.Option(
+        None,
+        "--config",
+        help=(
+            "Chemin du fichier config TOML. "
+            f"Par défaut : {DEFAULT_CONFIG_PATH} si présent."
+        ),
+    ),
+    provider: ProviderChoice = typer.Option(
+        ProviderChoice.MOCK, "--provider", "-p",
+        help="Provider : mock, kimi-cli ou kimi-code"
+    ),
+    output: Path = typer.Option(
+        Path("plan.json"),
+        "--output", "-o",
+        help="Chemin de sortie pour le plan JSON (défaut : plan.json)",
+    ),
+    synthesizer_model: str | None = typer.Option(
+        None,
+        "--synthesizer-model",
+        envvar="GOAL_SYNTHESIZER_MODEL",
+        help="Modèle small/cheap dédié aux synthèses (obligatoire avec Kimi)",
+    ),
+):
+    """Génère un plan de découpage modulaire depuis un fichier de spécification."""
+
+    # ── 1. Vérifier que le fichier spec existe ───────────────────
+    spec_path = spec.expanduser().resolve()
+    if not spec_path.exists():
+        console.print(
+            f"[bold red]Fichier spec introuvable : {spec_path}[/bold red]"
+        )
+        raise typer.Exit(2)
+
+    # ── 2. Charger la config TOML (optionnel) ───────────────────
+    candidate_config_path = config or DEFAULT_CONFIG_PATH
+    should_load_config = config is not None or candidate_config_path.exists()
+    selected_provider: BaseProvider | None = None
+
+    if should_load_config:
+        if config is not None and not candidate_config_path.exists():
+            console.print(
+                f"[bold red]Config introuvable : "
+                f"{candidate_config_path.expanduser()}[/bold red]"
+            )
+            raise typer.Exit(2)
+        try:
+            goal_config = load_goal_config(candidate_config_path)
+        except (ValidationError, ValueError) as exc:
+            console.print(
+                f"[bold red]Config invalide ({candidate_config_path}): "
+                f"{exc}[/bold red]"
+            )
+            raise typer.Exit(1) from exc
+        _print_config_summary(candidate_config_path, goal_config.providers)
+
+        # Les providers Kimi exigent un modèle explicite
+        if (
+            goal_config.providers.resolved_synthesizer in ("kimi-cli", "kimi-code")
+            and not synthesizer_model
+        ):
+            typer.echo(
+                "Erreur : --synthesizer-model est requis avec un provider Kimi",
+                err=True,
+            )
+            raise typer.BadParameter(
+                "requis avec un provider Kimi",
+                param_hint="--synthesizer-model",
+            )
+
+        # Utiliser le synthesizer (tâche de planification = synthèse)
+        selected_provider = _build_provider(
+            goal_config.providers.resolved_synthesizer,
+            synthesizer_model=synthesizer_model,
+            config=goal_config,
+        )
+
+    # ── 3. Construire le provider (fallback) ─────────────────────
+    if selected_provider is None:
+        if synthesizer_model is not None:
+            synthesizer_model = synthesizer_model.strip()
+        selected_provider = _build_provider(
+            provider.value,
+            synthesizer_model=synthesizer_model,
+        )
+
+    # ── 4. Appeler ModuleGraph.from_spec ─────────────────────────
+    console.print(
+        f"[cyan]Analyse du spec : {spec_path}[/cyan]"
+    )
+    console.print(
+        f"[cyan]Provider : {selected_provider.name}[/cyan]"
+    )
+
+    try:
+        graph, plan = ModuleGraph.from_spec(spec_path, selected_provider)
+    except Exception as exc:
+        console.print(
+            f"[bold red]Erreur lors de la planification : {exc}[/bold red]"
+        )
+        raise typer.Exit(1) from exc
+
+    # ── 5. Sauvegarder le plan en plan.json ──────────────────────
+    output_path = output.expanduser().resolve()
+    plan_data = plan.model_dump()
+    plan_data["_graph"] = graph.to_plan_dict()
+    plan_data["_topological_order"] = graph.topological_order()
+    plan_data["_batches"] = graph.parallel_batches()
+    output_path.write_text(
+        json.dumps(plan_data, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+
+    # ── 6. Afficher un résumé rich ───────────────────────────────
+    batches = graph.parallel_batches()
+    topo_order = graph.topological_order()
+    total_lines = sum(m.estimated_lines for m in plan.modules)
+
+    # Modules
+    modules_table = Table(title="Modules")
+    modules_table.add_column("ID", style="cyan")
+    modules_table.add_column("Nom")
+    modules_table.add_column("Lignes est.", justify="right")
+    modules_table.add_column("Dépendances")
+    modules_table.add_column("Invariants", justify="right")
+
+    for mod in plan.modules:
+        deps = ", ".join(mod.dependencies) if mod.dependencies else "—"
+        modules_table.add_row(
+            mod.module_id,
+            mod.module_name,
+            str(mod.estimated_lines),
+            deps,
+            str(len(mod.invariants)),
+        )
+
+    if plan.integration_module:
+        im = plan.integration_module
+        deps = ", ".join(im.dependencies) if im.dependencies else "—"
+        modules_table.add_row(
+            f"[bold]{im.module_id}[/bold]",
+            f"[bold]{im.module_name}[/bold]",
+            str(im.estimated_lines),
+            deps,
+            str(len(im.invariants)),
+        )
+
+    console.print(modules_table)
+
+    # Résumé global
+    summary_lines = [
+        f"Modules        : {len(plan.modules)}"
+        + (f" + intégration" if plan.integration_module else ""),
+        f"Dépendances    : {len(plan.contracts)}",
+        f"Batches        : {len(batches)}",
+        f"Ordre topo     : {' → '.join(topo_order)}",
+        f"Total lignes   : {total_lines:,}",
+    ]
+    if plan.integration_module:
+        total_lines_all = total_lines + plan.integration_module.estimated_lines
+        summary_lines.append(f"Avec intégr.   : {total_lines_all:,} lignes")
+
+    console.print(
+        Panel.fit(
+            "\n".join(summary_lines),
+            border_style="green",
+            title="Résumé du plan",
+        )
+    )
+
+    # Contrats
+    if plan.contracts:
+        contracts_table = Table(title="Contrats d'interface")
+        contracts_table.add_column("ID", style="cyan")
+        contracts_table.add_column("Producteur")
+        contracts_table.add_column("Consommateur")
+        contracts_table.add_column("Format")
+        for c in plan.contracts:
+            contracts_table.add_row(
+                c.contract_id, c.producer, c.consumer, c.exchange_format
+            )
+        console.print(contracts_table)
+
+    console.print(f"\n[green]✅ Plan sauvegardé : {output_path}[/green]")
 
 
 @app.command()
