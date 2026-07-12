@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 from datetime import date
 from pathlib import Path
 from typing import Any
@@ -279,6 +280,14 @@ class BudgetTracker:
                 json.dumps(payload, indent=2),
                 encoding="utf-8",
             )
+            # Restreint au propriétaire : budget_daily.json révèle des
+            # métadonnées d'usage (fréquence, volume) qui n'ont rien
+            # à faire dans un fichier lisible par tous.
+            try:
+                os.chmod(self._daily_total_path, 0o600)
+            except OSError:
+                # FS ne supporte pas chmod (ex: certains mounts Windows).
+                pass
         except OSError:
             # FS readonly ou permissions : on accepte la dégradation en mémoire seule.
             pass

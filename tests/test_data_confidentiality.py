@@ -114,6 +114,30 @@ def test_runs_dir_itself_is_0o700(tmp_path: Path) -> None:
     assert (custom_runs.stat().st_mode & 0o777) == 0o700
 
 
+def test_budget_daily_json_is_0o600(tmp_path: Path) -> None:
+    """budget_daily.json est écrit avec les permissions 0o600.
+
+    Le fichier révèle des métadonnées d'usage (fréquence, volume journalier)
+    qui n'ont rien à faire dans un fichier world-readable, même s'il ne
+    contient pas de secret au sens strict.
+    """
+    from goal_cascade.config import BudgetConfig
+    from goal_cascade.orchestrator.budget_tracker import BudgetTracker
+
+    daily_path = tmp_path / "budget_daily.json"
+    tracker = BudgetTracker(
+        config=BudgetConfig(),
+        daily_total_path=daily_path,
+    )
+
+    # Force l'écriture du fichier journalier.
+    tracker._daily_total = 0.05
+    tracker._save_daily_total()
+
+    assert daily_path.exists()
+    assert (daily_path.stat().st_mode & 0o777) == 0o600
+
+
 # ── E3 : cache sémantique local et restreint ───────────────────────
 
 
