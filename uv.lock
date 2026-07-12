@@ -183,6 +183,7 @@ dependencies = [
     { name = "jinja2" },
     { name = "langgraph" },
     { name = "langgraph-checkpoint-sqlite" },
+    { name = "networkx" },
     { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12'" },
     { name = "numpy", version = "2.5.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
     { name = "psycopg2-binary" },
@@ -210,6 +211,7 @@ requires-dist = [
     { name = "langgraph", specifier = ">=0.2" },
     { name = "langgraph-checkpoint-sqlite", specifier = ">=2.0" },
     { name = "mirascope", marker = "extra == 'llm'", specifier = ">=1.0" },
+    { name = "networkx", specifier = ">=3.0" },
     { name = "numpy", specifier = ">=2.4.6" },
     { name = "psycopg2-binary", specifier = ">=2.9" },
     { name = "pydantic", specifier = ">=2.0" },
@@ -635,6 +637,15 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/5d/98/9fde99c0d8f28506f02bfa1db7de92f9ccf7bdec45aeebc3d1ada7093636/mirascope-2.5.0.tar.gz", hash = "sha256:bf4a24838a9717eb03ec4cf1d69b211d30fd7f48a774491f000ee81d0b636968", size = 3367934, upload-time = "2026-06-24T03:48:13.1Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/7c/49/b81e08fad3206dc6ff870d327afbf849e8cea741f873e66b4d54f80b8218/mirascope-2.5.0-py3-none-any.whl", hash = "sha256:4aee8148ce48254a02bf016b9a494ca0ce701d3cb351baff3c1207e0484962c1", size = 275135, upload-time = "2026-06-24T03:48:11.183Z" },
+]
+
+[[package]]
+name = "networkx"
+version = "3.6.1"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/6a/51/63fe664f3908c97be9d2e4f1158eb633317598cfa6e1fc14af5383f17512/networkx-3.6.1.tar.gz", hash = "sha256:26b7c357accc0c8cde558ad486283728b65b6a95d85ee1cd66bafab4c8168509", size = 2517025, upload-time = "2025-12-08T17:02:39.908Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/9e/c9/b2622292ea83fbb4ec318f5b9ab867d0a28ab43c5717bb85b0a5f6b3b0a4/networkx-3.6.1-py3-none-any.whl", hash = "sha256:d47fbf302e7d9cbbb9e2555a0d267983d2aa476bac30e90dfbe5669bd57f3762", size = 2068504, upload-time = "2025-12-08T17:02:38.159Z" },
 ]
 
 [[package]]

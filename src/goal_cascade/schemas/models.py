@@ -184,6 +184,53 @@ class Verdict(BaseModel):
     justification: str
 
 
+class Invariant(BaseModel):
+    """Un invariant vérifiable de la frozen spec (spec V2 §4.3)."""
+    description: str
+    category: Literal["functional", "structural", "non_negotiable"] = "functional"
+    verified: bool | None = None
+
+
+class FrozenSpec(BaseModel):
+    """Spécification gelée d'un module (spec V2 §4.3).
+
+    Aucun invariant ne peut être supprimé sans validation humaine.
+    Chaque module d'un multi-cascade a sa propre FrozenSpec.
+    """
+    module_name: str
+    objective: str
+    invariants: list[Invariant] = Field(..., min_length=1)
+    max_lines: int = Field(default=3000, ge=100, le=10000)
+
+    def all_verified(self) -> bool:
+        return all(inv.verified for inv in self.invariants)
+
+    def missing_invariants(self) -> list[Invariant]:
+        return [inv for inv in self.invariants if not inv.verified]
+
+
+class InterfaceInvariant(BaseModel):
+    """Invariant d'interface entre deux modules (spec V2 §4.4)."""
+    description: str
+    respected: bool | None = None
+
+
+class InterfaceContract(BaseModel):
+    """Contrat d'interface entre deux modules (spec V2 §4.4).
+
+    Créé AVANT les cascades. Définit ce que le producteur fournit
+    et ce que le consommateur attend.
+    """
+    contract_id: str
+    producer_module: str
+    consumer_module: str
+    output_description: str
+    input_description: str
+    exchange_format: str = "JSON Schema"
+    invariants: list[InterfaceInvariant] = Field(default_factory=list)
+    error_cases: list[str] = Field(default_factory=list)
+
+
 class CascadeState(BaseModel):
     """Etat persistant d'une cascade en cours d'execution."""
     run_id: str
@@ -199,6 +246,9 @@ class CascadeState(BaseModel):
     last_error: str | None = None
     accumulated_cost: float = 0.0
     last_raw_output: str = ""  # Sortie brute de la dernière itération (pour le graphe LangGraph)
+    # Champs multi-cascade (S6) — optionnels, pas utilisés en cascade unique
+    frozen_spec: FrozenSpec | None = None
+    interface_contracts: list[InterfaceContract] = Field(default_factory=list)
 
     def role_for_iteration(self, n: int) -> IterationRole:
         """Retourne le role pour une iteration donnee (1-4)."""
