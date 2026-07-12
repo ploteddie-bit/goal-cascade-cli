@@ -1,11 +1,12 @@
 [project]
 name = "goal-cascade"
-version = "0.1.0"
+version = "0.3.0"
 description = "G.O.A.L. Cascade — Multi-agent cascade framework for high-quality AI deliverables"
 readme = "README.md"
 requires-python = ">=3.11"
 license = "MIT"
 authors = [{ name = "Eddie" }]
+keywords = ["ai", "llm", "cascade", "multi-agent", "pydantic", "typer"]
 dependencies = [
     "typer>=0.12",
     "rich>=13.0",
