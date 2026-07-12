@@ -17,10 +17,28 @@ GOAL_DIR = Path(os.environ.get("GOAL_HOME", Path.home() / ".goal")).expanduser()
 RUNS_DIR = GOAL_DIR / "runs"
 
 
+PRIVATE_DIR_MODE = 0o700
+
+
+def ensure_private_dir(path: Path, mode: int = PRIVATE_DIR_MODE) -> Path:
+    """Crée un répertoire (et ses parents) avec des permissions restreintes.
+
+    Les traces de run et les données utilisateur ne doivent pas être
+    lisibles par les autres utilisateurs du système (E2/E3).
+    """
+    path.mkdir(parents=True, exist_ok=True)
+    try:
+        path.chmod(mode)
+    except OSError:
+        # FS ne supporte pas chmod (ex: certains mounts Windows) : ignorer.
+        pass
+    return path
+
+
 def get_run_dir(run_id: str) -> Path:
-    """Retourne le dossier d'un run."""
+    """Retourne le dossier d'un run, créé avec les permissions 0o700."""
     run_dir = RUNS_DIR / run_id
-    run_dir.mkdir(parents=True, exist_ok=True)
+    ensure_private_dir(run_dir)
     return run_dir
 
 

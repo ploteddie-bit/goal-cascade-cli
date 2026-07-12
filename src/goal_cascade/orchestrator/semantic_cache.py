@@ -28,11 +28,17 @@ try:
 except ImportError:
     logger = logging.getLogger(__name__)
 
+from ..audit_journal import redact_sensitive
 from ..rag.embed import OllamaEmbedding
+from .state_manager import ensure_private_dir
 
 CACHE_DB_PATH = Path.home() / ".goal" / "semantic_cache.db"
 EMBEDDING_DIM = 1024
 SIMILARITY_THRESHOLD = 0.92  # Seuil de match sémantique
+
+# Permissions restrictives pour la DB SQLite locale (E3).
+CACHE_DB_MODE = 0o600
+CACHE_DIR_MODE = 0o700
 
 
 class SemanticCache:
@@ -61,8 +67,8 @@ class SemanticCache:
         self._ensure_schema()
 
     def _ensure_schema(self) -> None:
-        """Crée la table si elle n'existe pas."""
-        self._db_path.parent.mkdir(parents=True, exist_ok=True)
+        """Crée la table si elle n'existe pas, avec permissions restreintes."""
+        ensure_private_dir(self._db_path.parent, mode=CACHE_DIR_MODE)
         with sqlite3.connect(str(self._db_path)) as conn:
             conn.execute("""
                 CREATE TABLE IF NOT EXISTS semantic_entries (
@@ -81,6 +87,11 @@ class SemanticCache:
                 ON semantic_entries(query_hash)
             """)
             conn.commit()
+        try:
+            self._db_path.chmod(CACHE_DB_MODE)
+        except OSError:
+            # FS ne supporte pas chmod : ignorer (ex: certains mounts Windows).
+            pass
 
     # ── Lookup (lecture seule) ──────────────────────────────────
 
@@ -94,7 +105,10 @@ class SemanticCache:
         try:
             query_embedding = self._embed_safe(query)
         except Exception as exc:
-            logger.warning("semantic_cache_lookup_embedding_failed error=%s", str(exc))
+            logger.warning(
+                "semantic_cache_lookup_embedding_failed error=%s",
+                redact_sensitive(str(exc)),
+            )
             return None
 
         if query_embedding is None:
@@ -149,7 +163,10 @@ class SemanticCache:
         try:
             embedding = self._embed_safe(query)
         except Exception as exc:
-            logger.warning("semantic_cache_store_embedding_failed error=%s", str(exc))
+            logger.warning(
+                "semantic_cache_store_embedding_failed error=%s",
+                redact_sensitive(str(exc)),
+            )
             return False
 
         if embedding is None:
@@ -175,7 +192,10 @@ class SemanticCache:
             )
             return True
         except sqlite3.Error as exc:
-            logger.error("semantic_cache_store_db_error error=%s", str(exc))
+            logger.error(
+                "semantic_cache_store_db_error error=%s",
+                redact_sensitive(str(exc)),
+            )
             return False
 
     # ── Stats et nettoyage ──────────────────────────────────────
@@ -223,7 +243,11 @@ class SemanticCache:
             if hasattr(vec, "tolist"):
                 return vec.tolist()
             return list(vec)
-        except Exception:
+        except Exception as exc:
+            logger.warning(
+                "semantic_cache_embedding_failed error=%s",
+                redact_sensitive(str(exc)),
+            )
             return None
 
     @staticmethod

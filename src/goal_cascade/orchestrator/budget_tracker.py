@@ -26,6 +26,7 @@ except ImportError:
     logger = logging.getLogger(__name__)
 
 from ..config import BudgetConfig
+from .state_manager import ensure_private_dir
 
 
 class BudgetExceeded(Exception):
@@ -269,7 +270,7 @@ class BudgetTracker:
         if self._daily_total_path is None:
             return
         try:
-            self._daily_total_path.parent.mkdir(parents=True, exist_ok=True)
+            ensure_private_dir(self._daily_total_path.parent)
             payload = {
                 "date": date.today().isoformat(),
                 "total": self._daily_total,

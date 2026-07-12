@@ -157,8 +157,8 @@ class AuditJournal:
         self.record_event(
             "error",
             error_type=type(error).__name__,
-            message=str(error),
-            traceback=trace,
+            message=redact_sensitive(str(error)),
+            traceback=redact_sensitive(trace),
         )
 
     def update_rag_status(self, status: str, **details: Any) -> Path:

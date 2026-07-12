@@ -26,6 +26,7 @@ try:
 except ImportError:
     logger = logging.getLogger(__name__)
 
+from goal_cascade.audit_journal import redact_sensitive
 from goal_cascade.rag.embed import OllamaEmbedding
 
 DRIFT_TIMEOUT_S = 2.0  # Timeout dédié drift, bien inférieur au sync RAG (180s)
@@ -76,7 +77,7 @@ class DriftDetector:
             embedding = self._embed_safe(text)
         except Exception as exc:
             logger.warning(
-                "drift_embedding_failed error=%s", str(exc),
+                "drift_embedding_failed error=%s", redact_sensitive(str(exc)),
             )
             return DriftStatus.ERROR, None
 

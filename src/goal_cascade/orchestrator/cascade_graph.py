@@ -28,6 +28,7 @@ from typing import Any
 from langgraph.graph import END, StateGraph
 from langgraph.checkpoint.sqlite import SqliteSaver
 
+from ..audit_journal import redact_sensitive
 from ..schemas.models import (
     CascadeState,
     IterationRole,
@@ -174,7 +175,11 @@ class CascadeGraph:
                 previous_artifacts=cascade.artifacts,
             )
         except Exception as exc:
-            logger.error("synth_failed iteration=%d error=%s", cascade.current_iteration, str(exc))
+            logger.error(
+                "synth_failed iteration=%d error=%s",
+                cascade.current_iteration,
+                redact_sensitive(str(exc)),
+            )
             return {"last_synthesis": None, "artifacts": cascade.artifacts}
 
         updates: dict[str, Any] = {
@@ -286,7 +291,11 @@ class CascadeGraph:
             try:
                 self._budget.check_budget(cascade.run_id, cascade.accumulated_cost)
             except BudgetExceeded as exc:
-                logger.error("budget_exceeded run=%s error=%s", cascade.run_id, str(exc))
+                logger.error(
+                    "budget_exceeded run=%s error=%s",
+                    cascade.run_id,
+                    redact_sensitive(str(exc)),
+                )
                 # Le status est mis à jour par le caller (pas ici, on retourne juste le routing)
                 return "forced_stop"
 

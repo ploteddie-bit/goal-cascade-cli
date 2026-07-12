@@ -8,6 +8,9 @@ build/
 versions/
 .goal/*
 .goal/runs/
+.goal/semantic_cache.db
+.goal/checkpoints.db
+.goal/budget_daily.json
 .env
 .env.*
 !.env.example

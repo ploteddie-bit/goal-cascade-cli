@@ -18,6 +18,7 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
+from ..audit_journal import redact_sensitive
 from .base import LLMResponse
 from .families import PROVIDER_FAMILIES
 
@@ -140,7 +141,7 @@ async def call_with_retry_and_fallback(
             last_error = exc
             logger.error(
                 "provider_unavailable backend=%s role=%s error=%s",
-                backend.value, role, str(exc),
+                backend.value, role, redact_sensitive(str(exc)),
             )
             break
     return await _try_fallback(
@@ -192,7 +193,7 @@ async def _try_fallback(
         except Exception as exc:
             logger.error(
                 "fallback_failed backend=%s role=%s error=%s",
-                fallback_backend.value, role, str(exc),
+                fallback_backend.value, role, redact_sensitive(str(exc)),
             )
     raise ProviderExhaustedError(
         f"Tous les providers epuises pour {backend.value}. "

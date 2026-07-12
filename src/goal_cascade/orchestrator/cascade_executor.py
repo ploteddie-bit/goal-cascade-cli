@@ -546,8 +546,7 @@ class CascadeExecutor:
         from .cascade_graph import build_cascade_graph, compile_with_sqlite
 
         run_dir = state_manager.get_run_dir(state.run_id)
-        checkpoint_dir = run_dir / ".checkpoints"
-        checkpoint_dir.mkdir(parents=True, exist_ok=True)
+        checkpoint_dir = state_manager.ensure_private_dir(run_dir / ".checkpoints")
         checkpoint_path = checkpoint_dir / "checkpoint.db"
 
         # Fonction nœud : encapsule une itération de la cascade.
