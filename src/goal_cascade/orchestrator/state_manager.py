@@ -35,6 +35,18 @@ def ensure_private_dir(path: Path, mode: int = PRIVATE_DIR_MODE) -> Path:
     return path
 
 
+def _initialize_runs_dir() -> None:
+    """Garantit que RUNS_DIR lui-même a les permissions 0o700.
+
+    Sans cela, le umask par défaut peut produire des répertoires en 0o755
+    (lisibles par tous) sur les systèmes où mkdir ne respecte pas le mode.
+    """
+    ensure_private_dir(RUNS_DIR)
+
+
+_initialize_runs_dir()
+
+
 def get_run_dir(run_id: str) -> Path:
     """Retourne le dossier d'un run, créé avec les permissions 0o700."""
     run_dir = RUNS_DIR / run_id

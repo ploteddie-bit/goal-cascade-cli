@@ -98,6 +98,22 @@ def test_ensure_private_dir_sets_mode(tmp_path: Path) -> None:
     assert (target.stat().st_mode & 0o777) == 0o700
 
 
+def test_runs_dir_itself_is_0o700(tmp_path: Path) -> None:
+    """RUNS_DIR lui-même a les permissions 0o700 après init du module.
+
+    Régression : avant ce fix, RUNS_DIR pouvait rester en 0o755 si le umask
+    par défaut du système était permissif, ce qui exposait les enfants en
+    lecture aux autres utilisateurs.
+    """
+    custom_runs = tmp_path / "fresh-goal" / "runs"
+    with patch.object(state_manager, "RUNS_DIR", custom_runs):
+        # Simule le premier import en appelant directement l'init.
+        state_manager._initialize_runs_dir()
+
+    assert custom_runs.exists()
+    assert (custom_runs.stat().st_mode & 0o777) == 0o700
+
+
 # ── E3 : cache sémantique local et restreint ───────────────────────
 
 
