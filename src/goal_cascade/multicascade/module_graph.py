@@ -14,7 +14,7 @@ from pathlib import Path
 
 import networkx as nx
 
-from goal_cascade.schemas.models import FrozenSpec, InterfaceContract
+from goal_cascade.schemas.models import FrozenSpec, InterfaceContract, Invariant
 from goal_cascade.schemas.plan import CascadePlan, DependencySpec, ModuleSpec
 
 logger = logging.getLogger(__name__)
@@ -261,6 +261,16 @@ class ModuleGraph:
     ) -> tuple[ModuleGraph, CascadePlan]:
         """Construit un ModuleGraph et son CascadePlan depuis un fichier spec.
 
+        ⚠️ FROZEN SPECS SQUELETTIQUES : Les frozen specs générées automatiquement
+        contiennent UN SEUL invariant (la responsabilité du module) avec
+        verified=False et category="functional". Elles sont conçues comme
+        point de départ à enrichir manuellement ou via --enrich-frozen-specs
+        (passage LLM dédié avec frozen_spec_gen.j2, non implémenté en V1).
+
+        Ne lancez PAS goal cascade run sans avoir validé et enrichi les
+        invariants. Un invariant unique = protection minimale contre la
+        dérive de simplification.
+
         Pipeline :
         1. Lecture du fichier spec.
         2. Construction du prompt de découpage (_build_planning_prompt).
@@ -268,7 +278,7 @@ class ModuleGraph:
         4. Parsing de la réponse (_parse_plan_response).
         5. Création du CascadePlan.
         6. Validation des contraintes (modules, dépendances, cycles).
-        7. Construction du ModuleGraph.
+        7. Construction du ModuleGraph avec frozen specs squelettiques.
         8. Calcul ordre topologique + batches parallèles.
 
         Args:
@@ -318,16 +328,34 @@ class ModuleGraph:
                 "Plan invalide : " + "; ".join(constraint_errors)
             )
 
-        # 6. Construction du graphe
+        # 6. Construction du graphe avec frozen specs squelettiques
         graph = cls()
 
         for mod in plan.modules:
+            # ⚠️ INVARIANT SQUELETTIQUE — un seul invariant = la responsabilité.
+            # verified=False → l'humain DOIT valider avant run.
+            # Enrichir manuellement ou via --enrich-frozen-specs (V2).
+            skeletal_invariant = Invariant(
+                description=mod.responsibility,
+                category="functional",
+                verified=False,
+            )
             frozen = FrozenSpec(
                 module_name=mod.name,
                 objective=mod.responsibility,
-                invariants=[{"description": mod.responsibility}],
+                invariants=[skeletal_invariant],
+                max_lines=mod.estimated_lines,
             )
             graph.add_module(mod.id, frozen)
+
+            # Warning explicite : ne pas lancer goal cascade run sans enrichir.
+            logger.warning(
+                "frozen_spec_skeletal module=%s invariants=%d "
+                "source=auto-from-planning "
+                "action=enrich_manually_or_use_enrich_flag",
+                mod.id,
+                len(frozen.invariants),
+            )
 
         for dep in plan.dependencies:
             iface = InterfaceContract(
