@@ -15,11 +15,20 @@ Phase ulterieures :
 from __future__ import annotations
 
 import json
+import logging
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Any
 
 from pydantic import ValidationError
+
+try:
+    import structlog
+
+    logger: Any = structlog.get_logger(__name__)
+except ImportError:
+    logger = logging.getLogger(__name__)
 
 from ..audit_journal import AuditJournal, redact_sensitive
 from ..prompts import PromptLoader
@@ -27,6 +36,7 @@ from ..providers.base import BaseProvider
 from ..schemas.models import (
     CascadeState,
     GoalOrientedSynthesis,
+    InterfaceContract,
     IterationRole,
     LLMCallRecord,
     RunReceipt,
@@ -35,6 +45,7 @@ from ..schemas.models import (
 )
 from . import state_manager
 from .budget_tracker import BudgetTracker
+from .cicd_hook import CICDHook, DeterministicCheckResult
 from .synthesizer import SynthesisError, Synthesizer
 
 # Tiers de modele par role (pour la cascade ascendante)
@@ -79,6 +90,7 @@ class CascadeExecutor:
         prompt_loader: PromptLoader | None = None,
         rag_bridge=None,
         budget_tracker: BudgetTracker | None = None,
+        cicd_hook: CICDHook | None = None,
     ):
         if synthesizer_provider is provider:
             raise ValueError(
@@ -93,6 +105,10 @@ class CascadeExecutor:
         )
         self.rag_bridge = rag_bridge
         self._budget = budget_tracker
+        # 🆕 A1-A6 — Hook CI/CD déterministe appliqué après chaque synthèse
+        # et avant le verdict de l'arbitre. Ne JAMAIS déléguer au LLM une
+        # vérification qu'un outil déterministe peut faire.
+        self._cicd = cicd_hook or CICDHook()
 
     def init_state(
         self,
@@ -491,6 +507,22 @@ class CascadeExecutor:
                 if verbose:
                     print("  Synthese orientee objectif -- OK")
 
+                # 🆕 CICD — vérification déterministe des artefacts produits
+                # (A1-A6 du cahier sécurité). On ne bloque PAS la cascade sur
+                # un échec : les artefacts sont préservés tels quels, on
+                # signale juste la non-conformité dans le journal.
+                if state.artifacts:
+                    cicd_result = self._run_cicd_checks(
+                        state.artifacts, journal,
+                    )
+                    if not cicd_result.passed:
+                        logger.warning(
+                            "cicd_artifacts_non_compliant iteration=%d "
+                            "failures=%d action=continue_with_artifacts",
+                            iteration,
+                            len(cicd_result.failures),
+                        )
+
                 # 🆕 DRIFT — STOP anticipé si dérive critique (section 6.1 + 11.3)
                 if synthesis_result.drift_status.value == "critical":
                     state.status = "forced_stop"
@@ -711,6 +743,40 @@ class CascadeExecutor:
             constraints=constraints,
             artifacts=artifacts,
         )
+
+    def _run_cicd_checks(
+        self,
+        artifacts: list,
+        journal: AuditJournal,
+    ) -> DeterministicCheckResult:
+        """Vérifie les artefacts via le hook CI/CD déterministe.
+
+        La cascade unique n'a pas de contrat d'interface explicite (elle
+        n'est pas dans un multi-cascade). On crée un contrat interne
+        permissif qui accepte tout type d'artefact : c'est le hook qui
+        décide quels types il sait vérifier.
+        """
+        if not artifacts:
+            return DeterministicCheckResult(passed=True)
+
+        contract = InterfaceContract(
+            contract_id=f"cicd-{uuid.uuid4().hex[:6]}",
+            producer_module="cascade",
+            consumer_module="cascade",
+            output_description="auto-detect",
+            input_description="auto-detect",
+            exchange_format="auto",
+        )
+        result = self._cicd.run_deterministic_checks(contract, list(artifacts))
+
+        # Trace l'événement dans le journal pour auditabilité.
+        journal.record_event(
+            "cicd_checks",
+            passed=result.passed,
+            artifacts=len(artifacts),
+            failures=len(result.failures),
+        )
+        return result
 
     def _parse_verdict(self, text: str) -> Verdict:
         """Valide l'objet JSON terminal conforme au schéma Verdict."""
