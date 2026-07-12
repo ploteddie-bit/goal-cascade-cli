@@ -40,6 +40,7 @@ class ProvidersConfig(BaseModel):
     resolved_role_mapping: dict[str, str] = Field(default_factory=dict)
     resolved_synthesizer: str = ""
     degraded: bool = False
+    diversity_failure: bool = False
     adaptations: list[ProviderAdaptation] = Field(default_factory=list)
 
     @model_validator(mode="after")
@@ -128,6 +129,32 @@ class ProvidersConfig(BaseModel):
                 )
             logger.warning("Diversité réduite : mêmes familles détectées. %s", details)
 
+        # Échec absolu de diversité : tous les rôles sur le même
+        # provider/famille (typiquement un seul provider enabled).
+        # Cela viole le Pilier 1 quelle que soit la valeur de
+        # require_diversity, donc on refuse au démarrage de la CLI.
+        unique_families = {
+            PROVIDER_FAMILIES.get(name, name)
+            for name in all_assigned.values()
+        }
+        diversity_failure = (
+            len(unique_families) == 1
+            and "mock" not in unique_families
+        )
+        if diversity_failure:
+            degraded = True
+            family = next(iter(unique_families))
+            details = f"{family}: {', '.join(all_assigned.keys())}"
+            if self.require_diversity:
+                raise ValueError(
+                    "require_diversity=true : tous les rôles sont assignés "
+                    f"à la même famille. {details}"
+                )
+            logger.warning(
+                "Diversité nulle : tous les rôles dans la même famille. %s",
+                details,
+            )
+
         if self.require_diversity and degraded:
             raise ValueError(
                 "require_diversity=true interdit le mode dégradé : "
@@ -146,6 +173,7 @@ class ProvidersConfig(BaseModel):
         self.resolved_role_mapping = resolved
         self.resolved_synthesizer = resolved_synthesizer
         self.degraded = degraded
+        self.diversity_failure = diversity_failure
         self.adaptations = adaptations
         return self
 

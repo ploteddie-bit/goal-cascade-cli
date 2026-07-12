@@ -230,6 +230,18 @@ def run(
             raise typer.Exit(1) from exc
         _print_config_summary(candidate_config_path, goal_config.providers)
 
+        # Pilier 1 : refuser de démarrer si tous les rôles sont assignés
+        # au même provider/famille. La configuration unitaire peut accepter
+        # ce mode (tests), mais la CLI l'interdit explicitement.
+        if goal_config.providers.diversity_failure:
+            console.print(
+                "[bold red]❌ Diversité multi-provider insuffisante : "
+                "tous les rôles sont assignés à la même famille. "
+                "Activez au moins deux providers de familles différentes "
+                "dans [providers].enabled.[/bold red]"
+            )
+            raise typer.Exit(1)
+
         # Les providers Kimi exigent un modele explicite pour le synthetiseur
         # (meme exigence que le mode legacy).
         if (

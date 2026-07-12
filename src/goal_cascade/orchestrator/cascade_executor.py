@@ -305,7 +305,21 @@ class CascadeExecutor:
 
             # Iteration 4 (Arbitre) : parser le verdict
             if role == IterationRole.ARBITER:
-                verdict = self._parse_verdict(response.text)
+                try:
+                    verdict = self._parse_verdict(response.text)
+                except ValueError as exc:
+                    # Doute profite au STOP : un verdict non parsable
+                    # bloque la cascade proprement plutôt que de la faire
+                    # échouer avec un status "failed".
+                    journal.record_event(
+                        "verdict_parse_failed",
+                        error=redact_sensitive(str(exc)),
+                        action="default_to_STOP",
+                    )
+                    verdict = Verdict(
+                        decision="STOP",
+                        justification="Verdict non parsable, STOP par défaut",
+                    )
                 state.final_verdict = verdict
                 if verdict.decision == "STOP":
                     state.status = "stopped"
