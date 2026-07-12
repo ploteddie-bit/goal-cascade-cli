@@ -75,7 +75,9 @@ class InterfaceChecker:
         ]
 
         for contract in relevant:
-            # Temps 1 : déterministe
+            # Temps 1 : déterministe — toujours avant toute phase LLM (A5).
+            # Si le formel échoue, on retourne immédiatement sans déléguer
+            # au LLM une vérification qu'un outil déterministe peut faire.
             det_result = self._run_deterministic_checks(contract, module_states)
             for det_fail in det_result.failures:
                 all_failures.append(
@@ -87,10 +89,16 @@ class InterfaceChecker:
                     )
                 )
 
+            if all_failures:
+                return CheckResult(
+                    passed=False,
+                    failures=all_failures,
+                )
+
             # Temps 2 : LLM (placeholder v1)
             # TODO(v2) : invoquer le LLM pour vérifier la cohérence sémantique
             #   entre producer et consumer (format, invariants, error_cases).
-            #   Non implémenté en v1 — aucune vérification sémantique ajoutée.
+            #   Ne JAMAIS être appelé si la phase déterministe a échoué.
 
         return CheckResult(
             passed=len(all_failures) == 0,
