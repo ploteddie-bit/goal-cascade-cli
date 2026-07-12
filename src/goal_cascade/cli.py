@@ -1436,6 +1436,19 @@ def cascade_run(
     for i, batch in enumerate(graph.parallel_batches()):
         console.print(f"  Batch {i+1} : {batch}")
 
+    # Charger la config pour le budget tracker global du multi-cascade.
+    try:
+        goal_config = load_goal_config()
+    except Exception:
+        goal_config = None
+
+    budget_tracker = None
+    if goal_config is not None:
+        budget_tracker = BudgetTracker(
+            config=goal_config.budget,
+            daily_total_path=RUNS_DIR.parent / "budget_daily.json",
+        )
+
     # Construire l'exécuteur avec MockProvider comme fallback sûr
     provider = MockProvider()
     synthesizer_provider = MockProvider()
@@ -1447,6 +1460,7 @@ def cascade_run(
     multi_executor = MultiCascadeExecutor(
         module_graph=graph,
         cascade_executor=cascade_executor,
+        budget_tracker=budget_tracker,
     )
 
     try:

@@ -4,14 +4,28 @@ Exécute un graphe de modules par batches topologiques, vérifie les
 contrats d'interface entre producteur et consommateur, puis lance
 une cascade d'intégration finale.
 """
-
 from __future__ import annotations
 
 import uuid
 from dataclasses import dataclass, field
+from typing import Any
 
-from goal_cascade.multicascade.interface_checker import InterfaceChecker
+try:
+    import structlog
+
+    logger: Any = structlog.get_logger(__name__)
+except ImportError:
+    import logging
+
+    logger = logging.getLogger(__name__)
+
+from goal_cascade.multicascade.interface_checker import (
+    CheckResult,
+    InterfaceChecker,
+)
 from goal_cascade.multicascade.module_graph import ModuleGraph
+from goal_cascade.orchestrator import state_manager
+from goal_cascade.orchestrator.budget_tracker import BudgetExceeded, BudgetTracker
 from goal_cascade.orchestrator.cascade_executor import CascadeExecutor
 from goal_cascade.schemas.models import (
     CascadeState,
@@ -45,6 +59,18 @@ class IntegrationFailedError(Exception):
         super().__init__(f"Intégration en échec : {summary}")
 
 
+class InterfaceViolationError(Exception):
+    """Un contrat d'interface entre modules est violé."""
+
+    def __init__(self, module_id: str, check_result: CheckResult) -> None:
+        self.module_id = module_id
+        self.check_result = check_result
+        failures = "; ".join(
+            f"{f.artifact_type} ({f.checker}): {f.error}" for f in check_result.failures
+        )
+        super().__init__(f"Interface invalide pour '{module_id}' : {failures}")
+
+
 # ------------------------------------------------------------------
 # Exécuteur principal
 # ------------------------------------------------------------------
@@ -57,16 +83,27 @@ class MultiCascadeExecutor:
     Exécute chaque module dans l'ordre topologique (par batches
     parallèles quand les dépendances le permettent), vérifie les
     contrats d'interface, puis lance une cascade d'intégration.
+
+    Args:
+        module_graph: Graphe acyclique des modules et de leurs contrats.
+        cascade_executor: Exécuteur de cascade individuelle.
+        interface_checker: Vérificateur de contrats d'interface.
+        budget_tracker: Kill switch budgétaire global pour l'ensemble
+            du multi-cascade. Si fourni, le budget est vérifié avant
+            chaque module et avant l'intégration.
     """
 
     module_graph: ModuleGraph
     cascade_executor: CascadeExecutor
-    interface_checker: InterfaceChecker
+    interface_checker: InterfaceChecker = field(default_factory=InterfaceChecker)
+    budget_tracker: BudgetTracker | None = None
 
     # Résultats cumulés (peuplés après run_all)
     _results: dict[str, CascadeState] = field(
         default_factory=dict, init=False, repr=False
     )
+    # Coût total accumulé par tous les modules exécutés
+    _total_cost: float = field(default=0.0, init=False, repr=False)
 
     # ------------------------------------------------------------------
     # Exécution complète
@@ -85,13 +122,36 @@ class MultiCascadeExecutor:
             Dictionnaire {module_id: CascadeState final du module}.
 
         Raises:
-            ModuleFailedError: si un module termine sans verdict STOP.
+            nx.HasACycle: si le graphe contient un cycle (C1).
+            BudgetExceeded: si le budget global est dépassé (C2).
+            ModuleFailedError: si un module termine sans verdict STOP (C3).
+            InterfaceViolationError: si un contrat d'interface est violé (C6).
         """
         self._results.clear()
+        self._total_cost = 0.0
+
+        # C1 : validation acyclique explicite avant toute exécution.
+        self.module_graph.validate_acyclic()
         batches = self.module_graph.parallel_batches()
+        logger.info(
+            "multi_cascade_start modules=%d batches=%d",
+            len(self.module_graph._dag.nodes),
+            len(batches),
+        )
 
         for batch_index, batch in enumerate(batches):
+            logger.info(
+                "multi_cascade_batch_start batch=%d/%d modules=%s",
+                batch_index + 1,
+                len(batches),
+                batch,
+            )
+
             for module_id in batch:
+                # C2 : vérification budgétaire avant chaque module.
+                if self.budget_tracker is not None:
+                    self.budget_tracker.check_budget(module_id, self._total_cost)
+
                 spec = self._get_spec(module_id)
                 state = self._run_single_module(
                     module_id=module_id,
@@ -100,15 +160,27 @@ class MultiCascadeExecutor:
                 )
                 self._results[module_id] = state
 
-                # Vérifier les contrats d'interface avec les producteurs
-                self._check_interfaces(module_id, state)
+                # C2 : enregistrement du coût du module dans le tracker global.
+                if self.budget_tracker is not None:
+                    self.budget_tracker.record(state.accumulated_cost)
+                    self._total_cost += state.accumulated_cost
 
+                # C3 : arrêt propre sur échec avec checkpoint.
                 if state.status == "failed" or (
                     state.final_verdict is not None
                     and state.final_verdict.decision == "CONTINUE"
                 ):
+                    state_manager.save_state(state)
                     raise ModuleFailedError(module_id, state)
 
+            # C6 : vérification des contrats d'interface APRÈS chaque batch.
+            self._check_batch_interfaces(batch)
+
+        logger.info(
+            "multi_cascade_all_modules_done total=%d cost=%.4f",
+            len(self._results),
+            self._total_cost,
+        )
         return dict(self._results)
 
     # ------------------------------------------------------------------
@@ -134,6 +206,8 @@ class MultiCascadeExecutor:
             CascadeState de l'intégration finale.
 
         Raises:
+            ValueError: si aucun résultat de module n'est disponible.
+            BudgetExceeded: si le budget global est dépassé avant l'intégration.
             IntegrationFailedError: si l'intégration échoue.
         """
         results = module_results if module_results is not None else self._results
@@ -143,10 +217,15 @@ class MultiCascadeExecutor:
                 "Appelez run_all() avant run_integration()."
             )
 
+        # C2 : vérification budgétaire avant la cascade d'intégration.
+        if self.budget_tracker is not None:
+            self.budget_tracker.check_budget("integration", self._total_cost)
+
         integration_objective = self._build_integration_objective(results)
         integration_spec = self._build_integration_spec(results)
 
         run_id = f"integration-{uuid.uuid4().hex[:8]}"
+        # C4 : limite de 5 itérations pour l'intégration.
         integration_state = CascadeState(
             run_id=run_id,
             objective=integration_objective,
@@ -160,73 +239,27 @@ class MultiCascadeExecutor:
             verbose=verbose,
         )
 
+        # C2 : enregistrement du coût d'intégration.
+        if self.budget_tracker is not None:
+            self.budget_tracker.record(final_state.accumulated_cost)
+            self._total_cost += final_state.accumulated_cost
+
         if final_state.status == "failed" or (
             final_state.final_verdict is not None
             and final_state.final_verdict.decision == "CONTINUE"
         ):
             raise IntegrationFailedError(final_state)
 
+        logger.info(
+            "multi_cascade_integration_done iterations=%d cost=%.4f",
+            final_state.current_iteration,
+            final_state.accumulated_cost,
+        )
         return final_state
 
     # ------------------------------------------------------------------
     # Méthodes internes
     # ------------------------------------------------------------------
-
-    def _get_spec(self, module_id: str) -> FrozenSpec:
-        """Récupère la FrozenSpec d'un module depuis le graphe."""
-        contracts = self.module_graph.get_contracts_for_module(module_id)
-        # On récupère la spec directement depuis le graphe interne
-        # via le serialisation plan (le module_graph ne expose pas
-        # directement get_spec, mais to_plan_dict le contient).
-        plan = self.module_graph.to_plan_dict()
-        for entry in plan.get("modules", []):
-            if entry["module_id"] == module_id:
-                return FrozenSpec(**entry["spec"])
-        raise KeyError(f"FrozenSpec introuvable pour le module '{module_id}'.")
-
-    def _run_single_module(
-        self,
-        module_id: str,
-        spec: FrozenSpec,
-        verbose: bool,
-    ) -> CascadeState:
-        """Lance une cascade unique pour un module."""
-        run_id = f"{module_id}-{uuid.uuid4().hex[:8]}"
-        state = CascadeState(
-            run_id=run_id,
-            objective=spec.objective,
-            max_iterations=5,
-        )
-
-        constraints = spec.model_dump_json()
-        return self.cascade_executor.run(
-            state=state,
-            audience=module_id,
-            constraints=f"FrozenSpec: {constraints}",
-            verbose=verbose,
-        )
-
-    def _check_interfaces(
-        self,
-        module_id: str,
-        state: CascadeState,
-    ) -> None:
-        """Vérifie les contrats d'interface où module_id est consommateur."""
-        contracts = self.module_graph.get_contracts_for_module(module_id)
-        for contract in contracts:
-            if contract.consumer_module != module_id:
-                continue
-            producer_id = contract.producer_module
-            producer_state = self._results.get(producer_id)
-            if producer_state is None:
-                # Le producteur n'a pas encore été exécuté (ne devrait
-                # pas arriver dans un ordre topologique valide).
-                continue
-            self.interface_checker.check(
-                contract=contract,
-                producer_state=producer_state,
-                consumer_state=state,
-            )
 
     def _build_integration_objective(
         self,
@@ -280,3 +313,71 @@ class MultiCascadeExecutor:
             objective="Valider l'intégration de tous les modules",
             invariants=aggregated_invariants,
         )
+
+    def _get_spec(self, module_id: str) -> FrozenSpec:
+        """Récupère la FrozenSpec d'un module depuis le graphe."""
+        plan = self.module_graph.to_plan_dict()
+        for entry in plan.get("modules", []):
+            if entry["module_id"] == module_id:
+                return FrozenSpec(**entry["spec"])
+        raise KeyError(f"FrozenSpec introuvable pour le module '{module_id}'.")
+
+    def _run_single_module(
+        self,
+        module_id: str,
+        spec: FrozenSpec,
+        verbose: bool,
+    ) -> CascadeState:
+        """Lance une cascade unique pour un module."""
+        run_id = f"{module_id}-{uuid.uuid4().hex[:8]}"
+        state = CascadeState(
+            run_id=run_id,
+            objective=spec.objective,
+            max_iterations=5,
+        )
+
+        constraints = spec.model_dump_json()
+        return self.cascade_executor.run(
+            state=state,
+            audience=module_id,
+            constraints=f"FrozenSpec: {constraints}",
+            verbose=verbose,
+        )
+
+    def _check_batch_interfaces(self, batch: list[str]) -> None:
+        """Vérifie les contrats d'interface après qu'un batch est terminé (C6).
+
+        Pour chaque module du batch, on vérifie les contrats où il est
+        impliqué (producteur ou consommateur) en utilisant les états
+        déjà accumulés dans ``self._results``.
+
+        Args:
+            batch: Liste des module_ids du batch terminé.
+
+        Raises:
+            InterfaceViolationError: si un contrat est formellement invalide.
+        """
+        for module_id in batch:
+            contracts = self.module_graph.get_contracts_for_module(module_id)
+            if not contracts:
+                continue
+
+            result = self.interface_checker.check(
+                contracts=contracts,
+                module_states=self._results,
+                current_module_id=module_id,
+            )
+
+            if not result.passed:
+                logger.error(
+                    "interface_check_failed module=%s failures=%d",
+                    module_id,
+                    len(result.failures),
+                )
+                raise InterfaceViolationError(module_id, result)
+
+            logger.info(
+                "interface_check_passed module=%s contracts=%d",
+                module_id,
+                len(contracts),
+            )
