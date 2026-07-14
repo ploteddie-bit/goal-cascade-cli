@@ -27,6 +27,10 @@ from .config import DEFAULT_CONFIG_PATH, ProvidersConfig, load_goal_config
 from .audit_journal import redact_sensitive
 from .orchestrator.budget_tracker import BudgetConfig, BudgetTracker
 from .orchestrator.cascade_executor import CascadeExecutor
+from .orchestrator.execution_context import (
+    ExecutionContext,
+    build_execution_context,
+)
 from .orchestrator.state_manager import RUNS_DIR, list_runs, load_state
 from .providers.base import BaseProvider
 from .providers.kimi_command import KimiBackend, KimiCommandProvider
@@ -257,27 +261,12 @@ def run(
                 param_hint="--synthesizer-model",
             )
 
-        provider_names = set(goal_config.providers.resolved_role_mapping.values())
-        providers_by_name = {
-            provider_name: _build_provider(provider_name, config=goal_config)
-            for provider_name in provider_names
-        }
-        selected_provider = RoleMappedProvider(
-            providers_by_name=providers_by_name,
-            role_mapping=goal_config.providers.resolved_role_mapping,
-        )
-        selected_synthesizer_provider = _build_provider(
-            goal_config.providers.resolved_synthesizer,
-            synthesizer_model=synthesizer_model,
-            config=goal_config,
-        )
+        ctx = build_execution_context(goal_config, synthesizer_model=synthesizer_model)
+        selected_provider = ctx.provider
+        selected_synthesizer_provider = ctx.synthesizer_provider
+        budget_tracker = ctx.budget_tracker
         provider_label = "Mapping TOML adaptatif"
         synthesizer_label = goal_config.providers.resolved_synthesizer
-        # Activer le kill switch budgetaire si la section [budget] est definie.
-        budget_tracker = BudgetTracker(
-            config=goal_config.budget,
-            daily_total_path=RUNS_DIR.parent / "budget_daily.json",
-        )
     elif provider == ProviderChoice.MOCK:
         # Selection du provider. Chaque appel Kimi omet volontairement les
         # options de reprise : une iteration = une nouvelle session.
@@ -1342,33 +1331,22 @@ def resume(
                 param_hint="--synthesizer-model",
             )
 
-        provider_names = set(goal_config.providers.resolved_role_mapping.values())
-        providers_by_name = {
-            provider_name: _build_provider(provider_name, config=goal_config)
-            for provider_name in provider_names
-        }
-        selected_provider = RoleMappedProvider(
-            providers_by_name=providers_by_name,
-            role_mapping=goal_config.providers.resolved_role_mapping,
-        )
-        selected_synthesizer_provider = _build_provider(
-            goal_config.providers.resolved_synthesizer,
-            synthesizer_model=synthesizer_model,
-            config=goal_config,
-        )
-        budget_tracker = BudgetTracker(
-            config=goal_config.budget,
-            daily_total_path=RUNS_DIR.parent / "budget_daily.json",
-        )
+        ctx = build_execution_context(goal_config, synthesizer_model=synthesizer_model)
+        selected_provider = ctx.provider
+        selected_synthesizer_provider = ctx.synthesizer_provider
+        budget_tracker = ctx.budget_tracker
     else:
         # Fallback Mock (comportement legacy)
         selected_provider = MockProvider()
         selected_synthesizer_provider = MockProvider()
 
-    # Créer un executor avec les vrais providers
+    # Créer un executor avec les vrais providers.
+    # rag_bridge branché (comme run()) : sans lui, resume() ne pourrait pas
+    # synchroniser le run repris vers le RAG.
     executor = CascadeExecutor(
         provider=selected_provider,
         synthesizer_provider=selected_synthesizer_provider,
+        rag_bridge=RagBridge(),
         budget_tracker=budget_tracker,
     )
 
@@ -1464,12 +1442,29 @@ def resume(
 @app.command(name="cascade-run")
 def cascade_run(
     plan_path: str = typer.Argument(..., help="Chemin vers le fichier plan.json"),
+    config: Path | None = typer.Option(
+        None,
+        "--config",
+        help=(
+            "Chemin du fichier config TOML. "
+            f"Par défaut : {DEFAULT_CONFIG_PATH} si présent."
+        ),
+    ),
+    synthesizer_model: str | None = typer.Option(
+        None,
+        "--synthesizer-model",
+        envvar="GOAL_SYNTHESIZER_MODEL",
+        help="Modèle small/cheap dédié aux synthèses (obligatoire avec Kimi)",
+    ),
     verbose: bool = typer.Option(False, "--verbose", "-v", help="Logs détaillés"),
 ) -> None:
     """Exécute toutes les cascades d'un plan.json.
 
     Multi-cascade : exécuteur topologique + intégration finale.
     """
+    if synthesizer_model is not None:
+        synthesizer_model = synthesizer_model.strip()
+
     import json as _json
     from .multicascade.module_graph import ModuleGraph
     from .multicascade.multi_executor import MultiCascadeExecutor
@@ -1494,25 +1489,67 @@ def cascade_run(
     for i, batch in enumerate(graph.parallel_batches()):
         console.print(f"  Batch {i+1} : {batch}")
 
-    # Charger la config pour le budget tracker global du multi-cascade.
-    try:
-        goal_config = load_goal_config()
-    except Exception:
-        goal_config = None
+    # --- Construction des providers et du budget tracker (même logique que run/resume) ---
+    # NOTE (commit 1) : suppression du hardcode MockProvider. Avant ce patch,
+    # cascade-run propageait MockProvider à CHAQUE module via
+    # MultiCascadeExecutor.run_all() → cascade_executor.run(...). Tout plan
+    # multi-cascade s'exécutait en mock, indépendamment de la config TOML.
+    candidate_config_path = config or DEFAULT_CONFIG_PATH
+    should_load_config = config is not None or candidate_config_path.exists()
+    budget_tracker: BudgetTracker | None = None
+    selected_provider: BaseProvider
+    selected_synthesizer_provider: BaseProvider
+    goal_config: "GoalConfig | None" = None
 
-    budget_tracker = None
-    if goal_config is not None:
-        budget_tracker = BudgetTracker(
-            config=goal_config.budget,
-            daily_total_path=RUNS_DIR.parent / "budget_daily.json",
+    if should_load_config:
+        if config is not None and not candidate_config_path.exists():
+            console.print(
+                f"[bold red]Config introuvable : "
+                f"{candidate_config_path.expanduser()}[/bold red]"
+            )
+            raise typer.Exit(2)
+        try:
+            goal_config = load_goal_config(candidate_config_path)
+        except (ValidationError, ValueError) as exc:
+            console.print(
+                f"[bold red]Config invalide ({candidate_config_path}): "
+                f"{exc}[/bold red]"
+            )
+            raise typer.Exit(1) from exc
+        _print_config_summary(candidate_config_path, goal_config.providers)
+
+        # Validation Kimi : --synthesizer-model obligatoire avec kimi-cli/kimi-code
+        if (
+            goal_config.providers.resolved_synthesizer in ("kimi-cli", "kimi-code")
+            and not synthesizer_model
+        ):
+            typer.echo(
+                "Erreur : --synthesizer-model est requis avec un provider Kimi",
+                err=True,
+            )
+            raise typer.BadParameter(
+                "requis avec un provider Kimi",
+                param_hint="--synthesizer-model",
+            )
+
+        ctx = build_execution_context(goal_config, synthesizer_model=synthesizer_model)
+        selected_provider = ctx.provider
+        selected_synthesizer_provider = ctx.synthesizer_provider
+        budget_tracker = ctx.budget_tracker
+    else:
+        # Fallback Mock (comportement legacy sans config)
+        selected_provider = MockProvider()
+        selected_synthesizer_provider = MockProvider()
+        console.print(
+            "[yellow]⚠ Aucune config chargée : cascade exécutée avec MockProvider. "
+            "Spécifiez --config PATH pour utiliser les vrais providers.[/yellow]"
         )
 
-    # Construire l'exécuteur avec MockProvider comme fallback sûr
-    provider = MockProvider()
-    synthesizer_provider = MockProvider()
+    # Construire l'exécuteur avec les vrais providers (fallback Mock géré ci-dessus)
     cascade_executor = CascadeExecutor(
-        provider=provider,
-        synthesizer_provider=synthesizer_provider,
+        provider=selected_provider,
+        synthesizer_provider=selected_synthesizer_provider,
+        rag_bridge=RagBridge(),
     )
 
     multi_executor = MultiCascadeExecutor(

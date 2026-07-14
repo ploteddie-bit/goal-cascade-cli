@@ -19,9 +19,12 @@ import logging
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from pydantic import ValidationError
+
+if TYPE_CHECKING:
+    from ..config import GoalConfig
 
 try:
     import structlog
@@ -160,37 +163,51 @@ class CascadeExecutor:
             journal.record_error(exc)
             raise
         finally:
-            state_manager.save_state(state)
-            duration_s = (datetime.now() - start_time).total_seconds()
-            metadata = {
-                "objective": state.objective,
-                "variant": state.variant.value,
-                "provider": self.provider.name,
-                "synthesizer_provider": self.synthesizer_provider.name,
-                "status": state.status,
-                "iterations": state.current_iteration,
-                "verdict": (
-                    state.final_verdict.decision if state.final_verdict else "absent"
-                ),
-                "last_error": state.last_error or "aucune",
-            }
-            journal.finalize(metadata)
+            self._finalize_run(state, journal, start_time)
+
+        return state
+
+    def _finalize_run(
+        self,
+        state: CascadeState,
+        journal: AuditJournal,
+        start_time: datetime,
+    ) -> None:
+        """Finalise un run : état, métadonnées, reçu de coût et sync RAG.
+
+        Partagé entre ``run()`` et ``resume()`` pour garantir que les deux
+        chemins produisent exactement les mêmes artefacts de transparence
+        (métadonnées du journal, receipt.json et preuve RAG).
+        """
+        state_manager.save_state(state)
+        duration_s = (datetime.now() - start_time).total_seconds()
+        metadata = {
+            "objective": state.objective,
+            "variant": state.variant.value,
+            "provider": self.provider.name,
+            "synthesizer_provider": self.synthesizer_provider.name,
+            "status": state.status,
+            "iterations": state.current_iteration,
+            "verdict": (
+                state.final_verdict.decision if state.final_verdict else "absent"
+            ),
+            "last_error": state.last_error or "aucune",
+        }
+        journal.finalize(metadata)
+        try:
+            receipt = self.build_receipt(state, duration_s)
+            receipt_path = state_manager.save_receipt(state.run_id, receipt)
+            journal.record_file("receipt_saved", receipt_path)
+            journal.refresh_timeline()
+        except Exception as exc:
+            journal.record_error(exc)
+            journal.refresh_timeline()
+        if self.rag_bridge is not None:
             try:
-                receipt = self.build_receipt(state, duration_s)
-                receipt_path = state_manager.save_receipt(state.run_id, receipt)
-                journal.record_file("receipt_saved", receipt_path)
-                journal.refresh_timeline()
+                self.rag_bridge.sync_run(state.run_id, journal=journal)
             except Exception as exc:
                 journal.record_error(exc)
                 journal.refresh_timeline()
-            if self.rag_bridge is not None:
-                try:
-                    self.rag_bridge.sync_run(state.run_id, journal=journal)
-                except Exception as exc:
-                    journal.record_error(exc)
-                    journal.refresh_timeline()
-
-        return state
 
     def _run_loop(
         self,
@@ -656,6 +673,7 @@ class CascadeExecutor:
     def resume(
         self,
         run_id: str,
+        config: GoalConfig | None = None,
         audience: str = "",
         constraints: str = "",
         verbose: bool = True,
@@ -663,10 +681,41 @@ class CascadeExecutor:
     ) -> CascadeState:
         """Reprend une cascade interrompue depuis le dernier checkpoint SQLite.
 
-        Charge le checkpoint pour le run_id donné et ré-invocque le graphe
-        LangGraph pour continuer l'exécution.
+        Args:
+            run_id: ID du run à reprendre.
+            config: Si fourni, reconstruit les providers depuis cette config
+                au lieu de réutiliser ceux du constructeur.
+            audience: Public cible.
+            constraints: Contraintes format/longueur.
+            verbose: Journalisation détaillée.
+            no_synth: Désactiver la synthèse orientée objectif.
+
+        Raises:
+            TypeError: Si CascadeExecutor est frozen/slots (mutation impossible).
+            FileNotFoundError: Si aucun checkpoint valide n'existe pour run_id.
         """
         from .cascade_graph import build_cascade_graph, compile_with_sqlite
+
+        # Reconstruction des providers depuis config si fournie.
+        if config is not None:
+            from .execution_context import build_execution_context
+
+            if hasattr(self, "__slots__") or getattr(
+                type(self), "__frozen__", False
+            ):
+                raise TypeError(
+                    "CascadeExecutor est frozen/slots — impossible de "
+                    "reconstruire les providers dans resume(). "
+                    "Retirez @dataclass(frozen=True) ou __slots__."
+                )
+
+            ctx = build_execution_context(config)
+            self.provider = ctx.provider
+            self.synthesizer_provider = ctx.synthesizer_provider
+            self.synthesizer = Synthesizer(
+                self.synthesizer_provider, self.prompt_loader
+            )
+            self._budget = ctx.budget_tracker
 
         run_dir = state_manager.get_run_dir(run_id)
         checkpoint_dir = run_dir / ".checkpoints"
@@ -684,9 +733,9 @@ class CascadeExecutor:
         graph = build_cascade_graph(dummy_node)
         app, checkpointer = compile_with_sqlite(graph, checkpoint_path)
 
-        config = {"configurable": {"thread_id": run_id}}
+        config_dict = {"configurable": {"thread_id": run_id}}
 
-        saved = app.get_state(config)
+        saved = app.get_state(config_dict)
 
         if not saved or not saved.values:
             raise FileNotFoundError(
@@ -702,9 +751,35 @@ class CascadeExecutor:
 
         state = CascadeState(**cascade_dict)
         journal = AuditJournal(run_id)
+        start_time = datetime.now()
+        journal.record_event(
+            "resume_started",
+            objective=state.objective,
+            variant=state.variant.value,
+            provider=self.provider.name,
+            synthesizer_provider=self.synthesizer_provider.name,
+            no_synth=no_synth,
+        )
 
-        # Relancer avec le vrai graphe
-        return self._run_with_graph(state, audience, constraints, verbose, journal, no_synth=no_synth)
+        audience = redact_sensitive(audience)
+        constraints = redact_sensitive(constraints)
+
+        # Relancer avec le vrai graphe, puis finaliser comme run() :
+        # reçu de coût, métadonnées et sync RAG (angle mort corrigé).
+        try:
+            state = self._run_with_graph(
+                state, audience, constraints, verbose, journal, no_synth=no_synth
+            )
+        except Exception as exc:
+            state.status = "failed"
+            state.last_error = redact_sensitive(str(exc))
+            state_manager.save_state(state)
+            journal.record_error(exc)
+            raise
+        finally:
+            self._finalize_run(state, journal, start_time)
+
+        return state
 
     def _build_prompt(
         self,
