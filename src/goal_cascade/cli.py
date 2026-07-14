@@ -214,7 +214,7 @@ def run(
             goal_config = load_goal_config(candidate_config_path)
         except (ValidationError, ValueError) as exc:
             console.print(f"[bold red]Config invalide ({candidate_config_path}): {exc}[/bold red]")
-            raise typer.Exit(1) from exc
+            raise typer.Exit(1) from None
         _print_config_summary(candidate_config_path, goal_config.providers)
 
         # Pilier 1 : refuser de démarrer si tous les rôles sont assignés
@@ -352,7 +352,7 @@ def run(
         console.print(f"Trace complète : [cyan]{run_dir / 'timeline.md'}[/cyan]")
         console.print(f"Événements bruts : [cyan]{run_dir / 'events.jsonl'}[/cyan]")
         console.print(f"Statut RAG : [cyan]{run_dir / 'rag-status.json'}[/cyan]")
-        raise typer.Exit(1) from exc
+        raise typer.Exit(1) from None
 
     # Afficher le resultat
     console.print()
@@ -909,7 +909,7 @@ def rag_sync(
         path = RUNS_DIR / run_id / "rag-status.json"
         console.print(f"[bold red]Synchronisation RAG en échec : {exc}[/bold red]")
         console.print(f"Preuve locale : [cyan]{path}[/cyan]")
-        raise typer.Exit(1) from exc
+        raise typer.Exit(1) from None
     console.print("[bold green]Synchronisation RAG vérifiée.[/bold green]")
     console.print_json(data=result)
 
@@ -1033,7 +1033,7 @@ def cascade_plan(
             goal_config = load_goal_config(candidate_config_path)
         except (ValidationError, ValueError) as exc:
             console.print(f"[bold red]Config invalide ({candidate_config_path}): {exc}[/bold red]")
-            raise typer.Exit(1) from exc
+            raise typer.Exit(1) from None
         _print_config_summary(candidate_config_path, goal_config.providers)
 
         # Les providers Kimi exigent un modèle explicite
@@ -1078,7 +1078,7 @@ def cascade_plan(
         )
     except Exception as exc:
         console.print(f"[bold red]Erreur lors de la planification : {exc}[/bold red]")
-        raise typer.Exit(1) from exc
+        raise typer.Exit(1) from None
 
     # ── 5. Sauvegarder le plan en plan.json ──────────────────────
     output_path = output.expanduser().resolve()
@@ -1220,7 +1220,7 @@ def resume(
             goal_config = load_goal_config(candidate_config_path)
         except (ValidationError, ValueError) as exc:
             console.print(f"[bold red]Config invalide ({candidate_config_path}): {exc}[/bold red]")
-            raise typer.Exit(1) from exc
+            raise typer.Exit(1) from None
         _print_config_summary(candidate_config_path, goal_config.providers)
 
         if (
@@ -1312,10 +1312,10 @@ def resume(
         )
     except FileNotFoundError as exc:
         console.print(f"[bold red]{exc}[/bold red]")
-        raise typer.Exit(1) from exc
+        raise typer.Exit(1) from None
     except Exception as exc:
         console.print(f"[bold red]Erreur lors de la reprise : {exc}[/bold red]")
-        raise typer.Exit(1) from exc
+        raise typer.Exit(1) from None
 
     # Afficher le résultat
     console.print()
@@ -1379,7 +1379,7 @@ def cascade_run(
         graph = ModuleGraph.from_plan_file(plan_file)
     except Exception as exc:
         console.print(f"[red]Plan invalide : {exc}[/red]")
-        raise typer.Exit(1) from exc
+        raise typer.Exit(1) from None
 
     plan_data = _json.loads(plan_file.read_text(encoding="utf-8"))
     module_count = len(plan_data.get("modules", []))
@@ -1412,7 +1412,7 @@ def cascade_run(
             goal_config = load_goal_config(candidate_config_path)
         except (ValidationError, ValueError) as exc:
             console.print(f"[bold red]Config invalide ({candidate_config_path}): {exc}[/bold red]")
-            raise typer.Exit(1) from exc
+            raise typer.Exit(1) from None
         _print_config_summary(candidate_config_path, goal_config.providers)
 
         # Validation Kimi : --synthesizer-model obligatoire avec kimi-cli/kimi-code
@@ -1459,14 +1459,14 @@ def cascade_run(
         module_results = multi_executor.run_all()
     except Exception as exc:
         console.print(f"[red]Échec d'un module : {exc}[/red]")
-        raise typer.Exit(1) from exc
+        raise typer.Exit(1) from None
 
     console.print("\n[blue]Cascade d'intégration...[/blue]")
     try:
         integration_state = multi_executor.run_integration(module_results)
     except Exception as exc:
         console.print(f"[red]Intégration échouée : {exc}[/red]")
-        raise typer.Exit(1) from exc
+        raise typer.Exit(1) from None
 
     total_cost = sum(s.accumulated_cost for s in module_results.values())
     total_cost += integration_state.accumulated_cost
