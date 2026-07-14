@@ -101,6 +101,10 @@ class KimiCommandProvider(BaseProvider):
 
     def _command(self, prompt: str) -> list[str]:
         if self.backend == KimiBackend.CLI:
+            # SECURITY: --print auto-approuve tous les outils (shell, fichiers, etc.)
+            # sans confirmation utilisateur. Une injection de prompt pourrait exécuter
+            # des commandes arbitraires dans le HOME de l'utilisateur.
+            # Risque atténué par isolate_work_dir=True et SAFETY_PREFIX.
             command = [
                 self.executable,
                 "--print",

@@ -8,12 +8,34 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
-from enum import Enum
 from typing import Any
 
 from pydantic import BaseModel, Field
 
 from .base import BaseProvider, LLMResponse
+from .anthropic_cache import is_anthropic_sdk_available
+from .rate_limiter import (
+    Backend,
+    FALLBACK_CHAIN,
+    ProviderExhaustedError,
+    ProviderUnavailableError,
+    RateLimitConfig,
+    RateLimitError,
+    call_with_retry_and_fallback,
+)
+
+# Re-exports preserves pour retro-compatibilite avec cli.py et les tests.
+# Voir providers/rate_limiter.py pour les implementations reelles.
+__all__ = [
+    "Backend",
+    "FALLBACK_CHAIN",
+    "MirascopeProvider",
+    "ProviderExhaustedError",
+    "ProviderUnavailableError",
+    "RateLimitConfig",
+    "RateLimitError",
+    "TIER_MODEL_MAP",
+]
 
 try:
     import structlog
@@ -22,20 +44,15 @@ try:
 except ImportError:
     logger = logging.getLogger(__name__)
     logger.warning(
-        "structlog non installé. Logs dégradés. Installez avec: pip install goal-cascade[llm]"
+        "structlog non installé. Logs dégradés. "
+        "Installez avec: pip install goal-cascade[llm]"
     )
-
-
-class Backend(str, Enum):
-    ANTHROPIC = "anthropic"
-    OPENAI = "openai"
-    GOOGLE = "google"
 
 
 TIER_MODEL_MAP: dict[Backend, dict[str, str]] = {
     Backend.ANTHROPIC: {
-        "small": "claude-haiku-4-5",
-        "medium": "claude-sonnet-4-5",
+        "small": "claude-haiku-3-5",
+        "medium": "claude-sonnet-4",
         "large": "claude-opus-4",
         "xlarge": "claude-opus-4",
     },
@@ -46,19 +63,18 @@ TIER_MODEL_MAP: dict[Backend, dict[str, str]] = {
         "xlarge": "gpt-4o",
     },
     Backend.GOOGLE: {
-        # Seul gemini-3-flash-preview est accessible avec la clé de test.
-        # Les variantes "pro" et les suffixes raccourcis retournent 404.
-        "small": "gemini-3-flash-preview",
-        "medium": "gemini-3-flash-preview",
-        "large": "gemini-3-flash-preview",
-        "xlarge": "gemini-3-flash-preview",
+        "small": "gemini-2.0-flash",
+        "medium": "gemini-2.5-pro",
+        "large": "gemini-2.5-pro",
+        "xlarge": "gemini-2.5-pro",
     },
 }
 
 
 def _missing_llm_extra_message() -> str:
     return (
-        "mirascope requis pour les providers réels. Installez avec: pip install goal-cascade[llm]"
+        "mirascope requis pour les providers réels. "
+        "Installez avec: pip install goal-cascade[llm]"
     )
 
 
@@ -137,9 +153,10 @@ def _extract_mirascope_text(response: Any) -> str:
     return text
 
 
+# Prix par million de tokens (input/output) — dernière vérification : 2026-07-11
 ANTHROPIC_PRICES = {
-    "claude-haiku-4-5": (0.25 / 1_000_000, 1.25 / 1_000_000),
-    "claude-sonnet-4-5": (3.00 / 1_000_000, 15.00 / 1_000_000),
+    "claude-haiku-3-5": (0.80 / 1_000_000, 4.00 / 1_000_000),
+    "claude-sonnet-4": (3.00 / 1_000_000, 15.00 / 1_000_000),
     "claude-opus-4": (15.00 / 1_000_000, 75.00 / 1_000_000),
 }
 OPENAI_PRICES = {
@@ -147,7 +164,8 @@ OPENAI_PRICES = {
     "gpt-4o": (2.50 / 1_000_000, 10.00 / 1_000_000),
 }
 GOOGLE_PRICES = {
-    "gemini-3-flash-preview": (0.075 / 1_000_000, 0.30 / 1_000_000),
+    "gemini-2.0-flash": (0.10 / 1_000_000, 0.40 / 1_000_000),
+    "gemini-2.5-pro": (1.25 / 1_000_000, 10.00 / 1_000_000),
 }
 
 
@@ -162,45 +180,32 @@ def _estimate_cost_openai(model: str, usage: Any) -> float:
     if usage is None:
         return 0.0
     input_price, output_price = OPENAI_PRICES.get(model, (0.0, 0.0))
-    input_tokens = getattr(usage, "input_tokens", 0) or getattr(usage, "prompt_tokens", 0) or 0
+    input_tokens = (
+        getattr(usage, "input_tokens", 0)
+        or getattr(usage, "prompt_tokens", 0)
+        or 0
+    )
     output_tokens = (
-        getattr(usage, "output_tokens", 0) or getattr(usage, "completion_tokens", 0) or 0
+        getattr(usage, "output_tokens", 0)
+        or getattr(usage, "completion_tokens", 0)
+        or 0
     )
     return input_tokens * input_price + output_tokens * output_price
 
 
 def _estimate_cost_google(model: str, usage: Any) -> float:
     input_price, output_price = GOOGLE_PRICES.get(model, (0.0, 0.0))
-    input_tokens = getattr(usage, "input_tokens", 0) or getattr(usage, "prompt_token_count", 0) or 0
+    input_tokens = (
+        getattr(usage, "input_tokens", 0)
+        or getattr(usage, "prompt_token_count", 0)
+        or 0
+    )
     output_tokens = (
-        getattr(usage, "output_tokens", 0) or getattr(usage, "candidates_token_count", 0) or 0
+        getattr(usage, "output_tokens", 0)
+        or getattr(usage, "candidates_token_count", 0)
+        or 0
     )
     return input_tokens * input_price + output_tokens * output_price
-
-
-class RateLimitConfig(BaseModel):
-    max_retries: int = Field(default=3, ge=1, le=10)
-    initial_backoff_s: float = Field(default=1.0, gt=0)
-    backoff_multiplier: float = Field(default=2.0, gt=1)
-
-
-FALLBACK_CHAIN: dict[Backend, list[Backend]] = {
-    Backend.ANTHROPIC: [Backend.OPENAI, Backend.GOOGLE],
-    Backend.OPENAI: [Backend.ANTHROPIC, Backend.GOOGLE],
-    Backend.GOOGLE: [Backend.ANTHROPIC, Backend.OPENAI],
-}
-
-
-class RateLimitError(Exception):
-    """Le provider a retourné une limite de débit."""
-
-
-class ProviderUnavailableError(Exception):
-    """Le provider est indisponible ou retourne une erreur serveur."""
-
-
-class ProviderExhaustedError(Exception):
-    """Tous les providers disponibles ont échoué."""
 
 
 class MirascopeProvider(BaseProvider):
@@ -224,94 +229,19 @@ class MirascopeProvider(BaseProvider):
         try:
             asyncio.get_running_loop()
         except RuntimeError:
-            return asyncio.run(self._call_with_retry(prompt, role, tier))
+            return asyncio.run(
+                call_with_retry_and_fallback(
+                    backend_call=self._call_backend,
+                    backend=self._backend,
+                    prompt=prompt,
+                    role=role,
+                    tier=tier,
+                    rate_config=self._rate_config,
+                    available_backends=self._available_backends,
+                )
+            )
         raise RuntimeError(
             "MirascopeProvider.call() ne peut pas être appelé depuis une boucle async active"
-        )
-
-    async def _call_with_retry(self, prompt: str, role: str, tier: str) -> LLMResponse:
-        last_error: Exception | None = None
-        for attempt in range(self._rate_config.max_retries):
-            try:
-                response = await self._call_backend(self._backend, prompt, role, tier)
-                logger.info(
-                    "provider_call_success backend=%s role=%s tier=%s attempt=%d",
-                    self._backend.value,
-                    role,
-                    tier,
-                    attempt + 1,
-                )
-                return response
-            except RateLimitError as exc:
-                last_error = exc
-                if attempt < self._rate_config.max_retries - 1:
-                    wait = self._rate_config.initial_backoff_s * (
-                        self._rate_config.backoff_multiplier**attempt
-                    )
-                    logger.warning(
-                        "rate_limit_retry backend=%s role=%s tier=%s attempt=%d wait_s=%.3f",
-                        self._backend.value,
-                        role,
-                        tier,
-                        attempt + 1,
-                        wait,
-                    )
-                    await asyncio.sleep(wait)
-                else:
-                    logger.error(
-                        "rate_limit_exhausted backend=%s role=%s tier=%s max_retries=%d",
-                        self._backend.value,
-                        role,
-                        tier,
-                        self._rate_config.max_retries,
-                    )
-            except ProviderUnavailableError as exc:
-                last_error = exc
-                logger.error(
-                    "provider_unavailable backend=%s role=%s error=%s",
-                    self._backend.value,
-                    role,
-                    str(exc),
-                )
-                break
-        return await self._try_fallback(prompt, role, tier, last_error)
-
-    async def _try_fallback(
-        self,
-        prompt: str,
-        role: str,
-        tier: str,
-        original_error: Exception | None,
-    ) -> LLMResponse:
-        for fallback_backend in FALLBACK_CHAIN.get(self._backend, []):
-            if fallback_backend not in self._available_backends:
-                continue
-            try:
-                logger.warning(
-                    "provider_fallback from=%s to=%s role=%s tier=%s",
-                    self._backend.value,
-                    fallback_backend.value,
-                    role,
-                    tier,
-                )
-                response = await self._call_backend(fallback_backend, prompt, role, tier)
-                logger.info(
-                    "fallback_success backend=%s role=%s tier=%s",
-                    fallback_backend.value,
-                    role,
-                    tier,
-                )
-                return response
-            except Exception as exc:
-                logger.error(
-                    "fallback_failed backend=%s role=%s error=%s",
-                    fallback_backend.value,
-                    role,
-                    str(exc),
-                )
-        raise ProviderExhaustedError(
-            f"Tous les providers épuisés pour {self._backend.value}. "
-            f"Dernière erreur : {original_error}"
         )
 
     def _model_for_tier(self, backend: Backend, tier: str) -> str:
@@ -352,7 +282,9 @@ class MirascopeProvider(BaseProvider):
     async def _call_google(self, prompt: str, prompt_model: str) -> LLMResponse:
         return await self._call_mirascope_v2(Backend.GOOGLE, prompt, prompt_model)
 
-    async def _call_mirascope_v2(self, backend: Backend, prompt: str, model: str) -> LLMResponse:
+    async def _call_mirascope_v2(
+        self, backend: Backend, prompt: str, model: str
+    ) -> LLMResponse:
         """Appel Mirascope v2 unifié (anthropic/openai/google via `mirascope.llm.call`).
 
         Utilise la version synchrone de ``llm.call`` exécutée dans un thread
@@ -361,9 +293,26 @@ class MirascopeProvider(BaseProvider):
         successifs (le client HTTP sous-jacent garde une référence à la
         première boucle event loop).
 
-        Le prompt-caching Anthropic n'est pas activé : Mirascope v2 n'expose
-        pas ``cache_control`` via l'API publique ``mirascope.llm``.
+        Le prompt-caching Anthropic n'est pas encore active : Mirascope v2
+        n'expose pas ``cache_control`` via l'API publique ``mirascope.llm``.
+        Le module ``providers/anthropic_cache.py`` prepare l'infrastructure
+        (detection SDK, structure de messages avec cache_control.ephemeral,
+        degradation gracieuse). Quand mirascope v2 exposera cette option, le
+        bloc ci-dessous basculera vers ``build_cached_messages(...)``.
         """
+        if backend == Backend.ANTHROPIC and self._enable_cache:
+            sdk_ok = is_anthropic_sdk_available()
+            logger.info(
+                "cache_intent",
+                extra={
+                    "backend": backend.value,
+                    "enable_cache": self._enable_cache,
+                    "anthropic_sdk_available": sdk_ok,
+                    "applied": False,
+                    "reason": "mirascope_v2_no_cache_control_api",
+                },
+            )
+
         llm = _get_llm()
         model_id = _build_model_id(backend, model)
 
@@ -415,6 +364,7 @@ class MirascopeProvider(BaseProvider):
             excs = _get_mirascope_exceptions()
         except ImportError:
             return
+        names = {RateLimitError, ProviderUnavailableError}
         for name in (RateLimitError, ProviderUnavailableError, Exception):
             cls = getattr(excs, name.__name__, None)
             if cls is not None and isinstance(exc, cls):

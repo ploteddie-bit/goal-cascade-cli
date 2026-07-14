@@ -4,15 +4,25 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
 import re
 from dataclasses import dataclass
-from typing import Literal, cast
+from typing import Any
 
 from pydantic import ValidationError
 
 from ..prompts import PromptLoader
 from ..providers.base import BaseProvider, LLMResponse
 from ..schemas.models import GoalOrientedSynthesis, ImmutableArtifact
+from .drift_detector import DriftDetector, DriftStatus
+
+try:
+    import structlog
+
+    _logger: Any = structlog.get_logger(__name__)
+except ImportError:
+    _logger = logging.getLogger(__name__)
+
 
 CODE_BLOCK_RE = re.compile(
     r"```(?P<language>[\w.+-]*)\s*\n(?P<content>.*?)```",
@@ -33,14 +43,29 @@ class SynthesisResult:
     artifacts: list[ImmutableArtifact]
     response: LLMResponse
     prompt: str
+    # 🆕 DRIFT — champs ajoutés pour la détection de dérive cosinus
+    similarity_score: float | None = None
+    drift_status: DriftStatus = DriftStatus.NO_DATA
+    # 🆕 QUALITY — coverage de la synthèse vs sortie brute (S3-C)
+    coverage_score: float | None = None
 
 
 class Synthesizer:
     """Produit les quatre blocs de synthèse et conserve le code intact."""
 
-    def __init__(self, provider: BaseProvider, prompt_loader: PromptLoader):
+    def __init__(
+        self,
+        provider: BaseProvider,
+        prompt_loader: PromptLoader,
+        drift_detector: DriftDetector | None = None,
+    ):
         self.provider = provider
         self.prompt_loader = prompt_loader
+        # Pas de DriftDetector par defaut : on evite qu'une simple creation
+        # de Synthesizer declenche une connexion reseau. Le CascadeExecutor
+        # injecte explicitement un DriftDetector quand la detection de derive
+        # est activee.
+        self.drift_detector = drift_detector
 
     def process(
         self,
@@ -73,11 +98,49 @@ class Synthesizer:
             previous_artifacts or [],
             self._extract_artifacts(raw_output, iteration_from),
         )
+
+        # 🆕 DRIFT — Évaluer la similarité cosinus (section 5.3 + 11.3 du plan v2)
+        drift_status = DriftStatus.NO_DATA
+        similarity_score: float | None = None
+        if self.drift_detector is not None:
+            drift_status, similarity_score = self.drift_detector.evaluate(raw_output)
+
+        if drift_status == DriftStatus.CRITICAL:
+            _logger.warning(
+                "drift_critical_detected iteration=%d similarity=%.4f "
+                "action=forced_stop",
+                iteration_to, similarity_score or 0.0,
+            )
+        elif drift_status == DriftStatus.WARNING:
+            _logger.info(
+                "drift_warning iteration=%d similarity=%.4f "
+                "action=verify_new_content",
+                iteration_to, similarity_score or 0.0,
+            )
+        elif drift_status == DriftStatus.ERROR:
+            _logger.warning(
+                "drift_embedding_unavailable iteration=%d "
+                "action=continue_without_drift_check",
+                iteration_to,
+            )
+
+        # 🆕 QUALITY — Coverage de la synthèse vs sortie brute (S3-C)
+        coverage_score = self._compute_coverage(raw_output, synthesis)
+        if coverage_score is not None and coverage_score < 0.30:
+            _logger.warning(
+                "synthesis_low_coverage iteration=%d coverage=%.3f "
+                "action=check_synthesis_quality",
+                iteration_to, coverage_score,
+            )
+
         return SynthesisResult(
             synthesis=synthesis,
             artifacts=artifacts,
             response=response,
             prompt=prompt,
+            similarity_score=similarity_score,
+            drift_status=drift_status,
+            coverage_score=coverage_score,
         )
 
     def build_prompt(
@@ -94,7 +157,9 @@ class Synthesizer:
             objective=objective,
             previous_output=raw_output,
             previous_synthesis=(
-                previous_synthesis.model_dump_json(indent=2) if previous_synthesis else ""
+                previous_synthesis.model_dump_json(indent=2)
+                if previous_synthesis
+                else ""
             ),
             iteration_from=iteration_from,
             iteration_to=iteration_to,
@@ -140,17 +205,14 @@ class Synthesizer:
             content = match.group("content").rstrip()
             if not content:
                 continue
-            artifact_type = cast(
-                Literal["code", "json_schema", "formula", "test", "config", "sql"],
-                {
-                    "json": "json_schema",
-                    "jsonschema": "json_schema",
-                    "sql": "sql",
-                    "toml": "config",
-                    "yaml": "config",
-                    "yml": "config",
-                }.get(language or "", "code"),
-            )
+            artifact_type = {
+                "json": "json_schema",
+                "jsonschema": "json_schema",
+                "sql": "sql",
+                "toml": "config",
+                "yaml": "config",
+                "yml": "config",
+            }.get(language or "", "code")
             checksum = hashlib.sha256(content.encode("utf-8")).hexdigest()
             artifacts.append(
                 ImmutableArtifact(
@@ -170,6 +232,62 @@ class Synthesizer:
     ) -> list[ImmutableArtifact]:
         merged: dict[str, ImmutableArtifact] = {}
         for artifact in [*previous, *current]:
-            key = artifact.checksum or hashlib.sha256(artifact.content.encode("utf-8")).hexdigest()
+            key = artifact.checksum or hashlib.sha256(
+                artifact.content.encode("utf-8")
+            ).hexdigest()
             merged[key] = artifact
         return list(merged.values())
+
+    @staticmethod
+    def _compute_coverage(
+        raw_output: str,
+        synthesis: GoalOrientedSynthesis,
+    ) -> float | None:
+        """Ratio de mots significatifs de la sortie brute présents dans la synthèse.
+
+        Mesure simple de la préservation d'information :
+        coverage = |mots_brut ∩ mots_synthèse| / |mots_brut|
+
+        Les mots < 4 caractères et les stop words courants sont exclus
+        pour réduire le bruit.
+        """
+        STOP_WORDS = {
+            "the", "a", "an", "is", "are", "was", "were", "be", "been",
+            "have", "has", "had", "do", "does", "did", "will", "would",
+            "shall", "should", "may", "might", "can", "could", "not",
+            "and", "but", "or", "nor", "for", "yet", "so", "if", "then",
+            "that", "this", "these", "those", "with", "from", "into",
+            "le", "la", "les", "un", "une", "des", "est", "sont", "ont",
+            "et", "ou", "mais", "donc", "car", "pour", "dans", "par",
+            "pas", "qui", "que", "quoi", "dont", "avec", "sur", "sous",
+        }
+
+        def _significant_words(text: str) -> set[str]:
+            return {
+                w.lower()
+                for w in re.findall(r"[a-zA-Z\u00C0-\u024F]{4,}", text)
+                if w.lower() not in STOP_WORDS
+            }
+
+        brute_words = _significant_words(raw_output)
+        if not brute_words:
+            return None
+
+        synth_text = " ".join(
+            [
+                synthesis.objective,
+                " ".join(synthesis.key_decisions),
+                " ".join(synthesis.uncertainties),
+                synthesis.next_instruction,
+            ]
+        )
+        synth_words = _significant_words(synth_text)
+        if not synth_words:
+            return 0.0
+
+        covered = brute_words & synth_words
+        return len(covered) / len(brute_words)
+
+    def reset_drift(self) -> None:
+        """🆕 DRIFT — Réinitialiser le détecteur (nouvelle cascade)."""
+        self.drift_detector.reset()

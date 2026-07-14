@@ -15,21 +15,40 @@ Phase ulterieures :
 from __future__ import annotations
 
 import json
+import logging
 import uuid
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import TYPE_CHECKING, Any
 
 from pydantic import ValidationError
+
+if TYPE_CHECKING:
+    from ..config import GoalConfig
+
+try:
+    import structlog
+
+    logger: Any = structlog.get_logger(__name__)
+except ImportError:
+    logger = logging.getLogger(__name__)
 
 from ..audit_journal import AuditJournal, redact_sensitive
 from ..prompts import PromptLoader
 from ..providers.base import BaseProvider
 from ..schemas.models import (
     CascadeState,
+    GoalOrientedSynthesis,
+    InterfaceContract,
     IterationRole,
     LLMCallRecord,
-    Variant,
+    RunReceipt,
     Verdict,
+    Variant,
 )
 from . import state_manager
+from .budget_tracker import BudgetTracker
+from .cicd_hook import CICDHook, DeterministicCheckResult
 from .synthesizer import SynthesisError, Synthesizer
 
 # Tiers de modele par role (pour la cascade ascendante)
@@ -73,9 +92,13 @@ class CascadeExecutor:
         synthesizer_provider: BaseProvider,
         prompt_loader: PromptLoader | None = None,
         rag_bridge=None,
+        budget_tracker: BudgetTracker | None = None,
+        cicd_hook: CICDHook | None = None,
     ):
         if synthesizer_provider is provider:
-            raise ValueError("Le synthétiseur exige une instance de provider distincte")
+            raise ValueError(
+                "Le synthétiseur exige une instance de provider distincte"
+            )
         self.provider = provider
         self.synthesizer_provider = synthesizer_provider
         self.prompt_loader = prompt_loader or PromptLoader()
@@ -84,6 +107,11 @@ class CascadeExecutor:
             self.prompt_loader,
         )
         self.rag_bridge = rag_bridge
+        self._budget = budget_tracker
+        # 🆕 A1-A6 — Hook CI/CD déterministe appliqué après chaque synthèse
+        # et avant le verdict de l'arbitre. Ne JAMAIS déléguer au LLM une
+        # vérification qu'un outil déterministe peut faire.
+        self._cicd = cicd_hook or CICDHook()
 
     def init_state(
         self,
@@ -107,16 +135,19 @@ class CascadeExecutor:
         audience: str = "",
         constraints: str = "",
         verbose: bool = True,
+        no_synth: bool = False,
     ) -> CascadeState:
         """Execute la cascade jusqu'au verdict STOP ou la limite."""
 
         journal = AuditJournal(state.run_id)
+        start_time = datetime.now()
         journal.record_event(
             "run_started",
             objective=state.objective,
             variant=state.variant.value,
             provider=self.provider.name,
             synthesizer_provider=self.synthesizer_provider.name,
+            no_synth=no_synth,
         )
         state_manager.save_state(state)
 
@@ -124,7 +155,7 @@ class CascadeExecutor:
         constraints = redact_sensitive(constraints)
 
         try:
-            state = self._run_loop(state, audience, constraints, verbose, journal)
+            state = self._run_with_graph(state, audience, constraints, verbose, journal, no_synth=no_synth)
         except Exception as exc:
             state.status = "failed"
             state.last_error = redact_sensitive(str(exc))
@@ -132,26 +163,51 @@ class CascadeExecutor:
             journal.record_error(exc)
             raise
         finally:
-            state_manager.save_state(state)
-            metadata = {
-                "objective": state.objective,
-                "variant": state.variant.value,
-                "provider": self.provider.name,
-                "synthesizer_provider": self.synthesizer_provider.name,
-                "status": state.status,
-                "iterations": state.current_iteration,
-                "verdict": (state.final_verdict.decision if state.final_verdict else "absent"),
-                "last_error": state.last_error or "aucune",
-            }
-            journal.finalize(metadata)
-            if self.rag_bridge is not None:
-                try:
-                    self.rag_bridge.sync_run(state.run_id, journal=journal)
-                except Exception as exc:
-                    journal.record_error(exc)
-                    journal.refresh_timeline()
+            self._finalize_run(state, journal, start_time)
 
         return state
+
+    def _finalize_run(
+        self,
+        state: CascadeState,
+        journal: AuditJournal,
+        start_time: datetime,
+    ) -> None:
+        """Finalise un run : état, métadonnées, reçu de coût et sync RAG.
+
+        Partagé entre ``run()`` et ``resume()`` pour garantir que les deux
+        chemins produisent exactement les mêmes artefacts de transparence
+        (métadonnées du journal, receipt.json et preuve RAG).
+        """
+        state_manager.save_state(state)
+        duration_s = (datetime.now() - start_time).total_seconds()
+        metadata = {
+            "objective": state.objective,
+            "variant": state.variant.value,
+            "provider": self.provider.name,
+            "synthesizer_provider": self.synthesizer_provider.name,
+            "status": state.status,
+            "iterations": state.current_iteration,
+            "verdict": (
+                state.final_verdict.decision if state.final_verdict else "absent"
+            ),
+            "last_error": state.last_error or "aucune",
+        }
+        journal.finalize(metadata)
+        try:
+            receipt = self.build_receipt(state, duration_s)
+            receipt_path = state_manager.save_receipt(state.run_id, receipt)
+            journal.record_file("receipt_saved", receipt_path)
+            journal.refresh_timeline()
+        except Exception as exc:
+            journal.record_error(exc)
+            journal.refresh_timeline()
+        if self.rag_bridge is not None:
+            try:
+                self.rag_bridge.sync_run(state.run_id, journal=journal)
+            except Exception as exc:
+                journal.record_error(exc)
+                journal.refresh_timeline()
 
     def _run_loop(
         self,
@@ -160,15 +216,35 @@ class CascadeExecutor:
         constraints: str,
         verbose: bool,
         journal: AuditJournal,
+        no_synth: bool = False,
+        _single_iteration: bool = False,
     ) -> CascadeState:
-        """Exécute la boucle tout en enregistrant chaque entrée et sortie."""
+        """Exécute la boucle tout en enregistrant chaque entrée et sortie.
+
+        Si _single_iteration=True, exécute exactement une itération et retourne.
+        Utilisé par le graphe LangGraph pour le checkpointing par itération.
+        """
 
         while state.status == "running":
             # Limite absolue : 5 iterations
             if state.current_iteration >= state.max_iterations:
                 state.status = "forced_stop"
                 state.final_verdict = Verdict(
-                    decision="STOP", justification="Limite absolue de 5 iterations atteinte"
+                    decision="STOP",
+                    justification="Limite absolue de 5 iterations atteinte"
+                )
+                state_manager.save_state(state)
+                break
+
+            # Kill switch budgetaire (section 9 du plan v2)
+            if self._budget is not None and self._budget.is_exceeded(state.run_id, state.accumulated_cost):
+                state.status = "budget_exceeded"
+                state.final_verdict = Verdict(
+                    decision="STOP",
+                    justification=(
+                        f"Budget depasse: ${state.accumulated_cost:.4f} "
+                        f"(max ${self._budget.config.max_per_run_usd:.2f})"
+                    ),
                 )
                 state_manager.save_state(state)
                 break
@@ -178,17 +254,16 @@ class CascadeExecutor:
             iteration = state.current_iteration
 
             # Apres l'iteration 4, on reboucle vers le critique (iteration 5 max)
-            role = state.role_for_iteration(iteration) if iteration <= 4 else IterationRole.CRITIC
+            if iteration <= 4:
+                role = state.role_for_iteration(iteration)
+            else:
+                role = IterationRole.CRITIC
 
             if verbose:
                 tier = ROLE_TIERS.get(role, "medium")
                 label = ROLE_LABELS.get(role, role.value)
-                print(
-                    f"\n  Iteration {iteration}/{state.max_iterations} "
-                    f"-- {label} ({self.provider.name}/{tier}) ...",
-                    end=" ",
-                    flush=True,
-                )
+                print(f"\n  Iteration {iteration}/{state.max_iterations} "
+                      f"-- {label} ({self.provider.name}/{tier}) ...", end=" ", flush=True)
 
             # Construire le prompt
             prompt = self._build_prompt(state, role, audience, constraints)
@@ -227,9 +302,12 @@ class CascadeExecutor:
                 latency_ms=response.latency_ms,
                 raw_output=response.text,
                 token_count_estimated=response.token_count_estimated,
+                timestamp_utc=datetime.now(timezone.utc).isoformat(),
             )
             state.history.append(call_record)
             state.accumulated_cost += response.cost_usd
+            if self._budget is not None:
+                self._budget.record(response.cost_usd)
 
             # Persister la sortie de cette iteration (angle mort identifie)
             iteration_path = state_manager.save_iteration_output(
@@ -260,10 +338,43 @@ class CascadeExecutor:
 
             # Iteration 4 (Arbitre) : parser le verdict
             if role == IterationRole.ARBITER:
-                verdict = self._parse_verdict(response.text)
+                try:
+                    verdict = self._parse_verdict(response.text)
+                except ValueError as exc:
+                    # Doute profite au STOP : un verdict non parsable
+                    # bloque la cascade proprement plutôt que de la faire
+                    # échouer avec un status "failed".
+                    journal.record_event(
+                        "verdict_parse_failed",
+                        error=redact_sensitive(str(exc)),
+                        action="default_to_STOP",
+                    )
+                    verdict = Verdict(
+                        decision="STOP",
+                        justification="Verdict non parsable, STOP par défaut",
+                    )
                 state.final_verdict = verdict
                 if verdict.decision == "STOP":
                     state.status = "stopped"
+                else:
+                    # CONTINUE : injecter la justification de l'arbitre
+                    # dans last_synthesis pour que l'itération 5 la reçoive.
+                    state.last_synthesis = GoalOrientedSynthesis(
+                        objective=state.objective,
+                        key_decisions=(
+                            state.last_synthesis.key_decisions
+                            if state.last_synthesis
+                            else ["Synthèse arbitre"]
+                        ),
+                        uncertainties=(
+                            state.last_synthesis.uncertainties
+                            if state.last_synthesis
+                            else []
+                        ),
+                        next_instruction=verdict.justification,
+                        iteration_from=4,
+                        iteration_to=5,
+                    )
 
             # Une cinquieme iteration est la limite absolue. Elle peut
             # analyser le point restant, mais ne declenche jamais un 6e appel.
@@ -275,7 +386,14 @@ class CascadeExecutor:
                 )
 
             # La synthese est un appel isole entre les iterations principales.
-            if role != IterationRole.ARBITER and state.status == "running":
+            # En mode --no-synth, on passe la sortie brute a l'iteration suivante
+            # sans filtrage. Utile pour debugger une synthese qui ecrase des
+            # informations critiques.
+            if (
+                role != IterationRole.ARBITER
+                and state.status == "running"
+                and not no_synth
+            ):
                 synthesis_prompt = self.synthesizer.build_prompt(
                     raw_output=response.text,
                     objective=state.objective,
@@ -328,10 +446,15 @@ class CascadeExecutor:
                                 cost_usd=failed_response.cost_usd,
                                 latency_ms=failed_response.latency_ms,
                                 raw_output=failed_response.text,
-                                token_count_estimated=(failed_response.token_count_estimated),
+                                token_count_estimated=(
+                                    failed_response.token_count_estimated
+                                ),
+                                timestamp_utc=datetime.now(timezone.utc).isoformat(),
                             )
                         )
                         state.accumulated_cost += failed_response.cost_usd
+                        if self._budget is not None:
+                            self._budget.record(failed_response.cost_usd)
                         failed_path = state_manager.save_synthesis_output(
                             state.run_id,
                             iteration,
@@ -366,9 +489,12 @@ class CascadeExecutor:
                         latency_ms=synthesis_response.latency_ms,
                         raw_output=synthesis_response.text,
                         token_count_estimated=synthesis_response.token_count_estimated,
+                        timestamp_utc=datetime.now(timezone.utc).isoformat(),
                     )
                 )
                 state.accumulated_cost += synthesis_response.cost_usd
+                if self._budget is not None:
+                    self._budget.record(synthesis_response.cost_usd)
                 state.last_synthesis = synthesis_result.synthesis
                 state.artifacts = synthesis_result.artifacts
                 synthesis_path = state_manager.save_synthesis_output(
@@ -398,19 +524,260 @@ class CascadeExecutor:
                 if verbose:
                     print("  Synthese orientee objectif -- OK")
 
+                # 🆕 CICD — vérification déterministe des artefacts produits
+                # (A1-A6 du cahier sécurité). On ne bloque PAS la cascade sur
+                # un échec : les artefacts sont préservés tels quels, on
+                # signale juste la non-conformité dans le journal.
+                if state.artifacts:
+                    cicd_result = self._run_cicd_checks(
+                        state.artifacts, journal,
+                    )
+                    if not cicd_result.passed:
+                        logger.warning(
+                            "cicd_artifacts_non_compliant iteration=%d "
+                            "failures=%d action=continue_with_artifacts",
+                            iteration,
+                            len(cicd_result.failures),
+                        )
+
+                # 🆕 DRIFT — STOP anticipé si dérive critique (section 6.1 + 11.3)
+                if synthesis_result.drift_status.value == "critical":
+                    state.status = "forced_stop"
+                    state.final_verdict = Verdict(
+                        decision="STOP",
+                        justification=(
+                            f"Dérive détectée (sim={synthesis_result.similarity_score:.3f})"
+                        ),
+                    )
+                    journal.record_event(
+                        "drift_forced_stop",
+                        iteration=iteration,
+                        similarity=synthesis_result.similarity_score,
+                        drift_status=synthesis_result.drift_status.value,
+                    )
+                    state_manager.save_state(state)
+                    break
+
             # Sauvegarder l'etat a chaque iteration (checkpointing)
             state_manager.save_state(state)
 
+            # En mode single_iteration (graphe LangGraph), on s'arrête
+            # après chaque itération pour laisser le graphe gérer la boucle.
+            if _single_iteration:
+                break
+
         # Sauvegarder le livrable final
         if state.history:
-            arbiter_outputs = [call.raw_output for call in state.history if call.role == "arbiter"]
-            main_outputs = [call.raw_output for call in state.history if call.role != "synthesizer"]
-            final_output = arbiter_outputs[-1] if arbiter_outputs else main_outputs[-1]
+            main_outputs = [
+                call.raw_output for call in state.history if call.role != "synthesizer"
+            ]
+            if state.current_iteration > 4:
+                # L'itération 5 a tourné : sa sortie prime sur l'arbitre.
+                final_output = main_outputs[-1]
+            else:
+                arbiter_outputs = [
+                    call.raw_output
+                    for call in state.history
+                    if call.role == "arbiter"
+                ]
+                final_output = (
+                    arbiter_outputs[-1] if arbiter_outputs else main_outputs[-1]
+                )
             final_path = state_manager.save_final_output(state.run_id, final_output)
             journal.record_file("final_output_saved", final_path)
 
         # Persister aussi les transitions terminales survenues hors iteration.
         state_manager.save_state(state)
+
+        return state
+
+    def _run_with_graph(
+        self,
+        state: CascadeState,
+        audience: str,
+        constraints: str,
+        verbose: bool,
+        journal: AuditJournal,
+        no_synth: bool = False,
+    ) -> CascadeState:
+        """Exécute la cascade via un graphe LangGraph avec checkpointing SQLite.
+
+        Le graphe a un nœud "iteration" qui appelle _run_loop en mode
+        _single_iteration. Le checkpoint SQLite sauvegarde l'état à chaque
+        transition de nœud, permettant goal resume.
+        """
+        from .cascade_graph import build_cascade_graph, compile_with_sqlite
+
+        run_dir = state_manager.get_run_dir(state.run_id)
+        checkpoint_dir = state_manager.ensure_private_dir(run_dir / ".checkpoints")
+        checkpoint_path = checkpoint_dir / "checkpoint.db"
+
+        # Fonction nœud : encapsule une itération de la cascade.
+        # Capture self, audience, constraints, verbose, no_synth, journal
+        # via closure.
+        def iteration_node(graph_state: dict) -> dict:
+            # Désérialiser le CascadeState depuis le dict du graphe
+            cascade_dict = graph_state.get("cascade", {})
+            if cascade_dict:
+                current_state = CascadeState(**cascade_dict)
+            else:
+                current_state = state
+
+            # Exécuter une itération
+            self._run_loop(
+                current_state,
+                audience=audience,
+                constraints=constraints,
+                verbose=verbose,
+                journal=journal,
+                no_synth=no_synth,
+                _single_iteration=True,
+            )
+
+            # Sérialiser et retourner la mise à jour
+            return {
+                "cascade": current_state.model_dump(),
+                "current_iteration": current_state.current_iteration,
+                "status": current_state.status,
+            }
+
+        # Construire et compiler le graphe avec checkpointer SQLite
+        graph = build_cascade_graph(iteration_node)
+        app, checkpointer = compile_with_sqlite(graph, checkpoint_path)
+
+        # État initial du graphe
+        initial_graph_state = {
+            "cascade": state.model_dump(),
+            "run_id": state.run_id,
+            "current_iteration": state.current_iteration,
+            "status": state.status,
+        }
+        config = {"configurable": {"thread_id": state.run_id}}
+
+        result = app.invoke(initial_graph_state, config)
+
+        # Mettre à jour l'état depuis le résultat final du graphe
+        final_cascade = result.get("cascade", {})
+        if final_cascade:
+            final_state = CascadeState(**final_cascade)
+            state.status = final_state.status
+            state.current_iteration = final_state.current_iteration
+            state.history = final_state.history
+            state.accumulated_cost = final_state.accumulated_cost
+            state.last_synthesis = final_state.last_synthesis
+            state.artifacts = final_state.artifacts
+            state.final_verdict = final_state.final_verdict
+
+        return state
+
+    def resume(
+        self,
+        run_id: str,
+        config: GoalConfig | None = None,
+        audience: str = "",
+        constraints: str = "",
+        verbose: bool = True,
+        no_synth: bool = False,
+    ) -> CascadeState:
+        """Reprend une cascade interrompue depuis le dernier checkpoint SQLite.
+
+        Args:
+            run_id: ID du run à reprendre.
+            config: Si fourni, reconstruit les providers depuis cette config
+                au lieu de réutiliser ceux du constructeur.
+            audience: Public cible.
+            constraints: Contraintes format/longueur.
+            verbose: Journalisation détaillée.
+            no_synth: Désactiver la synthèse orientée objectif.
+
+        Raises:
+            TypeError: Si CascadeExecutor est frozen/slots (mutation impossible).
+            FileNotFoundError: Si aucun checkpoint valide n'existe pour run_id.
+        """
+        from .cascade_graph import build_cascade_graph, compile_with_sqlite
+
+        # Reconstruction des providers depuis config si fournie.
+        if config is not None:
+            from .execution_context import build_execution_context
+
+            if hasattr(self, "__slots__") or getattr(
+                type(self), "__frozen__", False
+            ):
+                raise TypeError(
+                    "CascadeExecutor est frozen/slots — impossible de "
+                    "reconstruire les providers dans resume(). "
+                    "Retirez @dataclass(frozen=True) ou __slots__."
+                )
+
+            ctx = build_execution_context(config)
+            self.provider = ctx.provider
+            self.synthesizer_provider = ctx.synthesizer_provider
+            self.synthesizer = Synthesizer(
+                self.synthesizer_provider, self.prompt_loader
+            )
+            self._budget = ctx.budget_tracker
+
+        run_dir = state_manager.get_run_dir(run_id)
+        checkpoint_dir = run_dir / ".checkpoints"
+        checkpoint_path = checkpoint_dir / "checkpoint.db"
+
+        if not checkpoint_path.exists():
+            raise FileNotFoundError(
+                f"Aucun checkpoint trouvé pour le run {run_id} : {checkpoint_path}"
+            )
+
+        # Charger l'état depuis le checkpoint
+        def dummy_node(graph_state: dict) -> dict:
+            return graph_state
+
+        graph = build_cascade_graph(dummy_node)
+        app, checkpointer = compile_with_sqlite(graph, checkpoint_path)
+
+        config_dict = {"configurable": {"thread_id": run_id}}
+
+        saved = app.get_state(config_dict)
+
+        if not saved or not saved.values:
+            raise FileNotFoundError(
+                f"Checkpoint vide pour le run {run_id}"
+            )
+
+        checkpointed = saved.values
+        cascade_dict = checkpointed.get("cascade", {})
+        if not cascade_dict:
+            raise FileNotFoundError(
+                f"Pas de CascadeState dans le checkpoint du run {run_id}"
+            )
+
+        state = CascadeState(**cascade_dict)
+        journal = AuditJournal(run_id)
+        start_time = datetime.now()
+        journal.record_event(
+            "resume_started",
+            objective=state.objective,
+            variant=state.variant.value,
+            provider=self.provider.name,
+            synthesizer_provider=self.synthesizer_provider.name,
+            no_synth=no_synth,
+        )
+
+        audience = redact_sensitive(audience)
+        constraints = redact_sensitive(constraints)
+
+        # Relancer avec le vrai graphe, puis finaliser comme run() :
+        # reçu de coût, métadonnées et sync RAG (angle mort corrigé).
+        try:
+            state = self._run_with_graph(
+                state, audience, constraints, verbose, journal, no_synth=no_synth
+            )
+        except Exception as exc:
+            state.status = "failed"
+            state.last_error = redact_sensitive(str(exc))
+            state_manager.save_state(state)
+            journal.record_error(exc)
+            raise
+        finally:
+            self._finalize_run(state, journal, start_time)
 
         return state
 
@@ -451,6 +818,40 @@ class CascadeExecutor:
             constraints=constraints,
             artifacts=artifacts,
         )
+
+    def _run_cicd_checks(
+        self,
+        artifacts: list,
+        journal: AuditJournal,
+    ) -> DeterministicCheckResult:
+        """Vérifie les artefacts via le hook CI/CD déterministe.
+
+        La cascade unique n'a pas de contrat d'interface explicite (elle
+        n'est pas dans un multi-cascade). On crée un contrat interne
+        permissif qui accepte tout type d'artefact : c'est le hook qui
+        décide quels types il sait vérifier.
+        """
+        if not artifacts:
+            return DeterministicCheckResult(passed=True)
+
+        contract = InterfaceContract(
+            contract_id=f"cicd-{uuid.uuid4().hex[:6]}",
+            producer_module="cascade",
+            consumer_module="cascade",
+            output_description="auto-detect",
+            input_description="auto-detect",
+            exchange_format="auto",
+        )
+        result = self._cicd.run_deterministic_checks(contract, list(artifacts))
+
+        # Trace l'événement dans le journal pour auditabilité.
+        journal.record_event(
+            "cicd_checks",
+            passed=result.passed,
+            artifacts=len(artifacts),
+            failures=len(result.failures),
+        )
+        return result
 
     def _parse_verdict(self, text: str) -> Verdict:
         """Valide l'objet JSON terminal conforme au schéma Verdict."""
@@ -502,3 +903,26 @@ class CascadeExecutor:
             except Exception:
                 details = type(exc).__name__
             raise ValueError(f"Verdict JSON invalide ou absent : {details}") from exc
+
+    def build_receipt(self, state: CascadeState, duration_s: float) -> RunReceipt:
+        """Construit le RunReceipt depuis l'etat final de la cascade.
+
+        Délègue la construction à RunReceipt.from_calls() qui calcule
+        automatiquement total_cost, cache_hit_rate et projected_monthly_cost.
+        """
+        runs_per_day = (
+            self._budget.config.runs_per_day_projection
+            if self._budget is not None
+            else 10
+        )
+        return RunReceipt.from_calls(
+            run_id=state.run_id,
+            objective=state.objective,
+            verdict=(
+                state.final_verdict.decision
+                if state.final_verdict else "absent"
+            ),
+            duration_s=duration_s,
+            calls=list(state.history),
+            runs_per_day=runs_per_day,
+        )

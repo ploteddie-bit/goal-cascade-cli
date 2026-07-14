@@ -10,16 +10,46 @@ import json
 import os
 from pathlib import Path
 
-from ..schemas.models import CascadeState
+from ..schemas.models import CascadeState, RunReceipt
 
 GOAL_DIR = Path(os.environ.get("GOAL_HOME", Path.home() / ".goal")).expanduser()
 RUNS_DIR = GOAL_DIR / "runs"
 
 
+PRIVATE_DIR_MODE = 0o700
+
+
+def ensure_private_dir(path: Path, mode: int = PRIVATE_DIR_MODE) -> Path:
+    """Crée un répertoire (et ses parents) avec des permissions restreintes.
+
+    Les traces de run et les données utilisateur ne doivent pas être
+    lisibles par les autres utilisateurs du système (E2/E3).
+    """
+    path.mkdir(parents=True, exist_ok=True)
+    try:
+        path.chmod(mode)
+    except OSError:
+        # FS ne supporte pas chmod (ex: certains mounts Windows) : ignorer.
+        pass
+    return path
+
+
+def _initialize_runs_dir() -> None:
+    """Garantit que RUNS_DIR lui-même a les permissions 0o700.
+
+    Sans cela, le umask par défaut peut produire des répertoires en 0o755
+    (lisibles par tous) sur les systèmes où mkdir ne respecte pas le mode.
+    """
+    ensure_private_dir(RUNS_DIR)
+
+
+_initialize_runs_dir()
+
+
 def get_run_dir(run_id: str) -> Path:
-    """Retourne le dossier d'un run."""
+    """Retourne le dossier d'un run, créé avec les permissions 0o700."""
     run_dir = RUNS_DIR / run_id
-    run_dir.mkdir(parents=True, exist_ok=True)
+    ensure_private_dir(run_dir)
     return run_dir
 
 
@@ -70,6 +100,17 @@ def save_final_output(run_id: str, output: str) -> Path:
     run_dir = get_run_dir(run_id)
     output_file = run_dir / "final_output.md"
     output_file.write_text(output, encoding="utf-8")
+    return output_file
+
+
+def save_receipt(run_id: str, receipt: RunReceipt) -> Path:
+    """Sauvegarde le recu detaille du run (transparence des couts)."""
+    run_dir = get_run_dir(run_id)
+    output_file = run_dir / "receipt.json"
+    output_file.write_text(
+        receipt.model_dump_json(indent=2),
+        encoding="utf-8",
+    )
     return output_file
 
 

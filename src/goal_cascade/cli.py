@@ -4,6 +4,9 @@ Usage:
     goal run --objective "..." [--provider mock|kimi-cli|kimi-code]
     goal status [run_id]
     goal list
+    goal versions <run_id>
+    goal diff <run_id_1> <run_id_2>
+    goal inspect <run_id>
 """
 
 from __future__ import annotations
@@ -11,21 +14,33 @@ from __future__ import annotations
 from enum import Enum
 from pathlib import Path
 
+import datetime as _dt
+import json
+
 import typer
 from pydantic import ValidationError
 from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 
-from .config import DEFAULT_CONFIG_PATH, GoalConfig, ProvidersConfig, load_goal_config
+from .config import DEFAULT_CONFIG_PATH, ProvidersConfig, load_goal_config
+from .audit_journal import redact_sensitive
+from .orchestrator.budget_tracker import BudgetConfig, BudgetTracker
 from .orchestrator.cascade_executor import CascadeExecutor
+from .orchestrator.execution_context import (
+    ExecutionContext,
+    build_execution_context,
+)
 from .orchestrator.state_manager import RUNS_DIR, list_runs, load_state
 from .providers.base import BaseProvider
 from .providers.kimi_command import KimiBackend, KimiCommandProvider
 from .providers.mock import MockProvider
 from .providers.router import RoleMappedProvider
 from .rag_bridge import RagBridge, RagSyncError
+from .multicascade.module_graph import ModuleGraph
 from .schemas.models import Variant
+from .schemas.plan import CascadePlan
+from .schemas.versioning import RunVersion, VersionDiff
 
 app = typer.Typer(
     name="goal",
@@ -41,9 +56,13 @@ __all__ = [
     "run",
     "status",
     "list_cmd",
+    "versions",
+    "diff",
+    "inspect_run",
     "rag_status",
     "rag_sync",
     "init",
+    "cascade_plan",
 ]
 
 
@@ -60,7 +79,8 @@ def _print_config_summary(config_path: Path, providers: ProvidersConfig) -> None
     available_count = len(set(providers.enabled))
     if providers.degraded:
         console.print(
-            f"[yellow]⚠️  Mode dégradé : {available_count}/3 provider(s) disponible(s)[/yellow]"
+            f"[yellow]⚠️  Mode dégradé : {available_count}/3 provider(s) "
+            f"disponible(s)[/yellow]"
         )
         console.print("   Mapping effectif :")
         for row in providers.mapping_rows():
@@ -74,7 +94,10 @@ def _print_config_summary(config_path: Path, providers: ProvidersConfig) -> None
             "Les erreurs seront corrélées.[/yellow]"
         )
     else:
-        console.print(f"   Providers : {', '.join(providers.enabled)} ({available_count}/3 ✓)")
+        console.print(
+            f"   Providers : {', '.join(providers.enabled)} "
+            f"({available_count}/3 ✓)"
+        )
         console.print("   Diversité : optimale")
 
 
@@ -82,7 +105,7 @@ def _build_provider(
     provider_id: str,
     *,
     synthesizer_model: str | None = None,
-    config: GoalConfig | None = None,
+    config: "GoalConfig | None" = None,
 ) -> BaseProvider:
     """Construit l'instance de provider effective pour un identifiant résolu.
 
@@ -125,7 +148,11 @@ def _build_provider(
             }
         return MirascopeProvider(
             backend=Backend(provider_id),
-            rate_limit_config=RateLimitConfig(),
+            rate_limit_config=(
+                RateLimitConfig(**config.ratelimit.model_dump())
+                if config is not None
+                else RateLimitConfig()
+            ),
             enable_cache=True,
             available_backends=available_backends,
         )
@@ -138,28 +165,43 @@ def _build_provider(
 @app.command()
 def run(
     objective: str = typer.Option(
-        ..., "--objective", "-o", help="L'objectif du livrable (une phrase claire)"
+        ..., "--objective", "-o",
+        help="L'objectif du livrable (une phrase claire)"
     ),
     variant: Variant = typer.Option(
-        Variant.A, "--variant", "-v", help="Variante : A (redactionnel) ou B (technique)"
+        Variant.A, "--variant", "-v",
+        help="Variante : A (redactionnel) ou B (technique)"
     ),
     provider: ProviderChoice = typer.Option(
-        ProviderChoice.MOCK, "--provider", "-p", help="Provider : mock, kimi-cli ou kimi-code"
+        ProviderChoice.MOCK, "--provider", "-p",
+        help="Provider : mock, kimi-cli ou kimi-code"
     ),
     config: Path | None = typer.Option(
         None,
         "--config",
-        help=(f"Chemin du fichier config TOML. Par défaut : {DEFAULT_CONFIG_PATH} si présent."),
+        help=(
+            "Chemin du fichier config TOML. "
+            f"Par défaut : {DEFAULT_CONFIG_PATH} si présent."
+        ),
     ),
-    audience: str = typer.Option("", "--audience", "-a", help="Public cible"),
+    audience: str = typer.Option(
+        "", "--audience", "-a",
+        help="Public cible"
+    ),
     constraints: str = typer.Option(
-        "", "--constraints", "-c", help="Contraintes (format, longueur, etc.)"
+        "", "--constraints", "-c",
+        help="Contraintes (format, longueur, etc.)"
     ),
     synthesizer_model: str | None = typer.Option(
         None,
         "--synthesizer-model",
         envvar="GOAL_SYNTHESIZER_MODEL",
         help="Modèle small/cheap dédié aux synthèses (obligatoire avec Kimi)",
+    ),
+    no_synth: bool = typer.Option(
+        False,
+        "--no-synth",
+        help="Désactiver la synthèse orientée objectif (debug : la sortie brute est passée telle quelle)",
     ),
 ):
     """Lance une cascade G.O.A.L. complete."""
@@ -171,21 +213,38 @@ def run(
     # le chemin par defaut existe. Sinon, retombe sur la selection legacy.
     candidate_config_path = config or DEFAULT_CONFIG_PATH
     should_load_config = config is not None or candidate_config_path.exists()
+    budget_tracker: BudgetTracker | None = None
     if should_load_config:
         # Si l'utilisateur a passe --config PATH explicitement et que le
         # fichier n'existe pas, on remonte une erreur CLI claire plutot
         # qu'un FileNotFoundError brut issu de tomllib.
         if config is not None and not candidate_config_path.exists():
             console.print(
-                f"[bold red]Config introuvable : {candidate_config_path.expanduser()}[/bold red]"
+                f"[bold red]Config introuvable : "
+                f"{candidate_config_path.expanduser()}[/bold red]"
             )
             raise typer.Exit(2)
         try:
             goal_config = load_goal_config(candidate_config_path)
         except (ValidationError, ValueError) as exc:
-            console.print(f"[bold red]Config invalide ({candidate_config_path}): {exc}[/bold red]")
+            console.print(
+                f"[bold red]Config invalide ({candidate_config_path}): "
+                f"{exc}[/bold red]"
+            )
             raise typer.Exit(1) from exc
         _print_config_summary(candidate_config_path, goal_config.providers)
+
+        # Pilier 1 : refuser de démarrer si tous les rôles sont assignés
+        # au même provider/famille. La configuration unitaire peut accepter
+        # ce mode (tests), mais la CLI l'interdit explicitement.
+        if goal_config.providers.diversity_failure:
+            console.print(
+                "[bold red]❌ Diversité multi-provider insuffisante : "
+                "tous les rôles sont assignés à la même famille. "
+                "Activez au moins deux providers de familles différentes "
+                "dans [providers].enabled.[/bold red]"
+            )
+            raise typer.Exit(1)
 
         # Les providers Kimi exigent un modele explicite pour le synthetiseur
         # (meme exigence que le mode legacy).
@@ -202,18 +261,10 @@ def run(
                 param_hint="--synthesizer-model",
             )
 
-        provider_names = set(goal_config.providers.resolved_role_mapping.values())
-        providers_by_name = {
-            provider_name: _build_provider(provider_name) for provider_name in provider_names
-        }
-        selected_provider: BaseProvider = RoleMappedProvider(
-            providers_by_name=providers_by_name,
-            role_mapping=goal_config.providers.resolved_role_mapping,
-        )
-        selected_synthesizer_provider: BaseProvider = _build_provider(
-            goal_config.providers.resolved_synthesizer,
-            synthesizer_model=synthesizer_model,
-        )
+        ctx = build_execution_context(goal_config, synthesizer_model=synthesizer_model)
+        selected_provider = ctx.provider
+        selected_synthesizer_provider = ctx.synthesizer_provider
+        budget_tracker = ctx.budget_tracker
         provider_label = "Mapping TOML adaptatif"
         synthesizer_label = goal_config.providers.resolved_synthesizer
     elif provider == ProviderChoice.MOCK:
@@ -244,6 +295,12 @@ def run(
         )
         provider_label = "Kimi CLI 1.x (sessions non interactives)"
         synthesizer_label = f"Kimi CLI 1.x / {synthesizer_model}"
+        console.print(
+            "[bold yellow]⚠  Attention : le provider Kimi CLI utilise --print "
+            "qui auto-approuve les outils (shell, fichiers). "
+            "Risque d'injection de prompt. "
+            "Utilisez dans un environnement contrôlé.[/bold yellow]"
+        )
     else:
         if not synthesizer_model:
             typer.echo(
@@ -265,6 +322,12 @@ def run(
         )
         provider_label = "Kimi Code 0.x (sessions non interactives)"
         synthesizer_label = f"Kimi Code 0.x / {synthesizer_model}"
+        console.print(
+            "[bold yellow]⚠  Attention : le provider Kimi Code utilise --print "
+            "qui auto-approuve les outils (shell, fichiers). "
+            "Risque d'injection de prompt. "
+            "Utilisez dans un environnement contrôlé.[/bold yellow]"
+        )
 
     # Afficher l'en-tete
     header = Panel.fit(
@@ -283,6 +346,7 @@ def run(
         provider=selected_provider,
         synthesizer_provider=selected_synthesizer_provider,
         rag_bridge=RagBridge(),
+        budget_tracker=budget_tracker,
     )
     state = executor.init_state(objective=objective, variant=variant)
     run_dir = RUNS_DIR / state.run_id
@@ -298,6 +362,7 @@ def run(
             audience=audience,
             constraints=constraints,
             verbose=True,
+            no_synth=no_synth,
         )
     except Exception as exc:
         console.print(f"\n[bold red]Cascade en erreur : {exc}[/bold red]")
@@ -310,7 +375,8 @@ def run(
     console.print()
     if state.status == "stopped":
         console.print(
-            f"[bold green]Cascade terminee en {state.current_iteration} iterations[/bold green]"
+            f"[bold green]Cascade terminee en {state.current_iteration} "
+            f"iterations[/bold green]"
         )
     elif state.status == "forced_stop":
         console.print(
@@ -321,7 +387,9 @@ def run(
     if state.final_verdict:
         verdict = state.final_verdict
         color = "green" if verdict.decision == "STOP" else "yellow"
-        console.print(f"\nVerdict : [{color}]{verdict.decision}[/{color}]")
+        console.print(
+            f"\nVerdict : [{color}]{verdict.decision}[/{color}]"
+        )
         console.print(f"Justification : {verdict.justification}")
 
     if state.accumulated_cost > 0:
@@ -332,9 +400,26 @@ def run(
         cost_str = "non communiqué par le CLI Kimi"
     console.print(f"Cout total : {cost_str}")
 
+    # Recu detaille du run (transparence radicale des couts, section 9 plan v2)
+    receipt_path = RUNS_DIR / state.run_id / "receipt.json"
+    if receipt_path.exists():
+        try:
+            from .schemas.models import RunReceipt
+            receipt_data = json.loads(receipt_path.read_text(encoding="utf-8"))
+            receipt = RunReceipt.model_validate(receipt_data)
+            console.print()
+            for line in receipt.summary_lines():
+                console.print(f"[dim]{line}[/dim]")
+            console.print(f"  Recu complet : [dim]{receipt_path}[/dim]")
+        except (OSError, json.JSONDecodeError, Exception):
+            # Fallback : affichage minimal si le reçu ne peut pas être parsé
+            console.print(f"[dim]Recu : {receipt_path}[/dim]")
+
     # Afficher les details du run
     console.print(f"\nRun ID : [cyan]{state.run_id}[/cyan]")
-    console.print(f"Livrable : {RUNS_DIR / state.run_id / 'final_output.md'}")
+    console.print(
+        f"Livrable : {RUNS_DIR / state.run_id / 'final_output.md'}"
+    )
     console.print(f"Cheminement : {run_dir / 'timeline.md'}")
     console.print(f"Événements : {run_dir / 'events.jsonl'}")
     console.print(f"Preuve RAG : {run_dir / 'rag-status.json'}")
@@ -373,6 +458,74 @@ def run(
             )
 
         console.print(table)
+
+
+def _print_velocity_dashboard(
+    history: list[LLMCallRecord], run_id: str
+) -> None:
+    """Affiche un dashboard ASCII de vitesse de la cascade.
+
+    Barre horizontale par itération : rôle, coût, indicateur visuel.
+    █ pour les itérations coûteuses, ░ pour les légères.
+    Le coût maximum sert de référence pour la largeur des barres.
+    """
+    if not history:
+        return
+
+    # Déterminer la métrique : coût si dispo, sinon tokens
+    max_cost = max((c.cost_usd for c in history), default=0.0)
+    use_tokens = max_cost <= 0.0
+    if use_tokens:
+        max_value = float(
+            max((c.input_tokens + c.output_tokens for c in history), default=1)
+        )
+    else:
+        max_value = max_cost
+
+    if max_value <= 0:
+        return
+
+    bar_width = 30
+    separator = "─" * 78
+
+    console.print()
+    console.print("[bold]Dashboard de vitesse[/bold]")
+    console.print(separator)
+
+    for call in history:
+        value = (
+            float(call.input_tokens + call.output_tokens)
+            if use_tokens
+            else call.cost_usd
+        )
+        ratio = min(value / max_value, 1.0)
+        filled = max(1, int(ratio * bar_width)) if value > 0 else 0
+        empty = bar_width - filled
+        bar = "█" * filled + "░" * empty
+
+        if use_tokens:
+            metric_str = f"{call.input_tokens + call.output_tokens} tok"
+        else:
+            metric_str = f"${call.cost_usd:.4f}"
+
+        console.print(
+            f"{call.iteration:>2}  {call.role:<10} {metric_str:>9}  {bar}"
+        )
+
+    console.print(separator)
+
+    # Cache hit rate depuis receipt.json
+    from .schemas.models import RunReceipt
+
+    receipt_path = RUNS_DIR / run_id / "receipt.json"
+    if receipt_path.exists():
+        try:
+            receipt_data = json.loads(receipt_path.read_text(encoding="utf-8"))
+            receipt = RunReceipt.model_validate(receipt_data)
+            rate = receipt.cache_hit_rate
+            console.print(f"  Cache hit rate : {rate:.0%}")
+        except (OSError, json.JSONDecodeError, Exception):
+            pass
 
 
 @app.command()
@@ -431,10 +584,334 @@ def status(
 
         console.print(table)
 
+    # Dashboard de vitesse
+    _print_velocity_dashboard(state.history, state.run_id)
+
     if state.final_verdict:
         color = "green" if state.final_verdict.decision == "STOP" else "yellow"
-        console.print(f"\nVerdict : [{color}]{state.final_verdict.decision}[/{color}]")
+        console.print(
+            f"\nVerdict : [{color}]{state.final_verdict.decision}[/{color}]"
+        )
         console.print(f"  {state.final_verdict.justification}")
+
+
+@app.command(name="versions")
+def versions(
+    run_id: str = typer.Argument(..., help="ID du run dont lister les versions"),
+):
+    """Liste les versions d'un run depuis le répertoire ~/.goal/runs/<run_id>/."""
+    run_dir = RUNS_DIR / run_id
+    if not run_dir.exists():
+        console.print(f"[red]Run '{run_id}' introuvable : {run_dir}[/red]")
+        raise typer.Exit(1)
+
+    state_file = run_dir / "state.json"
+    receipt_file = run_dir / "receipt.json"
+
+    if not state_file.exists():
+        console.print(f"[red]Aucun state.json pour le run '{run_id}'.[/red]")
+        raise typer.Exit(1)
+
+    state_data = json.loads(state_file.read_text(encoding="utf-8"))
+    receipt_data: dict | None = None
+    if receipt_file.exists():
+        receipt_data = json.loads(receipt_file.read_text(encoding="utf-8"))
+
+    iterations = state_data.get("current_iteration", 0)
+    status_val = state_data.get("status", "unknown")
+    objective = state_data.get("objective", "")
+
+    # Chaque itération = une "version" du run
+    versions_list: list[RunVersion] = []
+    for it in range(1, iterations + 1):
+        iter_file = run_dir / f"iteration_{it}.txt"
+        if iter_file.exists():
+            iter_stat = iter_file.stat()
+            created_at = _dt.datetime.fromtimestamp(
+                iter_stat.st_mtime, tz=_dt.timezone.utc
+            ).isoformat()
+        else:
+            created_at = ""
+
+        # Coût par itération depuis l'historique
+        cost_for_iter = 0.0
+        for call in state_data.get("history", []):
+            if call.get("iteration") == it:
+                cost_for_iter += call.get("cost_usd", 0.0)
+
+        # Durée par itération depuis le receipt
+        duration_s = 0.0
+        if receipt_data:
+            for call in receipt_data.get("calls", []):
+                if call.get("iteration") == it:
+                    duration_s += call.get("latency_ms", 0) / 1000.0
+
+        verdict_val = (
+            state_data.get("final_verdict", {}).get("decision", "CONTINUE")
+            if it == iterations
+            else "CONTINUE"
+        )
+
+        versions_list.append(
+            RunVersion(
+                version_id=f"v{it}",
+                run_id=run_id,
+                created_at=created_at,
+                iteration_count=it,
+                final_verdict=verdict_val,
+                total_cost_usd=cost_for_iter,
+                status=status_val if it == iterations else "running",
+                objective=objective,
+            )
+        )
+
+    if not versions_list:
+        console.print(
+            f"[yellow]Aucune version trouvée pour le run '{run_id}'.[/yellow]"
+        )
+        return
+
+    table = Table(title=f"Versions du run {run_id}")
+    table.add_column("Version", style="cyan")
+    table.add_column("Itération", justify="right")
+    table.add_column("Statut")
+    table.add_column("Coût (USD)", justify="right")
+    table.add_column("Verdict")
+    table.add_column("Durée (s)", justify="right")
+
+    for v in versions_list:
+        verdict_color = "green" if v.final_verdict == "STOP" else "yellow"
+        cost_display = f"${v.total_cost_usd:.4f}" if v.total_cost_usd > 0 else "—"
+        duration_display = (
+            f"{receipt_data['total_duration_s']:.1f}"
+            if receipt_data and v.version_id == f"v{iterations}"
+            else "—"
+        )
+        table.add_row(
+            v.version_id,
+            str(v.iteration_count),
+            v.status,
+            cost_display,
+            f"[{verdict_color}]{v.final_verdict}[/{verdict_color}]",
+            duration_display,
+        )
+
+    console.print(table)
+
+
+@app.command(name="diff")
+def diff(
+    run_id_1: str = typer.Argument(..., help="Premier run ID à comparer"),
+    run_id_2: str = typer.Argument(..., help="Deuxième run ID à comparer"),
+):
+    """Compare deux runs : delta coûts, delta itérations, verdict changé."""
+    state_1 = load_state(run_id_1)
+    state_2 = load_state(run_id_2)
+
+    if not state_1:
+        console.print(f"[red]Run '{run_id_1}' introuvable.[/red]")
+        raise typer.Exit(1)
+    if not state_2:
+        console.print(f"[red]Run '{run_id_2}' introuvable.[/red]")
+        raise typer.Exit(1)
+
+    cost_delta = state_2.accumulated_cost - state_1.accumulated_cost
+    iter_delta = state_2.current_iteration - state_1.current_iteration
+
+    verdict_a = (
+        state_1.final_verdict.decision if state_1.final_verdict else state_1.status
+    )
+    verdict_b = (
+        state_2.final_verdict.decision if state_2.final_verdict else state_2.status
+    )
+    verdict_changed = verdict_a != verdict_b
+
+    # Artefacts
+    artifacts_1 = len(state_1.artifacts)
+    artifacts_2 = len(state_2.artifacts)
+    new_artifacts = max(0, artifacts_2 - artifacts_1)
+    removed_artifacts = max(0, artifacts_1 - artifacts_2)
+
+    summary_parts = []
+    summary_parts.append(
+        f"Coût : {'+' if cost_delta >= 0 else ''}{cost_delta:.4f} USD"
+    )
+    summary_parts.append(
+        f"Itérations : {'+' if iter_delta >= 0 else ''}{iter_delta}"
+    )
+    if verdict_changed:
+        summary_parts.append(f"Verdict changé : {verdict_a} → {verdict_b}")
+    else:
+        summary_parts.append(f"Verdict inchangé : {verdict_a}")
+    if new_artifacts or removed_artifacts:
+        summary_parts.append(
+            f"Artefacts : +{new_artifacts}/-{removed_artifacts}"
+        )
+
+    version_diff = VersionDiff(
+        run_id=f"{run_id_1}..{run_id_2}",
+        version_a=run_id_1,
+        version_b=run_id_2,
+        cost_delta_usd=cost_delta,
+        iteration_delta=iter_delta,
+        verdict_changed=verdict_changed,
+        verdict_a=verdict_a,
+        verdict_b=verdict_b,
+        new_artifacts=new_artifacts,
+        removed_artifacts=removed_artifacts,
+        summary=", ".join(summary_parts),
+    )
+
+    # Affichage
+    panel = Panel.fit(
+        f"[bold]Diff : {run_id_1} vs {run_id_2}[/bold]\n"
+        f"Coût Δ : {'[green]' if cost_delta <= 0 else '[red]'}"
+        f"{'+' if cost_delta >= 0 else ''}{cost_delta:.4f} USD[/]\n"
+        f"Itérations Δ : {'+' if iter_delta >= 0 else ''}{iter_delta}\n"
+        f"Verdict : "
+        f"{'[red]' if verdict_changed else '[green]'}"
+        f"{verdict_a} → {verdict_b}{' (changé)' if verdict_changed else ' (inchangé)'}[/]\n"
+        f"Artefacts : +{new_artifacts}/-{removed_artifacts}",
+        border_style="cyan",
+        title="Comparaison",
+    )
+    console.print(panel)
+    console.print(f"\n[dim]{version_diff.summary}[/dim]")
+
+
+@app.command(name="inspect")
+def inspect_run(
+    run_id: str = typer.Argument(..., help="ID du run à inspecter"),
+):
+    """Affiche les détails complets d'un run : état, appels, artefacts, synthèse."""
+    state = load_state(run_id)
+    if not state:
+        console.print(f"[red]Run '{run_id}' introuvable.[/red]")
+        raise typer.Exit(1)
+
+    run_dir = RUNS_DIR / run_id
+
+    # ── État ─────────────────────────────────────────────────────
+    status_color = {
+        "running": "yellow",
+        "stopped": "green",
+        "forced_stop": "yellow",
+        "failed": "red",
+        "budget_exceeded": "red",
+    }.get(state.status, "white")
+
+    header_lines = [
+        f"[bold]Run #{state.run_id}[/bold]",
+        f"Statut       : [{status_color}]{state.status}[/{status_color}]",
+        f"Objectif     : {state.objective}",
+        f"Variante     : {state.variant.value}",
+        f"Itérations   : {state.current_iteration}/{state.max_iterations}",
+        f"Coût total   : ${state.accumulated_cost:.4f}",
+    ]
+    if state.final_verdict:
+        v_color = "green" if state.final_verdict.decision == "STOP" else "yellow"
+        header_lines.append(
+            f"Verdict      : [{v_color}]{state.final_verdict.decision}[/{v_color}]"
+        )
+        header_lines.append(f"Justification: {state.final_verdict.justification}")
+    if state.last_error:
+        header_lines.append(f"Erreur       : [red]{state.last_error}[/red]")
+
+    console.print(
+        Panel.fit("\n".join(header_lines), border_style="cyan", title="État")
+    )
+
+    # ── Historique des appels ────────────────────────────────────
+    if state.history:
+        table = Table(title="Historique des appels LLM")
+        table.add_column("#", style="cyan")
+        table.add_column("Rôle")
+        table.add_column("Provider")
+        table.add_column("Modèle")
+        table.add_column("In tok", justify="right")
+        table.add_column("Out tok", justify="right")
+        table.add_column("Coût", justify="right")
+        table.add_column("Latence", justify="right")
+
+        for call in state.history:
+            cost_str = (
+                f"${call.cost_usd:.4f}" if call.cost_usd > 0 else "—"
+            )
+            in_tok = (
+                f"~{call.input_tokens}"
+                if call.token_count_estimated
+                else str(call.input_tokens)
+            )
+            out_tok = (
+                f"~{call.output_tokens}"
+                if call.token_count_estimated
+                else str(call.output_tokens)
+            )
+            table.add_row(
+                str(call.iteration),
+                call.role,
+                call.provider,
+                call.model,
+                in_tok,
+                out_tok,
+                cost_str,
+                f"{call.latency_ms}ms",
+            )
+        console.print(table)
+    else:
+        console.print("[dim]Aucun appel LLM enregistré.[/dim]")
+
+    # ── Artefacts ────────────────────────────────────────────────
+    if state.artifacts:
+        console.print()
+        console.print(Panel("[bold]Artefacts immuables[/bold]", border_style="blue"))
+        for i, art in enumerate(state.artifacts, 1):
+            art_type = art.artifact_type
+            lang = f" ({art.language})" if art.language else ""
+            content_preview = art.content[:120].replace("\n", " ")
+            if len(art.content) > 120:
+                content_preview += "…"
+            console.print(
+                f"  [{i}] {art_type}{lang} — itération {art.source_iteration}"
+            )
+            console.print(f"      {content_preview}")
+    else:
+        console.print("[dim]Aucun artefact.[/dim]")
+
+    # ── Synthèse ─────────────────────────────────────────────────
+    if state.last_synthesis:
+        synth = state.last_synthesis
+        synth_lines = [
+            f"Objectif   : {synth.objective}",
+            f"Décisions  : {'; '.join(synth.key_decisions)}",
+        ]
+        if synth.uncertainties:
+            synth_lines.append(
+                f"Incertain  : {'; '.join(synth.uncertainties)}"
+            )
+        synth_lines.append(
+            f"Itérations : {synth.iteration_from} → {synth.iteration_to}"
+        )
+        synth_lines.append(f"Prochaine  : {synth.next_instruction}")
+        console.print()
+        console.print(
+            Panel.fit(
+                "\n".join(synth_lines),
+                border_style="green",
+                title="Dernière synthèse",
+            )
+        )
+    else:
+        console.print("[dim]Aucune synthèse enregistrée.[/dim]")
+
+    # ── Fichiers du run ──────────────────────────────────────────
+    if run_dir.exists():
+        files = sorted(p.name for p in run_dir.iterdir() if p.is_file())
+        if files:
+            console.print()
+            console.print(Panel("[bold]Fichiers du run[/bold]", border_style="dim"))
+            for f in files:
+                console.print(f"  {f}")
 
 
 @app.command(name="list")
@@ -444,9 +921,8 @@ def list_cmd():
 
     if not runs:
         console.print("[yellow]Aucun run trouve.[/yellow]")
-        console.print(
-            'Lancez votre premiere cascade avec : [cyan]goal run --objective "..."[/cyan]'
-        )
+        console.print("Lancez votre premiere cascade avec : "
+                      "[cyan]goal run --objective \"...\"[/cyan]")
         return
 
     table = Table(title="Runs G.O.A.L. Cascade")
@@ -518,15 +994,596 @@ def init(
 
     # README minimal
     (project_dir / "README.md").write_text(
-        f"# {name}\n\nProjet G.O.A.L. Cascade.\n", encoding="utf-8"
+        f"# {name}\n\nProjet G.O.A.L. Cascade.\n",
+        encoding="utf-8"
     )
 
     console.print(f"[green]Projet '{name}' cree.[/green]")
-    console.print("\nStructure :")
+    console.print(f"\nStructure :")
     console.print(f"  {name}/")
-    console.print("  ├── .goal/       (config locale)")
-    console.print("  ├── output/      (livrables)")
-    console.print("  └── README.md")
+    console.print(f"  ├── .goal/       (config locale)")
+    console.print(f"  ├── output/      (livrables)")
+    console.print(f"  └── README.md")
+
+
+def _print_enrichment_summary(stats: dict) -> None:
+    """Affiche le résumé de l'enrichissement LLM des frozen specs.
+
+    Tous les invariants générés restent verified=False — l'humain DOIT
+    valider avant goal cascade run.
+    """
+    enriched = stats.get("modules_enriched", 0)
+    generated = stats.get("invariants_generated", 0)
+    failed = stats.get("modules_failed", [])
+
+    lines = [
+        f"Modules enrichis    : {enriched}",
+        f"Invariants générés  : {generated}",
+        f"Statut              : tous verified=False",
+    ]
+    if failed:
+        lines.append(
+            f"Modules en échec    : {len(failed)} ({', '.join(failed)})"
+        )
+
+    console.print(
+        Panel.fit(
+            "\n".join(lines),
+            border_style="yellow",
+            title="Enrichissement LLM des frozen specs",
+        )
+    )
+    console.print(
+        "[yellow]⚠️  Aucun invariant llm-generated n'est marqué verified=True "
+        "automatiquement. Validez chaque invariant avant "
+        "[bold]goal cascade run[/bold].[/yellow]"
+    )
+
+
+@app.command(name="plan")
+def cascade_plan(
+    spec: Path = typer.Argument(
+        ..., help="Chemin vers le fichier de spécification (JSON/TOML/Markdown)"
+    ),
+    config: Path | None = typer.Option(
+        None,
+        "--config",
+        help=(
+            "Chemin du fichier config TOML. "
+            f"Par défaut : {DEFAULT_CONFIG_PATH} si présent."
+        ),
+    ),
+    provider: ProviderChoice = typer.Option(
+        ProviderChoice.MOCK, "--provider", "-p",
+        help="Provider : mock, kimi-cli ou kimi-code"
+    ),
+    output: Path = typer.Option(
+        Path("plan.json"),
+        "--output", "-o",
+        help="Chemin de sortie pour le plan JSON (défaut : plan.json)",
+    ),
+    synthesizer_model: str | None = typer.Option(
+        None,
+        "--synthesizer-model",
+        envvar="GOAL_SYNTHESIZER_MODEL",
+        help="Modèle small/cheap dédié aux synthèses (obligatoire avec Kimi)",
+    ),
+    enrich_frozen_specs: bool = typer.Option(
+        False,
+        "--enrich-frozen-specs",
+        help=(
+            "Active un 2e appel LLM par module (frozen_spec_gen.j2) pour "
+            "générer 3-5 invariants llm-generated. Tous restent verified=False "
+            "— validation humaine obligatoire avant goal cascade run."
+        ),
+    ),
+):
+    """Génère un plan de découpage modulaire depuis un fichier de spécification."""
+
+    # ── 1. Vérifier que le fichier spec existe ───────────────────
+    spec_path = spec.expanduser().resolve()
+    if not spec_path.exists():
+        console.print(
+            f"[bold red]Fichier spec introuvable : {spec_path}[/bold red]"
+        )
+        raise typer.Exit(2)
+
+    # ── 2. Charger la config TOML (optionnel) ───────────────────
+    candidate_config_path = config or DEFAULT_CONFIG_PATH
+    should_load_config = config is not None or candidate_config_path.exists()
+    selected_provider: BaseProvider | None = None
+
+    if should_load_config:
+        if config is not None and not candidate_config_path.exists():
+            console.print(
+                f"[bold red]Config introuvable : "
+                f"{candidate_config_path.expanduser()}[/bold red]"
+            )
+            raise typer.Exit(2)
+        try:
+            goal_config = load_goal_config(candidate_config_path)
+        except (ValidationError, ValueError) as exc:
+            console.print(
+                f"[bold red]Config invalide ({candidate_config_path}): "
+                f"{exc}[/bold red]"
+            )
+            raise typer.Exit(1) from exc
+        _print_config_summary(candidate_config_path, goal_config.providers)
+
+        # Les providers Kimi exigent un modèle explicite
+        if (
+            goal_config.providers.resolved_synthesizer in ("kimi-cli", "kimi-code")
+            and not synthesizer_model
+        ):
+            typer.echo(
+                "Erreur : --synthesizer-model est requis avec un provider Kimi",
+                err=True,
+            )
+            raise typer.BadParameter(
+                "requis avec un provider Kimi",
+                param_hint="--synthesizer-model",
+            )
+
+        # Utiliser le synthesizer (tâche de planification = synthèse)
+        selected_provider = _build_provider(
+            goal_config.providers.resolved_synthesizer,
+            synthesizer_model=synthesizer_model,
+            config=goal_config,
+        )
+
+    # ── 3. Construire le provider (fallback) ─────────────────────
+    if selected_provider is None:
+        if synthesizer_model is not None:
+            synthesizer_model = synthesizer_model.strip()
+        selected_provider = _build_provider(
+            provider.value,
+            synthesizer_model=synthesizer_model,
+        )
+
+    # ── 4. Appeler ModuleGraph.from_spec ─────────────────────────
+    console.print(
+        f"[cyan]Analyse du spec : {spec_path}[/cyan]"
+    )
+    console.print(
+        f"[cyan]Provider : {selected_provider.name}[/cyan]"
+    )
+
+    try:
+        graph, plan, enrichment_stats = ModuleGraph.from_spec(
+            spec_path,
+            selected_provider,
+            enrich=enrich_frozen_specs,
+        )
+    except Exception as exc:
+        console.print(
+            f"[bold red]Erreur lors de la planification : {exc}[/bold red]"
+        )
+        raise typer.Exit(1) from exc
+
+    # ── 5. Sauvegarder le plan en plan.json ──────────────────────
+    output_path = output.expanduser().resolve()
+    plan_data = plan.model_dump()
+    plan_data["_graph"] = graph.to_plan_dict()
+    plan_data["_topological_order"] = graph.topological_order()
+    plan_data["_batches"] = graph.parallel_batches()
+    output_path.write_text(
+        json.dumps(plan_data, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+
+    # ── 6. Afficher un résumé rich ───────────────────────────────
+    batches = graph.parallel_batches()
+    topo_order = graph.topological_order()
+    total_lines = sum(m.estimated_lines for m in plan.modules)
+
+    # Modules
+    modules_table = Table(title="Modules")
+    modules_table.add_column("ID", style="cyan")
+    modules_table.add_column("Nom")
+    modules_table.add_column("Lignes est.", justify="right")
+    modules_table.add_column("Dépendances")
+    modules_table.add_column("Invariants", justify="right")
+
+    for mod in plan.modules:
+        # Dépendances du module depuis le plan
+        mod_deps = [
+            dep for dep in plan.dependencies
+            if dep.producer == mod.id or dep.consumer == mod.id
+        ]
+        deps = (
+            ", ".join(f"{d.producer}→{d.consumer}" for d in mod_deps)
+            if mod_deps else "—"
+        )
+        # Comptage depuis la frozen spec du graphe (peut avoir été enrichie).
+        frozen = graph._specs.get(mod.id)
+        invariants_count = len(frozen.invariants) if frozen else 0
+        modules_table.add_row(
+            mod.id,
+            mod.name,
+            str(mod.estimated_lines),
+            deps,
+            str(invariants_count),
+        )
+
+    console.print(modules_table)
+
+    # Résumé global
+    summary_lines = [
+        f"Modules        : {len(plan.modules)}",
+        f"Dépendances    : {len(plan.dependencies)}",
+        f"Batches        : {len(batches)}",
+        f"Ordre topo     : {' → '.join(topo_order)}",
+        f"Total lignes   : {total_lines:,}",
+    ]
+
+    console.print(
+        Panel.fit(
+            "\n".join(summary_lines),
+            border_style="green",
+            title="Résumé du plan",
+        )
+    )
+
+    # Résumé de l'enrichissement LLM (si activé)
+    if enrichment_stats is not None:
+        _print_enrichment_summary(enrichment_stats)
+
+    # Contrats
+    if plan.dependencies:
+        contracts_table = Table(title="Contrats d'interface")
+        contracts_table.add_column("Producteur")
+        contracts_table.add_column("Consommateur")
+        contracts_table.add_column("Description")
+        for dep in plan.dependencies:
+            contracts_table.add_row(
+                dep.producer, dep.consumer, dep.interface_description,
+            )
+        console.print(contracts_table)
+
+    console.print(f"\n[green]✅ Plan sauvegardé : {output_path}[/green]")
+
+
+@app.command()
+def resume(
+    run_id: str = typer.Argument(..., help="Run ID à reprendre"),
+    audience: str = typer.Option(
+        "", "--audience", "-a", help="Public cible"
+    ),
+    constraints: str = typer.Option(
+        "", "--constraints", "-c", help="Contraintes (format, longueur, etc.)"
+    ),
+    config: Path | None = typer.Option(
+        None,
+        "--config",
+        help=(
+            "Chemin du fichier config TOML. "
+            f"Par défaut : {DEFAULT_CONFIG_PATH} si présent."
+        ),
+    ),
+    synthesizer_model: str | None = typer.Option(
+        None,
+        "--synthesizer-model",
+        envvar="GOAL_SYNTHESIZER_MODEL",
+        help="Modèle small/cheap dédié aux synthèses (obligatoire avec Kimi)",
+    ),
+    no_synth: bool = typer.Option(
+        False,
+        "--no-synth",
+        help="Désactiver la synthèse orientée objectif (debug : la sortie brute est passée telle quelle)",
+    ),
+):
+    """Reprend une cascade interrompue depuis le dernier checkpoint SQLite."""
+    from .orchestrator.cascade_executor import CascadeExecutor
+    from .orchestrator.state_manager import RUNS_DIR, load_state
+
+    if synthesizer_model is not None:
+        synthesizer_model = synthesizer_model.strip()
+
+    run_dir = RUNS_DIR / run_id
+    checkpoint_dir = run_dir / ".checkpoints"
+    checkpoint_path = checkpoint_dir / "checkpoint.db"
+
+    if not checkpoint_path.exists():
+        console.print(
+            f"[bold red]Aucun checkpoint trouvé pour le run '{run_id}'[/bold red]"
+        )
+        console.print(f"  Chemin attendu : {checkpoint_path}")
+        raise typer.Exit(1)
+
+    # Charger l'état initial depuis le checkpoint
+    console.print(
+        f"[cyan]Reprise du run {run_id} depuis le checkpoint SQLite...[/cyan]"
+    )
+    console.print(f"  Checkpoint : [cyan]{checkpoint_path}[/cyan]")
+
+    # --- Construction des providers (même logique que run()) ---
+    candidate_config_path = config or DEFAULT_CONFIG_PATH
+    should_load_config = config is not None or candidate_config_path.exists()
+    budget_tracker: BudgetTracker | None = None
+
+    if should_load_config:
+        if config is not None and not candidate_config_path.exists():
+            console.print(
+                f"[bold red]Config introuvable : "
+                f"{candidate_config_path.expanduser()}[/bold red]"
+            )
+            raise typer.Exit(2)
+        try:
+            goal_config = load_goal_config(candidate_config_path)
+        except (ValidationError, ValueError) as exc:
+            console.print(
+                f"[bold red]Config invalide ({candidate_config_path}): "
+                f"{exc}[/bold red]"
+            )
+            raise typer.Exit(1) from exc
+        _print_config_summary(candidate_config_path, goal_config.providers)
+
+        if (
+            goal_config.providers.resolved_synthesizer in ("kimi-cli", "kimi-code")
+            and not synthesizer_model
+        ):
+            typer.echo(
+                "Erreur : --synthesizer-model est requis avec un provider Kimi",
+                err=True,
+            )
+            raise typer.BadParameter(
+                "requis avec un provider Kimi",
+                param_hint="--synthesizer-model",
+            )
+
+        ctx = build_execution_context(goal_config, synthesizer_model=synthesizer_model)
+        selected_provider = ctx.provider
+        selected_synthesizer_provider = ctx.synthesizer_provider
+        budget_tracker = ctx.budget_tracker
+    else:
+        # Fallback Mock (comportement legacy)
+        selected_provider = MockProvider()
+        selected_synthesizer_provider = MockProvider()
+
+    # Créer un executor avec les vrais providers.
+    # rag_bridge branché (comme run()) : sans lui, resume() ne pourrait pas
+    # synchroniser le run repris vers le RAG.
+    executor = CascadeExecutor(
+        provider=selected_provider,
+        synthesizer_provider=selected_synthesizer_provider,
+        rag_bridge=RagBridge(),
+        budget_tracker=budget_tracker,
+    )
+
+    # ── Budget check fail fast (avant reprise) ──────────────────
+    pre_state = load_state(run_id)
+    if pre_state is not None and budget_tracker is not None:
+        if budget_tracker.is_exceeded(run_id, pre_state.accumulated_cost):
+            console.print(
+                f"[bold yellow]⛔ Budget déjà dépassé pour le run '{run_id}' "
+                f"(${pre_state.accumulated_cost:.4f} / "
+                f"${budget_tracker.config.max_per_run_usd:.2f}).[/bold yellow]"
+            )
+            console.print(
+                "[yellow]Reprise impossible : ajustez le budget dans la config TOML "
+                "ou relancez un nouveau run.[/yellow]"
+            )
+            raise typer.Exit(1)
+
+    # ── Contexte de reprise (avant exécution) ───────────────────
+    if pre_state is not None:
+        status_color = {
+            "running": "yellow",
+            "stopped": "green",
+            "forced_stop": "yellow",
+            "budget_exceeded": "red",
+            "failed": "red",
+        }.get(pre_state.status, "white")
+
+        resume_lines = [
+            f"[bold]Reprise du run {run_id}[/bold]",
+            f"Itération : [cyan]{pre_state.current_iteration}[/cyan]"
+            f"/{pre_state.max_iterations}",
+            f"Statut : [{status_color}]{pre_state.status}[/{status_color}]",
+            f"Coût accumulé : [yellow]${pre_state.accumulated_cost:.4f}[/yellow]",
+        ]
+        if pre_state.last_synthesis:
+            resume_lines.append(
+                f"Objectif synthèse : [dim]{pre_state.last_synthesis.objective}[/dim]"
+            )
+        console.print()
+        console.print(
+            Panel.fit(
+                "\n".join(resume_lines),
+                border_style="cyan",
+                title="Contexte de reprise",
+            )
+        )
+
+    try:
+        state = executor.resume(
+            run_id,
+            audience=redact_sensitive(audience) if audience else "",
+            constraints=redact_sensitive(constraints) if constraints else "",
+            verbose=True,
+            no_synth=no_synth,
+        )
+    except FileNotFoundError as exc:
+        console.print(f"[bold red]{exc}[/bold red]")
+        raise typer.Exit(1) from exc
+    except Exception as exc:
+        console.print(f"[bold red]Erreur lors de la reprise : {exc}[/bold red]")
+        raise typer.Exit(1) from exc
+
+    # Afficher le résultat
+    console.print()
+    if state.status == "stopped":
+        console.print(
+            f"[bold green]Cascade reprise et terminée en "
+            f"{state.current_iteration} iterations[/bold green]"
+        )
+    elif state.status == "forced_stop":
+        console.print(
+            f"[bold yellow]Cascade reprise et stoppée (limite atteinte) "
+            f"après {state.current_iteration} iterations[/bold yellow]"
+        )
+    else:
+        console.print(
+            f"[bold cyan]Cascade reprise — statut : {state.status}[/bold cyan]"
+        )
+
+    if state.final_verdict:
+        verdict = state.final_verdict
+        color = "green" if verdict.decision == "STOP" else "yellow"
+        console.print(
+            f"\nVerdict : [{color}]{verdict.decision}[/{color}]"
+        )
+        console.print(f"Justification : {verdict.justification}")
+
+    console.print(f"\nRun ID : [cyan]{state.run_id}[/cyan]")
+    console.print(f"Livrable : {run_dir / 'final_output.md'}")
+
+
+@app.command(name="cascade-run")
+def cascade_run(
+    plan_path: str = typer.Argument(..., help="Chemin vers le fichier plan.json"),
+    config: Path | None = typer.Option(
+        None,
+        "--config",
+        help=(
+            "Chemin du fichier config TOML. "
+            f"Par défaut : {DEFAULT_CONFIG_PATH} si présent."
+        ),
+    ),
+    synthesizer_model: str | None = typer.Option(
+        None,
+        "--synthesizer-model",
+        envvar="GOAL_SYNTHESIZER_MODEL",
+        help="Modèle small/cheap dédié aux synthèses (obligatoire avec Kimi)",
+    ),
+    verbose: bool = typer.Option(False, "--verbose", "-v", help="Logs détaillés"),
+) -> None:
+    """Exécute toutes les cascades d'un plan.json.
+
+    Multi-cascade : exécuteur topologique + intégration finale.
+    """
+    if synthesizer_model is not None:
+        synthesizer_model = synthesizer_model.strip()
+
+    import json as _json
+    from .multicascade.module_graph import ModuleGraph
+    from .multicascade.multi_executor import MultiCascadeExecutor
+
+    plan_file = Path(plan_path)
+    if not plan_file.exists():
+        console.print(f"[red]Fichier plan introuvable : {plan_path}[/red]")
+        raise typer.Exit(1)
+
+    try:
+        graph = ModuleGraph.from_plan_file(plan_file)
+    except Exception as exc:
+        console.print(f"[red]Plan invalide : {exc}[/red]")
+        raise typer.Exit(1)
+
+    plan_data = _json.loads(plan_file.read_text(encoding="utf-8"))
+    module_count = len(plan_data.get("modules", []))
+    batch_count = len(graph.parallel_batches())
+
+    console.print(f"[blue]Exécution du plan : {module_count} modules, {batch_count} batches[/blue]")
+    console.print(f"  Ordre topologique : {graph.topological_order()}")
+    for i, batch in enumerate(graph.parallel_batches()):
+        console.print(f"  Batch {i+1} : {batch}")
+
+    # --- Construction des providers et du budget tracker (même logique que run/resume) ---
+    # NOTE (commit 1) : suppression du hardcode MockProvider. Avant ce patch,
+    # cascade-run propageait MockProvider à CHAQUE module via
+    # MultiCascadeExecutor.run_all() → cascade_executor.run(...). Tout plan
+    # multi-cascade s'exécutait en mock, indépendamment de la config TOML.
+    candidate_config_path = config or DEFAULT_CONFIG_PATH
+    should_load_config = config is not None or candidate_config_path.exists()
+    budget_tracker: BudgetTracker | None = None
+    selected_provider: BaseProvider
+    selected_synthesizer_provider: BaseProvider
+    goal_config: "GoalConfig | None" = None
+
+    if should_load_config:
+        if config is not None and not candidate_config_path.exists():
+            console.print(
+                f"[bold red]Config introuvable : "
+                f"{candidate_config_path.expanduser()}[/bold red]"
+            )
+            raise typer.Exit(2)
+        try:
+            goal_config = load_goal_config(candidate_config_path)
+        except (ValidationError, ValueError) as exc:
+            console.print(
+                f"[bold red]Config invalide ({candidate_config_path}): "
+                f"{exc}[/bold red]"
+            )
+            raise typer.Exit(1) from exc
+        _print_config_summary(candidate_config_path, goal_config.providers)
+
+        # Validation Kimi : --synthesizer-model obligatoire avec kimi-cli/kimi-code
+        if (
+            goal_config.providers.resolved_synthesizer in ("kimi-cli", "kimi-code")
+            and not synthesizer_model
+        ):
+            typer.echo(
+                "Erreur : --synthesizer-model est requis avec un provider Kimi",
+                err=True,
+            )
+            raise typer.BadParameter(
+                "requis avec un provider Kimi",
+                param_hint="--synthesizer-model",
+            )
+
+        ctx = build_execution_context(goal_config, synthesizer_model=synthesizer_model)
+        selected_provider = ctx.provider
+        selected_synthesizer_provider = ctx.synthesizer_provider
+        budget_tracker = ctx.budget_tracker
+    else:
+        # Fallback Mock (comportement legacy sans config)
+        selected_provider = MockProvider()
+        selected_synthesizer_provider = MockProvider()
+        console.print(
+            "[yellow]⚠ Aucune config chargée : cascade exécutée avec MockProvider. "
+            "Spécifiez --config PATH pour utiliser les vrais providers.[/yellow]"
+        )
+
+    # Construire l'exécuteur avec les vrais providers (fallback Mock géré ci-dessus)
+    cascade_executor = CascadeExecutor(
+        provider=selected_provider,
+        synthesizer_provider=selected_synthesizer_provider,
+        rag_bridge=RagBridge(),
+    )
+
+    multi_executor = MultiCascadeExecutor(
+        module_graph=graph,
+        cascade_executor=cascade_executor,
+        budget_tracker=budget_tracker,
+    )
+
+    try:
+        module_results = multi_executor.run_all()
+    except Exception as exc:
+        console.print(f"[red]Échec d'un module : {exc}[/red]")
+        raise typer.Exit(1)
+
+    console.print("\n[blue]Cascade d'intégration...[/blue]")
+    try:
+        integration_state = multi_executor.run_integration(module_results)
+    except Exception as exc:
+        console.print(f"[red]Intégration échouée : {exc}[/red]")
+        raise typer.Exit(1)
+
+    total_cost = sum(s.accumulated_cost for s in module_results.values())
+    total_cost += integration_state.accumulated_cost
+    total_iterations = sum(s.current_iteration for s in module_results.values())
+    total_iterations += integration_state.current_iteration
+
+    console.print(f"\n[green]Multi-cascade terminée[/green]")
+    console.print(f"  Modules : {len(module_results)}")
+    console.print(f"  Itérations totales : {total_iterations}")
+    console.print(f"  Coût total : ${total_cost:.4f}")
+    console.print(
+        f"  Intégration : "
+        f"{integration_state.final_verdict.decision if integration_state.final_verdict else 'N/A'}"
+    )
 
 
 if __name__ == "__main__":

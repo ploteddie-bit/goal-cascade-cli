@@ -28,6 +28,7 @@ class OllamaEmbedding:
         model_name: str | None = None,
         url: str | None = None,
         batch_size: int = DEFAULT_BATCH,
+        timeout: float = TIMEOUT,
     ):
         self.model_name = model_name or os.environ.get("OLLAMA_EMBED_MODEL", DEFAULT_EMBED_MODEL)
         if url:
@@ -36,6 +37,7 @@ class OllamaEmbedding:
             host = os.environ.get("OLLAMA_HOST", DEFAULT_OLLAMA_HOST).rstrip("/")
             self.url = os.environ.get("OLLAMA_EMBED_URL", f"{host}/api/embed").rstrip("/")
         self.batch_size = batch_size
+        self.timeout = timeout
 
     def _post(self, inputs: list[str]) -> list[list[float]]:
         if not self.url.startswith(("http://", "https://")):
@@ -44,7 +46,7 @@ class OllamaEmbedding:
         req = urllib.request.Request(
             self.url, data=payload, headers={"Content-Type": "application/json"}
         )
-        with urllib.request.urlopen(req, timeout=TIMEOUT) as resp:  # nosemgrep
+        with urllib.request.urlopen(req, timeout=self.timeout) as resp:  # nosemgrep
             data = json.loads(resp.read())
         embs: list[list[float]] = data.get("embeddings")
         if not embs:

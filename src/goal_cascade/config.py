@@ -4,9 +4,10 @@ import logging
 import tomllib
 from pathlib import Path
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import AliasChoices, BaseModel, ConfigDict, Field, model_validator
 
 from .providers.families import PROVIDER_FAMILIES
+from .providers.rate_limiter import RateLimitConfig
 
 logger = logging.getLogger(__name__)
 
@@ -39,6 +40,7 @@ class ProvidersConfig(BaseModel):
     resolved_role_mapping: dict[str, str] = Field(default_factory=dict)
     resolved_synthesizer: str = ""
     degraded: bool = False
+    diversity_failure: bool = False
     adaptations: list[ProviderAdaptation] = Field(default_factory=list)
 
     @model_validator(mode="after")
@@ -125,6 +127,32 @@ class ProvidersConfig(BaseModel):
                 )
             logger.warning("Diversité réduite : mêmes familles détectées. %s", details)
 
+        # Échec absolu de diversité : tous les rôles sur le même
+        # provider/famille (typiquement un seul provider enabled).
+        # Cela viole le Pilier 1 quelle que soit la valeur de
+        # require_diversity, donc on refuse au démarrage de la CLI.
+        unique_families = {
+            PROVIDER_FAMILIES.get(name, name)
+            for name in all_assigned.values()
+        }
+        diversity_failure = (
+            len(unique_families) == 1
+            and "mock" not in unique_families
+        )
+        if diversity_failure:
+            degraded = True
+            family = next(iter(unique_families))
+            details = f"{family}: {', '.join(all_assigned.keys())}"
+            if self.require_diversity:
+                raise ValueError(
+                    "require_diversity=true : tous les rôles sont assignés "
+                    f"à la même famille. {details}"
+                )
+            logger.warning(
+                "Diversité nulle : tous les rôles dans la même famille. %s",
+                details,
+            )
+
         if self.require_diversity and degraded:
             raise ValueError(
                 "require_diversity=true interdit le mode dégradé : "
@@ -143,6 +171,7 @@ class ProvidersConfig(BaseModel):
         self.resolved_role_mapping = resolved
         self.resolved_synthesizer = resolved_synthesizer
         self.degraded = degraded
+        self.diversity_failure = diversity_failure
         self.adaptations = adaptations
         return self
 
@@ -170,10 +199,45 @@ class ProvidersConfig(BaseModel):
         return rows
 
 
+class CacheConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    provider: str = Field(default="exact", description="Stratégie de cache : exact ou semantic")
+    enable_semantic: bool = Field(default=False, description="Activer le cache sémantique")
+    ttl_seconds: int = Field(default=3600, ge=60, description="Durée de vie du cache en secondes")
+
+
+class LoggingConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    level: str = Field(default="INFO", description="Niveau de log (DEBUG, INFO, WARNING, ERROR)")
+    format: str = Field(default="structlog", description="Format de log : structlog ou plain")
+    file: str | None = Field(default=None, description="Chemin du fichier de log (None = stdout)")
+
+
+class BudgetConfig(BaseModel):
+    """Configuration du budget et du kill switch (spec V2 §9.2)."""
+
+    max_per_run_usd: float = Field(default=0.50, gt=0)
+    max_per_day_usd: float = Field(default=10.00, gt=0)
+    warn_at_percent: int = Field(default=80, ge=10, le=100)
+    hard_stop: bool = True
+    runs_per_day_projection: int = Field(default=10, ge=1)
+
+
 class GoalConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     providers: ProvidersConfig
+    budget: BudgetConfig = Field(default_factory=BudgetConfig)
+    # Accepte [ratelimit] (canonique) ou [rate_limit] (alias historique)
+    # dans le TOML. Le nom Python reste `ratelimit`.
+    ratelimit: RateLimitConfig = Field(
+        default_factory=RateLimitConfig,
+        validation_alias=AliasChoices("ratelimit", "rate_limit"),
+    )
+    cache: CacheConfig = Field(default_factory=CacheConfig)
+    logging: LoggingConfig = Field(default_factory=LoggingConfig)
 
 
 def load_goal_config(path: Path) -> GoalConfig:
