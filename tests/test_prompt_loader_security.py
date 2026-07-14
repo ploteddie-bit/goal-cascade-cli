@@ -13,7 +13,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-from jinja2 import SecurityError, UndefinedError
+from jinja2.exceptions import SecurityError, UndefinedError
 
 from goal_cascade.orchestrator.prompt_loader import (
     InvalidTemplateNameError,
@@ -96,13 +96,17 @@ class TestB3Sandboxing:
 
     def test_blocks_import(self, tmp_path: Path) -> None:
         """Un template ne peut pas importer des modules."""
+        from jinja2.exceptions import TemplateNotFound
+
         malicious = tmp_path / "import_evil.j2"
         malicious.write_text(
             "{% import 'os' as os %}{{ os.system('whoami') }}",
             encoding="utf-8",
         )
         loader = PromptLoader(extra_paths=[tmp_path])
-        with pytest.raises((SecurityError, UndefinedError)):
+        # Jinja2 {% import %} cherche un template nommé 'os' (pas le module Python).
+        # Le loader échoue avant que le sandbox n'intervienne → TemplateNotFound.
+        with pytest.raises((SecurityError, UndefinedError, TemplateNotFound)):
             loader.load("import_evil.j2")
 
 
