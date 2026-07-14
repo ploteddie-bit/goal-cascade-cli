@@ -41,12 +41,12 @@ SIMILARITY_THRESHOLDS = {
 class DriftStatus(str, Enum):
     """Statut de dérive entre deux itérations successives."""
 
-    NO_DATA = "no_data"       # Première itération, pas de comparaison
-    NORMAL = "normal"         # 0.70 ≤ sim < 0.85
-    WARNING = "warning"       # 0.85 ≤ sim < 0.95
-    CRITICAL = "critical"     # sim ≥ 0.95 → STOP anticipé
-    DIVERGENT = "divergent"   # sim < 0.70 → attendu adversaire
-    ERROR = "error"           # Embedding échoué (timeout, serveur down)
+    NO_DATA = "no_data"  # Première itération, pas de comparaison
+    NORMAL = "normal"  # 0.70 ≤ sim < 0.85
+    WARNING = "warning"  # 0.85 ≤ sim < 0.95
+    CRITICAL = "critical"  # sim ≥ 0.95 → STOP anticipé
+    DIVERGENT = "divergent"  # sim < 0.70 → attendu adversaire
+    ERROR = "error"  # Embedding échoué (timeout, serveur down)
 
 
 class DriftDetector:
@@ -77,7 +77,8 @@ class DriftDetector:
             embedding = self._embed_safe(text)
         except Exception as exc:
             logger.warning(
-                "drift_embedding_failed error=%s", redact_sensitive(str(exc)),
+                "drift_embedding_failed error=%s",
+                redact_sensitive(str(exc)),
             )
             return DriftStatus.ERROR, None
 
@@ -98,7 +99,8 @@ class DriftDetector:
 
         logger.info(
             "drift_evaluated similarity=%.4f status=%s",
-            similarity, status.value,
+            similarity,
+            status.value,
         )
 
         return status, similarity

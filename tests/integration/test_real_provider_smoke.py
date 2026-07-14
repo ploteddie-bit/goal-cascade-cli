@@ -54,9 +54,7 @@ def _no_real_rag_bridge(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr("goal_cascade.cli.RagBridge", lambda: mock_bridge)
 
 
-def test_real_provider_smoke(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_real_provider_smoke(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """Un seul appel cascade réel avec un vrai provider.
 
     Le budget est fixé à 0.05 USD pour éviter toute dérive de coût.
@@ -65,9 +63,7 @@ def test_real_provider_smoke(
     """
     provider = _provider()
     if provider not in {"anthropic", "openai", "google"}:
-        pytest.skip(
-            "GOAL_INTEGRATION_PROVIDER doit être anthropic|openai|google"
-        )
+        pytest.skip("GOAL_INTEGRATION_PROVIDER doit être anthropic|openai|google")
     if not _api_key_for(provider):
         pytest.skip(f"{provider.upper()}_API_KEY non défini")
 
@@ -87,9 +83,7 @@ max_per_run_usd = 0.05
         encoding="utf-8",
     )
 
-    monkeypatch.setattr(
-        "goal_cascade.cli.DEFAULT_CONFIG_PATH", tmp_path / "absent.toml"
-    )
+    monkeypatch.setattr("goal_cascade.cli.DEFAULT_CONFIG_PATH", tmp_path / "absent.toml")
     monkeypatch.chdir(tmp_path)
 
     result = CliRunner().invoke(
@@ -98,8 +92,10 @@ max_per_run_usd = 0.05
             "run",
             "--objective",
             "Smoke test E2E : confirme en une phrase que tu fonctionnes.",
-            "--provider", provider,
-            "--config", str(config_path),
+            "--provider",
+            provider,
+            "--config",
+            str(config_path),
         ],
     )
 

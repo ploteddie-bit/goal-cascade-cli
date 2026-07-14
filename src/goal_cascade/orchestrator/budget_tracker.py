@@ -49,8 +49,7 @@ class BudgetExceeded(Exception):
         self.limit = limit
         self.scope = scope  # "per_run" ou "per_day"
         super().__init__(
-            f"Budget dépassé ({scope}): ${accumulated:.3f} / ${limit:.3f} "
-            f"(run {run_id})"
+            f"Budget dépassé ({scope}): ${accumulated:.3f} / ${limit:.3f} (run {run_id})"
         )
 
 
@@ -230,9 +229,7 @@ class BudgetTracker:
 
             # Sommer les coûts
             try:
-                for line in (
-                    events_file.read_text(encoding="utf-8").strip().split("\n")
-                ):
+                for line in events_file.read_text(encoding="utf-8").strip().split("\n"):
                     if not line.strip():
                         continue
                     event = json.loads(line)

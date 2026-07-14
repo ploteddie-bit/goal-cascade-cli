@@ -42,9 +42,7 @@ class PromptNotFoundError(FileNotFoundError):
         self.name = name
         self.searched = list(searched)
         paths = "\n  ".join(str(p) for p in self.searched) or "(aucun)"
-        super().__init__(
-            f"Template '{name}' introuvable. Chemins cherchés :\n  {paths}"
-        )
+        super().__init__(f"Template '{name}' introuvable. Chemins cherchés :\n  {paths}")
 
 
 class InvalidTemplateNameError(ValueError):

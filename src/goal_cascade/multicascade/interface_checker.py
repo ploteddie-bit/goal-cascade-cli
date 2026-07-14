@@ -70,8 +70,7 @@ class InterfaceChecker:
         relevant = [
             c
             for c in contracts
-            if c.producer_module == current_module_id
-            or c.consumer_module == current_module_id
+            if c.producer_module == current_module_id or c.consumer_module == current_module_id
         ]
 
         for contract in relevant:

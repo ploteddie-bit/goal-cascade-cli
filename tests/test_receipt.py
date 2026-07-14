@@ -3,6 +3,7 @@
 Adapté du code proposé par Eddie — imports depuis schemas.models
 (pas schemas.receipt qui n'existe pas dans notre architecture).
 """
+
 from __future__ import annotations
 
 from goal_cascade.schemas.models import LLMCallRecord, RunReceipt
@@ -34,8 +35,22 @@ def _make_call(
 def test_run_receipt_from_calls_computes_totals() -> None:
     calls = [
         _make_call(role="producer", input_tokens=420, output_tokens=1850, cost=0.003),
-        _make_call(role="critic", input_tokens=380, output_tokens=920, cache_read=420, cost=0.004, iteration=2),
-        _make_call(role="arbiter", input_tokens=680, output_tokens=850, cache_read=510, cost=0.001, iteration=4),
+        _make_call(
+            role="critic",
+            input_tokens=380,
+            output_tokens=920,
+            cache_read=420,
+            cost=0.004,
+            iteration=2,
+        ),
+        _make_call(
+            role="arbiter",
+            input_tokens=680,
+            output_tokens=850,
+            cache_read=510,
+            cost=0.001,
+            iteration=4,
+        ),
     ]
 
     receipt = RunReceipt.from_calls(

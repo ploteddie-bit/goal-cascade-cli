@@ -64,8 +64,10 @@ def test_goal_run_smoke_mock_provider(
             "run",
             "--objective",
             "Produire un rapport de smoke test E2E",
-            "--provider", "mock",
-            "--variant", "A",
+            "--provider",
+            "mock",
+            "--variant",
+            "A",
         ],
     )
 

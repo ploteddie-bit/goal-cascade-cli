@@ -35,8 +35,7 @@ class TestResumeNonexistentRun:
         result = runner.invoke(app, ["resume", "run-inexistant-xyz"])
 
         assert result.exit_code != 0, (
-            f"exit_code devrait être != 0 pour un run inexistant, "
-            f"reçu {result.exit_code}"
+            f"exit_code devrait être != 0 pour un run inexistant, reçu {result.exit_code}"
         )
 
 
@@ -71,15 +70,12 @@ class TestResumeBudgetExceeded:
                 scope="per_run",
             )
 
-        monkeypatch.setattr(
-            cascade_executor.CascadeExecutor, "resume", _fake_resume
-        )
+        monkeypatch.setattr(cascade_executor.CascadeExecutor, "resume", _fake_resume)
 
         result = runner.invoke(app, ["resume", run_id])
 
         assert result.exit_code != 0, (
-            f"exit_code devrait être != 0 quand le budget est dépassé, "
-            f"reçu {result.exit_code}"
+            f"exit_code devrait être != 0 quand le budget est dépassé, reçu {result.exit_code}"
         )
 
 
@@ -131,7 +127,5 @@ class TestResumeFinalization:
 
         assert receipt_path.exists(), "resume() doit re-générer receipt.json"
         assert metadata_path.exists(), "resume() doit finaliser les métadonnées"
-        assert rag_bridge.sync_run.call_count == 1, (
-            "resume() doit appeler rag_bridge.sync_run"
-        )
+        assert rag_bridge.sync_run.call_count == 1, "resume() doit appeler rag_bridge.sync_run"
         assert rag_bridge.sync_run.call_args.args[0] == run_id

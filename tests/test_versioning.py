@@ -1,4 +1,5 @@
 """Tests des schemas de versionnement (RunVersion, RunVersionsList, VersionDiff)."""
+
 from __future__ import annotations
 
 from goal_cascade.schemas.versioning import RunVersion, RunVersionsList, VersionDiff
@@ -65,15 +66,9 @@ class TestRunVersion:
 
 class TestRunVersionsList:
     def test_from_versions_sorted_by_date(self) -> None:
-        v_oldest = _make_version(
-            version_id="v1", created_at="2026-07-11T08:00:00+00:00"
-        )
-        v_newest = _make_version(
-            version_id="v3", created_at="2026-07-11T12:00:00+00:00"
-        )
-        v_middle = _make_version(
-            version_id="v2", created_at="2026-07-11T10:00:00+00:00"
-        )
+        v_oldest = _make_version(version_id="v1", created_at="2026-07-11T08:00:00+00:00")
+        v_newest = _make_version(version_id="v3", created_at="2026-07-11T12:00:00+00:00")
+        v_middle = _make_version(version_id="v2", created_at="2026-07-11T10:00:00+00:00")
 
         # Deliberement dans le desordre
         versions_list = RunVersionsList.from_versions(

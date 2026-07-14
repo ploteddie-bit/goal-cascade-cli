@@ -131,14 +131,8 @@ class ProvidersConfig(BaseModel):
         # provider/famille (typiquement un seul provider enabled).
         # Cela viole le Pilier 1 quelle que soit la valeur de
         # require_diversity, donc on refuse au démarrage de la CLI.
-        unique_families = {
-            PROVIDER_FAMILIES.get(name, name)
-            for name in all_assigned.values()
-        }
-        diversity_failure = (
-            len(unique_families) == 1
-            and "mock" not in unique_families
-        )
+        unique_families = {PROVIDER_FAMILIES.get(name, name) for name in all_assigned.values()}
+        diversity_failure = len(unique_families) == 1 and "mock" not in unique_families
         if diversity_failure:
             degraded = True
             family = next(iter(unique_families))

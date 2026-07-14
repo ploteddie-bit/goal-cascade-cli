@@ -31,9 +31,7 @@ def test_load_from_user_override(tmp_path: Path) -> None:
     """Un template dans extra_paths doit être prioritaire sur le package."""
     custom_dir = tmp_path / ".goal" / "prompts"
     custom_dir.mkdir(parents=True)
-    (custom_dir / "custom_test.j2").write_text(
-        "TEMPLATE PERSONNALISE : {{ objective }}\n"
-    )
+    (custom_dir / "custom_test.j2").write_text("TEMPLATE PERSONNALISE : {{ objective }}\n")
 
     loader = PromptLoader(extra_paths=[custom_dir])
     result = loader.load("custom_test.j2", objective="Test override")

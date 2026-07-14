@@ -116,6 +116,7 @@ def test_custom_checker_overrides_default() -> None:
 
 def test_custom_checker_failure_reported() -> None:
     """Un échec dans un checker personnalisé doit être rapporté."""
+
     def failing_checker(artifact: ImmutableArtifact) -> dict[str, str]:
         return {
             "artifact_type": artifact.artifact_type,

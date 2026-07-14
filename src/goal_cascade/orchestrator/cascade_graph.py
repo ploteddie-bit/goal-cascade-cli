@@ -65,6 +65,7 @@ ROLE_LABELS = {
 
 # ── Classe principale ──────────────────────────────────────────
 
+
 class CascadeGraph:
     """State machine LangGraph pour une cascade G.O.A.L. unique.
 
@@ -192,7 +193,8 @@ class CascadeGraph:
         if result.drift_status == DriftStatus.CRITICAL:
             logger.warning(
                 "drift_critical similarity=%.4f iteration=%d",
-                result.similarity_score or 0.0, cascade.current_iteration,
+                result.similarity_score or 0.0,
+                cascade.current_iteration,
             )
             updates["status"] = "forced_stop"
             updates["final_verdict"] = Verdict(
@@ -202,7 +204,8 @@ class CascadeGraph:
         elif result.drift_status == DriftStatus.WARNING:
             logger.info(
                 "drift_warning similarity=%.4f iteration=%d",
-                result.similarity_score or 0.0, cascade.current_iteration,
+                result.similarity_score or 0.0,
+                cascade.current_iteration,
             )
 
         return updates
@@ -325,7 +328,8 @@ class CascadeGraph:
         if cascade.current_iteration < cascade.max_iterations:
             logger.info(
                 "continue_loop iteration=%d max=%d",
-                cascade.current_iteration, cascade.max_iterations,
+                cascade.current_iteration,
+                cascade.max_iterations,
             )
             return "continue"
 
@@ -420,7 +424,7 @@ class CascadeGraph:
         end = raw_output.rfind("}")
         if start != -1 and end > start:
             try:
-                data = json.loads(raw_output[start:end + 1])
+                data = json.loads(raw_output[start : end + 1])
                 return Verdict(
                     decision=data.get("decision", "STOP"),
                     justification=data.get("justification", ""),

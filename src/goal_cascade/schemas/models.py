@@ -14,6 +14,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 class IterationRole(str, Enum):
     """Les 4 roles d'iteration de la cascade."""
+
     PRODUCER = "producer"
     CRITIC = "critic"
     ADVERSARY = "adversary"
@@ -22,6 +23,7 @@ class IterationRole(str, Enum):
 
 class Variant(str, Enum):
     """Variante de livrable."""
+
     A = "A"  # redactionnel (article, post, rapport)
     B = "B"  # technique (code, architecture, revue)
 
@@ -29,20 +31,21 @@ class Variant(str, Enum):
 class GoalOrientedSynthesis(BaseModel):
     """Synthese transmise entre les iterations (section 4 du framework).
     Filtre le bruit, garde le signal, casse l'ancrage."""
+
     objective: str = Field(
-        ..., min_length=1,
+        ...,
+        min_length=1,
         description="Objectif initial, reformule en une phrase (non vide)",
     )
     key_decisions: list[str] = Field(
-        ..., min_length=1, max_length=5,
-        description="3 a 5 decisions cles maximum"
+        ..., min_length=1, max_length=5, description="3 a 5 decisions cles maximum"
     )
     uncertainties: list[str] = Field(
-        default_factory=list,
-        description="Points non tranches ou a verifier"
+        default_factory=list, description="Points non tranches ou a verifier"
     )
     next_instruction: str = Field(
-        ..., min_length=1,
+        ...,
+        min_length=1,
         description="Role de l'iteration suivante + ce qu'elle doit produire (non vide)",
     )
     iteration_from: int
@@ -60,6 +63,7 @@ class ImmutableArtifact(BaseModel):
     """Charge utile immuable transmise intacte entre les jonctions.
     Ne JAMAIS etre synthetisee -- la forme EST le signal.
     (Identifie par revue externe Qwen, section 4.3 du framework)"""
+
     artifact_type: Literal["code", "json_schema", "formula", "test", "config", "sql"]
     language: str | None = None
     content: str = Field(..., description="Le contenu brut, non modifie")
@@ -69,10 +73,13 @@ class ImmutableArtifact(BaseModel):
 
 class LLMCallRecord(BaseModel):
     """Enregistrement d'un appel LLM pour la transparence des couts."""
+
     provider: str = Field(..., description="Provider utilisé (anthropic, openai, google, mock)")
     model: str = Field(..., description="Modèle concret (ex: claude-haiku-4-5)")
     iteration: int = Field(..., ge=1, le=5)
-    role: str = Field(..., description="Rôle dans la cascade (producer, critic, adversary, arbiter, synthesizer)")
+    role: str = Field(
+        ..., description="Rôle dans la cascade (producer, critic, adversary, arbiter, synthesizer)"
+    )
     input_tokens: int = Field(default=0, ge=0)
     output_tokens: int = Field(default=0, ge=0)
     cost_usd: float = Field(default=0.0, ge=0.0)
@@ -93,6 +100,7 @@ class RunReceipt(BaseModel):
     Voir la section 9 du plan d'implementation v2. La construction se fait
     via ``RunReceipt.from_calls()`` (classmethod) ou manuellement.
     """
+
     run_id: str
     objective: str
     total_iterations: int = Field(..., ge=0, le=5)
@@ -101,12 +109,10 @@ class RunReceipt(BaseModel):
     calls: list[LLMCallRecord] = Field(default_factory=list)
     total_cost_usd: float = Field(..., ge=0.0)
     cache_hit_rate: float = Field(
-        ..., ge=0.0, le=1.0,
-        description="cache_read_tokens / total_input_tokens"
+        ..., ge=0.0, le=1.0, description="cache_read_tokens / total_input_tokens"
     )
     projected_monthly_cost: float = Field(
-        ..., ge=0.0,
-        description="Basé sur runs_per_day_projection × 30 jours"
+        ..., ge=0.0, description="Basé sur runs_per_day_projection × 30 jours"
     )
 
     @classmethod
@@ -178,6 +184,7 @@ class RunReceipt(BaseModel):
 
 class Verdict(BaseModel):
     """Verdict de l'iteration 4 (Arbitre)."""
+
     model_config = ConfigDict(extra="forbid")
 
     decision: Literal["STOP", "CONTINUE"]
@@ -186,6 +193,7 @@ class Verdict(BaseModel):
 
 class Invariant(BaseModel):
     """Un invariant vérifiable de la frozen spec (spec V2 §4.3)."""
+
     description: str
     category: Literal["functional", "structural", "non_negotiable"] = "functional"
     verified: bool | None = None
@@ -198,6 +206,7 @@ class FrozenSpec(BaseModel):
     Aucun invariant ne peut être supprimé sans validation humaine.
     Chaque module d'un multi-cascade a sa propre FrozenSpec.
     """
+
     module_name: str
     objective: str
     invariants: list[Invariant] = Field(..., min_length=1)
@@ -212,6 +221,7 @@ class FrozenSpec(BaseModel):
 
 class InterfaceInvariant(BaseModel):
     """Invariant d'interface entre deux modules (spec V2 §4.4)."""
+
     description: str
     respected: bool | None = None
 
@@ -222,6 +232,7 @@ class InterfaceContract(BaseModel):
     Créé AVANT les cascades. Définit ce que le producteur fournit
     et ce que le consommateur attend.
     """
+
     contract_id: str
     producer_module: str
     consumer_module: str
@@ -234,6 +245,7 @@ class InterfaceContract(BaseModel):
 
 class CascadeState(BaseModel):
     """Etat persistant d'une cascade en cours d'execution."""
+
     run_id: str
     objective: str
     variant: Variant = Variant.A

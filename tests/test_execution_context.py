@@ -113,9 +113,7 @@ def test_execution_context_is_frozen() -> None:
         ctx.provider = None  # type: ignore[misc]
 
 
-def test_cascade_run_wires_real_provider_through_multi_executor(
-    tmp_path, monkeypatch
-) -> None:
+def test_cascade_run_wires_real_provider_through_multi_executor(tmp_path, monkeypatch) -> None:
     """E2E : ``cascade_run --config real.toml`` câble un ``RoleMappedProvider`` (pas Mock brut).
 
     Stratégie : monkeypatch ``MultiCascadeExecutor`` à la source
@@ -218,9 +216,7 @@ def test_cascade_run_wires_real_provider_through_multi_executor(
     )
 
     # ── Vérifications ───────────────────────────────────────────────────
-    assert result.exit_code == 0, (
-        f"cascade-run failed (exit {result.exit_code}):\n{result.output}"
-    )
+    assert result.exit_code == 0, f"cascade-run failed (exit {result.exit_code}):\n{result.output}"
     assert len(captured_executors) == 1, (
         f"Expected exactly 1 MultiCascadeExecutor, got {len(captured_executors)}"
     )

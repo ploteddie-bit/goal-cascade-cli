@@ -7,6 +7,7 @@ C4 : cascade d'intégration bornée à 5 itérations.
 C5 : pas de parallélisme non contrôlé.
 C6 : contrats d'interface vérifiés après chaque batch.
 """
+
 from __future__ import annotations
 
 import sys
@@ -290,13 +291,13 @@ def test_interface_check_called_after_batch_with_correct_signature() -> None:
     assert mock_checker.check.call_count == 2
 
     checked_modules = {
-        call.kwargs["current_module_id"]
-        for call in mock_checker.check.call_args_list
+        call.kwargs["current_module_id"] for call in mock_checker.check.call_args_list
     }
     assert checked_modules == {"A", "B"}
 
     b_call = next(
-        call for call in mock_checker.check.call_args_list
+        call
+        for call in mock_checker.check.call_args_list
         if call.kwargs["current_module_id"] == "B"
     )
     assert any(c.contract_id == "A->B" for c in b_call.kwargs["contracts"])

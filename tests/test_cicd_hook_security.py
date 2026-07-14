@@ -7,6 +7,7 @@ A4 : ``FileNotFoundError`` et ``TimeoutExpired`` attrapés et logués.
 A5 : ``InterfaceChecker.check()`` exécute d'abord la phase déterministe.
 A6 : aucun appel à ``SemanticCache.lookup()`` dans le chemin d'exécution.
 """
+
 from __future__ import annotations
 
 import subprocess

@@ -5,6 +5,7 @@ E2 : traces de run isolées (permissions 0o700).
 E3 : cache sémantique local à l'utilisateur avec permissions restreintes.
 E4 : .gitignore exclut les traces.
 """
+
 from __future__ import annotations
 
 import logging
@@ -59,9 +60,7 @@ def test_semantic_cache_error_logs_do_not_leak_query() -> None:
 
     secret_query = "Ma clé API est sk-cache-secret-999"
     mock_client = MagicMock()
-    mock_client.embed.side_effect = RuntimeError(
-        f"Connection failed for {secret_query}"
-    )
+    mock_client.embed.side_effect = RuntimeError(f"Connection failed for {secret_query}")
 
     cache = SemanticCache(
         db_path=Path("/tmp/should_not_exist_for_test_semantic_cache.db"),

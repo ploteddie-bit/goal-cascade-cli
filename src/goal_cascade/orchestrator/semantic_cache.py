@@ -119,9 +119,7 @@ class SemanticCache:
         best_similarity = 0.0
 
         with sqlite3.connect(str(self._db_path)) as conn:
-            cursor = conn.execute(
-                "SELECT embedding, result_json, run_id FROM semantic_entries"
-            )
+            cursor = conn.execute("SELECT embedding, result_json, run_id FROM semantic_entries")
             for row in cursor:
                 stored_vec = np.frombuffer(row[0], dtype=np.float64)
                 similarity = self._cosine_similarity(query_vec, stored_vec)
@@ -136,14 +134,17 @@ class SemanticCache:
         if best_match and best_similarity >= self._threshold:
             logger.info(
                 "semantic_cache_hit similarity=%.4f run_id=%s threshold=%.2f",
-                best_similarity, best_match["run_id"], self._threshold,
+                best_similarity,
+                best_match["run_id"],
+                self._threshold,
             )
             self._increment_access(best_match["run_id"])
             return best_match
 
         logger.debug(
             "semantic_cache_miss best_similarity=%.4f threshold=%.2f",
-            best_similarity, self._threshold,
+            best_similarity,
+            self._threshold,
         )
         return None
 
@@ -188,7 +189,9 @@ class SemanticCache:
                 conn.commit()
             logger.info(
                 "semantic_cache_stored hash=%s run_id=%s dim=%d",
-                query_hash, run_id, EMBEDDING_DIM,
+                query_hash,
+                run_id,
+                EMBEDDING_DIM,
             )
             return True
         except sqlite3.Error as exc:

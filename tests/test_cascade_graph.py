@@ -80,28 +80,25 @@ def cascade_graph(mock_provider, mock_synthesizer, budget_tracker) -> CascadeGra
 
 
 class TestRouteAfterSynth:
-    def test_after_iteration_1_routes_to_critic(
-        self, cascade_graph: CascadeGraph
-    ) -> None:
+    def test_after_iteration_1_routes_to_critic(self, cascade_graph: CascadeGraph) -> None:
         state = {"run_id": "test", "objective": "Test", "current_iteration": 1, "status": "running"}
         assert cascade_graph._route_after_synth(state) == "critic"
 
-    def test_after_iteration_2_routes_to_adversary(
-        self, cascade_graph: CascadeGraph
-    ) -> None:
+    def test_after_iteration_2_routes_to_adversary(self, cascade_graph: CascadeGraph) -> None:
         state = {"run_id": "test", "objective": "Test", "current_iteration": 2, "status": "running"}
         assert cascade_graph._route_after_synth(state) == "adversary"
 
-    def test_after_iteration_3_routes_to_arbiter(
-        self, cascade_graph: CascadeGraph
-    ) -> None:
+    def test_after_iteration_3_routes_to_arbiter(self, cascade_graph: CascadeGraph) -> None:
         state = {"run_id": "test", "objective": "Test", "current_iteration": 3, "status": "running"}
         assert cascade_graph._route_after_synth(state) == "arbiter"
 
-    def test_forced_stop_status_returns_forced_stop(
-        self, cascade_graph: CascadeGraph
-    ) -> None:
-        state = {"run_id": "test", "objective": "Test", "current_iteration": 2, "status": "forced_stop"}
+    def test_forced_stop_status_returns_forced_stop(self, cascade_graph: CascadeGraph) -> None:
+        state = {
+            "run_id": "test",
+            "objective": "Test",
+            "current_iteration": 2,
+            "status": "forced_stop",
+        }
         assert cascade_graph._route_after_synth(state) == "forced_stop"
 
 
@@ -109,42 +106,44 @@ class TestRouteAfterSynth:
 
 
 class TestRouteAfterVerdict:
-    def test_stop_verdict_returns_stop(
-        self, cascade_graph: CascadeGraph
-    ) -> None:
+    def test_stop_verdict_returns_stop(self, cascade_graph: CascadeGraph) -> None:
         state = {
-            "run_id": "test", "objective": "Test",
-            "current_iteration": 4, "status": "stopped",
+            "run_id": "test",
+            "objective": "Test",
+            "current_iteration": 4,
+            "status": "stopped",
             "final_verdict": Verdict(decision="STOP", justification="OK"),
         }
         assert cascade_graph._route_after_verdict(state) == "stop"
 
-    def test_continue_under_max_returns_continue(
-        self, cascade_graph: CascadeGraph
-    ) -> None:
+    def test_continue_under_max_returns_continue(self, cascade_graph: CascadeGraph) -> None:
         state = {
-            "run_id": "test", "objective": "Test",
-            "current_iteration": 4, "max_iterations": 5, "status": "running",
+            "run_id": "test",
+            "objective": "Test",
+            "current_iteration": 4,
+            "max_iterations": 5,
+            "status": "running",
             "final_verdict": Verdict(decision="CONTINUE", justification="Manque couverture"),
         }
         assert cascade_graph._route_after_verdict(state) == "continue"
 
-    def test_continue_at_max_returns_forced_stop(
-        self, cascade_graph: CascadeGraph
-    ) -> None:
+    def test_continue_at_max_returns_forced_stop(self, cascade_graph: CascadeGraph) -> None:
         state = {
-            "run_id": "test", "objective": "Test",
-            "current_iteration": 5, "max_iterations": 5, "status": "running",
+            "run_id": "test",
+            "objective": "Test",
+            "current_iteration": 5,
+            "max_iterations": 5,
+            "status": "running",
             "final_verdict": Verdict(decision="CONTINUE", justification="Encore"),
         }
         assert cascade_graph._route_after_verdict(state) == "forced_stop"
 
-    def test_forced_stop_status_returns_forced_stop(
-        self, cascade_graph: CascadeGraph
-    ) -> None:
+    def test_forced_stop_status_returns_forced_stop(self, cascade_graph: CascadeGraph) -> None:
         state = {
-            "run_id": "test", "objective": "Test",
-            "current_iteration": 4, "status": "forced_stop",
+            "run_id": "test",
+            "objective": "Test",
+            "current_iteration": 4,
+            "status": "forced_stop",
             "final_verdict": None,
         }
         assert cascade_graph._route_after_verdict(state) == "forced_stop"
@@ -165,9 +164,7 @@ class TestParseVerdict:
         verdict = cascade_graph._parse_verdict(raw)
         assert verdict.decision == "CONTINUE"
 
-    def test_defaults_to_stop_on_parse_failure(
-        self, cascade_graph: CascadeGraph
-    ) -> None:
+    def test_defaults_to_stop_on_parse_failure(self, cascade_graph: CascadeGraph) -> None:
         raw = "No JSON here at all"
         verdict = cascade_graph._parse_verdict(raw)
         assert verdict.decision == "STOP"
@@ -178,9 +175,7 @@ class TestParseVerdict:
 
 
 class TestGraphCompilation:
-    def test_build_graph_returns_state_graph(
-        self, cascade_graph: CascadeGraph
-    ) -> None:
+    def test_build_graph_returns_state_graph(self, cascade_graph: CascadeGraph) -> None:
         from langgraph.graph import StateGraph
 
         graph = cascade_graph._build_graph()

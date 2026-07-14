@@ -139,12 +139,8 @@ class TestDriftErrorHandling:
         assert status == DriftStatus.ERROR
         assert score is None
 
-    def test_connection_refused_returns_error_status(
-        self, detector, mock_embedding_client
-    ):
-        mock_embedding_client.embed.side_effect = ConnectionRefusedError(
-            "ia-general down"
-        )
+    def test_connection_refused_returns_error_status(self, detector, mock_embedding_client):
+        mock_embedding_client.embed.side_effect = ConnectionRefusedError("ia-general down")
 
         status, score = detector.evaluate("texte")
 
@@ -188,9 +184,7 @@ class TestDriftReset:
         detector.reset()
         assert detector.has_baseline is False
 
-    def test_after_reset_next_evaluate_is_no_data(
-        self, detector, mock_embedding_client
-    ):
+    def test_after_reset_next_evaluate_is_no_data(self, detector, mock_embedding_client):
         # return_value au lieu de side_effect pour supporter plusieurs appels
         vec = np.array(_make_unit_vector(seed=1), dtype=np.float32)
         mock_embedding_client.embed.return_value = [vec]
@@ -226,9 +220,7 @@ class TestOllamaEmbeddingTimeout:
 
     def test_drift_detector_uses_short_timeout_by_default(self):
         """Sans client explicite, DriftDetector crée un client avec timeout=2s."""
-        with patch(
-            "goal_cascade.orchestrator.drift_detector.OllamaEmbedding"
-        ) as MockCls:
+        with patch("goal_cascade.orchestrator.drift_detector.OllamaEmbedding") as MockCls:
             mock_instance = MagicMock()
             MockCls.return_value = mock_instance
 

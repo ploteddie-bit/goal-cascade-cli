@@ -45,9 +45,7 @@ if TYPE_CHECKING:
 
 # Rôles G.O.A.L. obligatoires — le framework exige ces 4 perspectives distinctes
 # (Producteur, Critique, Adversaire, Arbitre) pour garantir la diversité cognitive.
-REQUIRED_GOAL_ROLES: frozenset[str] = frozenset(
-    {"producer", "critic", "adversary", "arbiter"}
-)
+REQUIRED_GOAL_ROLES: frozenset[str] = frozenset({"producer", "critic", "adversary", "arbiter"})
 
 
 @dataclass(frozen=True)
@@ -153,13 +151,9 @@ def build_execution_context(
     providers_by_name: dict[str, BaseProvider] = {}
     for provider_name in provider_names:
         try:
-            providers_by_name[provider_name] = _build_provider(
-                provider_name, config=config
-            )
+            providers_by_name[provider_name] = _build_provider(provider_name, config=config)
         except Exception as e:
-            raise ValueError(
-                f"Échec de construction du provider '{provider_name}' : {e}"
-            ) from e
+            raise ValueError(f"Échec de construction du provider '{provider_name}' : {e}") from e
 
     provider = RoleMappedProvider(
         providers_by_name=providers_by_name,

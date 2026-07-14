@@ -49,8 +49,7 @@ class ModuleGraph:
         for mid in (producer, consumer):
             if mid not in self._dag:
                 raise ValueError(
-                    f"Module '{mid}' absent du graphe. "
-                    "Appelez add_module() avant add_dependency()."
+                    f"Module '{mid}' absent du graphe. Appelez add_module() avant add_dependency()."
                 )
         self._dag.add_edge(producer, consumer, contract=contract)
         self._contracts[contract.contract_id] = contract
@@ -249,8 +248,7 @@ class ModuleGraph:
             return json.loads(match.group(0))
 
         raise ValueError(
-            "Impossible d'extraire un JSON de la réponse LLM. "
-            f"Début de la réponse : {text[:200]!r}"
+            f"Impossible d'extraire un JSON de la réponse LLM. Début de la réponse : {text[:200]!r}"
         )
 
     @classmethod
@@ -338,9 +336,7 @@ class ModuleGraph:
         # 5. Validation des contraintes
         constraint_errors = plan.validate_constraints()
         if constraint_errors:
-            raise ValueError(
-                "Plan invalide : " + "; ".join(constraint_errors)
-            )
+            raise ValueError("Plan invalide : " + "; ".join(constraint_errors))
 
         # 6. Construction du graphe avec frozen specs squelettiques
         graph = cls()
@@ -452,9 +448,7 @@ class ModuleGraph:
         if match:
             return json.loads(match.group(0)).get("invariants", [])
 
-        raise ValueError(
-            "Impossible d'extraire le JSON d'invariants de la réponse LLM."
-        )
+        raise ValueError("Impossible d'extraire le JSON d'invariants de la réponse LLM.")
 
     @classmethod
     def _enrich_frozen_specs(
@@ -488,7 +482,8 @@ class ModuleGraph:
             except Exception as exc:
                 logger.warning(
                     "frozen_spec_enrich_failed module=%s error=%s action=keep_skeletal",
-                    mod.id, exc,
+                    mod.id,
+                    exc,
                 )
                 modules_failed.append(mod.id)
                 continue
@@ -554,15 +549,19 @@ class ModuleGraph:
         """Exporte le graphe sous forme de dictionnaire sérialisable."""
         modules = []
         for mid in sorted(self._specs):
-            modules.append({
-                "module_id": mid,
-                "spec": self._specs[mid].model_dump(),
-            })
+            modules.append(
+                {
+                    "module_id": mid,
+                    "spec": self._specs[mid].model_dump(),
+                }
+            )
         contracts = []
         for src, tgt, data in sorted(self._dag.edges(data=True)):
-            contracts.append({
-                "producer": src,
-                "consumer": tgt,
-                "contract": data["contract"].model_dump(),
-            })
+            contracts.append(
+                {
+                    "producer": src,
+                    "consumer": tgt,
+                    "contract": data["contract"].model_dump(),
+                }
+            )
         return {"modules": modules, "contracts": contracts}

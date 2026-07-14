@@ -3,6 +3,7 @@
 Structure : fixtures pytest, classes logiques, mock embedding client.
 Couvre : store/lookup exact, miss, remplacement, résilience erreurs, stats/clear.
 """
+
 from __future__ import annotations
 
 from unittest.mock import MagicMock
@@ -106,9 +107,7 @@ class TestSemanticCacheResilience:
         self, cache: SemanticCache, mock_embedding_client: MagicMock
     ) -> None:
         """ConnectionRefusedError sur embed → store retourne False sans lever."""
-        mock_embedding_client.embed.side_effect = ConnectionRefusedError(
-            "Ollama unreachable"
-        )
+        mock_embedding_client.embed.side_effect = ConnectionRefusedError("Ollama unreachable")
 
         ok = cache.store("test query", {"x": 1}, run_id="run-err")
         assert ok is False

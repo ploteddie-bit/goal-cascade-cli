@@ -4,6 +4,7 @@ Exécute un graphe de modules par batches topologiques, vérifie les
 contrats d'interface entre producteur et consommateur, puis lance
 une cascade d'intégration finale.
 """
+
 from __future__ import annotations
 
 import uuid
@@ -99,9 +100,7 @@ class MultiCascadeExecutor:
     budget_tracker: BudgetTracker | None = None
 
     # Résultats cumulés (peuplés après run_all)
-    _results: dict[str, CascadeState] = field(
-        default_factory=dict, init=False, repr=False
-    )
+    _results: dict[str, CascadeState] = field(default_factory=dict, init=False, repr=False)
     # Coût total accumulé par tous les modules exécutés
     _total_cost: float = field(default=0.0, init=False, repr=False)
 
@@ -167,8 +166,7 @@ class MultiCascadeExecutor:
 
                 # C3 : arrêt propre sur échec avec checkpoint.
                 if state.status == "failed" or (
-                    state.final_verdict is not None
-                    and state.final_verdict.decision == "CONTINUE"
+                    state.final_verdict is not None and state.final_verdict.decision == "CONTINUE"
                 ):
                     state_manager.save_state(state)
                     raise ModuleFailedError(module_id, state)
@@ -213,8 +211,7 @@ class MultiCascadeExecutor:
         results = module_results if module_results is not None else self._results
         if not results:
             raise ValueError(
-                "Aucun résultat de module disponible. "
-                "Appelez run_all() avant run_integration()."
+                "Aucun résultat de module disponible. Appelez run_all() avant run_integration()."
             )
 
         # C2 : vérification budgétaire avant la cascade d'intégration.
@@ -271,9 +268,7 @@ class MultiCascadeExecutor:
             synthesis_summary = ""
             if state.last_synthesis is not None:
                 synthesis_summary = state.last_synthesis.objective
-            parts.append(
-                f"- {module_id} : {synthesis_summary or state.objective}"
-            )
+            parts.append(f"- {module_id} : {synthesis_summary or state.objective}")
         modules_text = "\n".join(parts)
         return (
             "Intégration des modules suivants :\n"

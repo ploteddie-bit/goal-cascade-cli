@@ -101,8 +101,7 @@ class TestCICDHookWiring:
         journal_path = tmp_path / "runs" / state.run_id / "events.jsonl"
         events = journal_path.read_text(encoding="utf-8").splitlines()
         cicd_events = [
-            json.loads(line) for line in events
-            if json.loads(line).get("event") == "cicd_checks"
+            json.loads(line) for line in events if json.loads(line).get("event") == "cicd_checks"
         ]
         assert len(cicd_events) >= 1
 
@@ -129,15 +128,14 @@ class TestCICDHookWiring:
         journal_path = tmp_path / "runs" / state.run_id / "events.jsonl"
         events = journal_path.read_text(encoding="utf-8").splitlines()
         cicd_failures = [
-            json.loads(line) for line in events
+            json.loads(line)
+            for line in events
             if json.loads(line).get("event") == "cicd_checks"
             and json.loads(line).get("passed") is False
         ]
         assert len(cicd_failures) >= 1
         # L'artefact cassé est tout de même préservé dans state.artifacts.
-        assert any(
-            "def broken" in art.content for art in state.artifacts
-        )
+        assert any("def broken" in art.content for art in state.artifacts)
 
     def test_cicd_does_not_block_cascade(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
