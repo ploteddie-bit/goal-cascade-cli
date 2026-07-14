@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import pytest
-import typer
 from typer.testing import CliRunner
 
 from goal_cascade.cli import app
@@ -12,10 +10,7 @@ from goal_cascade.schemas.models import Variant
 
 def test_mock_prefers_initial_objective_over_synthesis_heading() -> None:
     provider = MockProvider()
-    prompt = (
-        "OBJECTIF INITIAL :\nObjectif exact\n\n"
-        "SYNTHÈSE ORIENTÉE OBJECTIF :\n{}"
-    )
+    prompt = "OBJECTIF INITIAL :\nObjectif exact\n\nSYNTHÈSE ORIENTÉE OBJECTIF :\n{}"
 
     assert provider._extract_objective(prompt) == "Objectif exact"
 

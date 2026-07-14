@@ -7,17 +7,16 @@ A4 : ``FileNotFoundError`` et ``TimeoutExpired`` attrapés et logués.
 A5 : ``InterfaceChecker.check()`` exécute d'abord la phase déterministe.
 A6 : aucun appel à ``SemanticCache.lookup()`` dans le chemin d'exécution.
 """
+
 from __future__ import annotations
 
 import subprocess
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-import pytest
-
+from goal_cascade.multicascade.interface_checker import InterfaceChecker
 from goal_cascade.orchestrator.cicd_hook import CICDHook
 from goal_cascade.orchestrator.semantic_cache import SemanticCache
-from goal_cascade.multicascade.interface_checker import InterfaceChecker
 from goal_cascade.schemas.models import (
     CascadeState,
     ImmutableArtifact,

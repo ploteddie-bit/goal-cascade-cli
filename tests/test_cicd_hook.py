@@ -2,12 +2,10 @@
 
 from __future__ import annotations
 
-import subprocess
 from unittest.mock import patch
 
 from goal_cascade.orchestrator.cicd_hook import CICDHook, DeterministicCheckResult
 from goal_cascade.schemas.models import ImmutableArtifact, InterfaceContract
-
 
 # ── Helpers ─────────────────────────────────────────────────────────
 
@@ -116,6 +114,7 @@ def test_custom_checker_overrides_default() -> None:
 
 def test_custom_checker_failure_reported() -> None:
     """Un échec dans un checker personnalisé doit être rapporté."""
+
     def failing_checker(artifact: ImmutableArtifact) -> dict[str, str]:
         return {
             "artifact_type": artifact.artifact_type,

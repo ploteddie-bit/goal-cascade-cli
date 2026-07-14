@@ -11,11 +11,11 @@ Usage:
 
 from __future__ import annotations
 
-from enum import Enum
-from pathlib import Path
-
 import datetime as _dt
 import json
+from enum import Enum
+from pathlib import Path
+from typing import TYPE_CHECKING
 
 import typer
 from pydantic import ValidationError
@@ -23,24 +23,25 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 
-from .config import DEFAULT_CONFIG_PATH, ProvidersConfig, load_goal_config
 from .audit_journal import redact_sensitive
-from .orchestrator.budget_tracker import BudgetConfig, BudgetTracker
+from .config import DEFAULT_CONFIG_PATH, ProvidersConfig, load_goal_config
+from .multicascade.module_graph import ModuleGraph
+from .orchestrator.budget_tracker import BudgetTracker
 from .orchestrator.cascade_executor import CascadeExecutor
 from .orchestrator.execution_context import (
-    ExecutionContext,
     build_execution_context,
 )
 from .orchestrator.state_manager import RUNS_DIR, list_runs, load_state
 from .providers.base import BaseProvider
 from .providers.kimi_command import KimiBackend, KimiCommandProvider
 from .providers.mock import MockProvider
-from .providers.router import RoleMappedProvider
 from .rag_bridge import RagBridge, RagSyncError
-from .multicascade.module_graph import ModuleGraph
 from .schemas.models import Variant
-from .schemas.plan import CascadePlan
 from .schemas.versioning import RunVersion, VersionDiff
+
+if TYPE_CHECKING:
+    from .config import GoalConfig
+    from .schemas.models import LLMCallRecord
 
 app = typer.Typer(
     name="goal",
@@ -79,8 +80,7 @@ def _print_config_summary(config_path: Path, providers: ProvidersConfig) -> None
     available_count = len(set(providers.enabled))
     if providers.degraded:
         console.print(
-            f"[yellow]⚠️  Mode dégradé : {available_count}/3 provider(s) "
-            f"disponible(s)[/yellow]"
+            f"[yellow]⚠️  Mode dégradé : {available_count}/3 provider(s) disponible(s)[/yellow]"
         )
         console.print("   Mapping effectif :")
         for row in providers.mapping_rows():
@@ -94,10 +94,7 @@ def _print_config_summary(config_path: Path, providers: ProvidersConfig) -> None
             "Les erreurs seront corrélées.[/yellow]"
         )
     else:
-        console.print(
-            f"   Providers : {', '.join(providers.enabled)} "
-            f"({available_count}/3 ✓)"
-        )
+        console.print(f"   Providers : {', '.join(providers.enabled)} ({available_count}/3 ✓)")
         console.print("   Diversité : optimale")
 
 
@@ -105,7 +102,7 @@ def _build_provider(
     provider_id: str,
     *,
     synthesizer_model: str | None = None,
-    config: "GoalConfig | None" = None,
+    config: GoalConfig | None = None,
 ) -> BaseProvider:
     """Construit l'instance de provider effective pour un identifiant résolu.
 
@@ -165,32 +162,22 @@ def _build_provider(
 @app.command()
 def run(
     objective: str = typer.Option(
-        ..., "--objective", "-o",
-        help="L'objectif du livrable (une phrase claire)"
+        ..., "--objective", "-o", help="L'objectif du livrable (une phrase claire)"
     ),
     variant: Variant = typer.Option(
-        Variant.A, "--variant", "-v",
-        help="Variante : A (redactionnel) ou B (technique)"
+        Variant.A, "--variant", "-v", help="Variante : A (redactionnel) ou B (technique)"
     ),
     provider: ProviderChoice = typer.Option(
-        ProviderChoice.MOCK, "--provider", "-p",
-        help="Provider : mock, kimi-cli ou kimi-code"
+        ProviderChoice.MOCK, "--provider", "-p", help="Provider : mock, kimi-cli ou kimi-code"
     ),
     config: Path | None = typer.Option(
         None,
         "--config",
-        help=(
-            "Chemin du fichier config TOML. "
-            f"Par défaut : {DEFAULT_CONFIG_PATH} si présent."
-        ),
+        help=(f"Chemin du fichier config TOML. Par défaut : {DEFAULT_CONFIG_PATH} si présent."),
     ),
-    audience: str = typer.Option(
-        "", "--audience", "-a",
-        help="Public cible"
-    ),
+    audience: str = typer.Option("", "--audience", "-a", help="Public cible"),
     constraints: str = typer.Option(
-        "", "--constraints", "-c",
-        help="Contraintes (format, longueur, etc.)"
+        "", "--constraints", "-c", help="Contraintes (format, longueur, etc.)"
     ),
     synthesizer_model: str | None = typer.Option(
         None,
@@ -220,18 +207,14 @@ def run(
         # qu'un FileNotFoundError brut issu de tomllib.
         if config is not None and not candidate_config_path.exists():
             console.print(
-                f"[bold red]Config introuvable : "
-                f"{candidate_config_path.expanduser()}[/bold red]"
+                f"[bold red]Config introuvable : {candidate_config_path.expanduser()}[/bold red]"
             )
             raise typer.Exit(2)
         try:
             goal_config = load_goal_config(candidate_config_path)
         except (ValidationError, ValueError) as exc:
-            console.print(
-                f"[bold red]Config invalide ({candidate_config_path}): "
-                f"{exc}[/bold red]"
-            )
-            raise typer.Exit(1) from exc
+            console.print(f"[bold red]Config invalide ({candidate_config_path}): {exc}[/bold red]")
+            raise typer.Exit(1) from None
         _print_config_summary(candidate_config_path, goal_config.providers)
 
         # Pilier 1 : refuser de démarrer si tous les rôles sont assignés
@@ -369,14 +352,13 @@ def run(
         console.print(f"Trace complète : [cyan]{run_dir / 'timeline.md'}[/cyan]")
         console.print(f"Événements bruts : [cyan]{run_dir / 'events.jsonl'}[/cyan]")
         console.print(f"Statut RAG : [cyan]{run_dir / 'rag-status.json'}[/cyan]")
-        raise typer.Exit(1) from exc
+        raise typer.Exit(1) from None
 
     # Afficher le resultat
     console.print()
     if state.status == "stopped":
         console.print(
-            f"[bold green]Cascade terminee en {state.current_iteration} "
-            f"iterations[/bold green]"
+            f"[bold green]Cascade terminee en {state.current_iteration} iterations[/bold green]"
         )
     elif state.status == "forced_stop":
         console.print(
@@ -387,9 +369,7 @@ def run(
     if state.final_verdict:
         verdict = state.final_verdict
         color = "green" if verdict.decision == "STOP" else "yellow"
-        console.print(
-            f"\nVerdict : [{color}]{verdict.decision}[/{color}]"
-        )
+        console.print(f"\nVerdict : [{color}]{verdict.decision}[/{color}]")
         console.print(f"Justification : {verdict.justification}")
 
     if state.accumulated_cost > 0:
@@ -405,6 +385,7 @@ def run(
     if receipt_path.exists():
         try:
             from .schemas.models import RunReceipt
+
             receipt_data = json.loads(receipt_path.read_text(encoding="utf-8"))
             receipt = RunReceipt.model_validate(receipt_data)
             console.print()
@@ -417,9 +398,7 @@ def run(
 
     # Afficher les details du run
     console.print(f"\nRun ID : [cyan]{state.run_id}[/cyan]")
-    console.print(
-        f"Livrable : {RUNS_DIR / state.run_id / 'final_output.md'}"
-    )
+    console.print(f"Livrable : {RUNS_DIR / state.run_id / 'final_output.md'}")
     console.print(f"Cheminement : {run_dir / 'timeline.md'}")
     console.print(f"Événements : {run_dir / 'events.jsonl'}")
     console.print(f"Preuve RAG : {run_dir / 'rag-status.json'}")
@@ -460,9 +439,7 @@ def run(
         console.print(table)
 
 
-def _print_velocity_dashboard(
-    history: list[LLMCallRecord], run_id: str
-) -> None:
+def _print_velocity_dashboard(history: list[LLMCallRecord], run_id: str) -> None:
     """Affiche un dashboard ASCII de vitesse de la cascade.
 
     Barre horizontale par itération : rôle, coût, indicateur visuel.
@@ -476,9 +453,7 @@ def _print_velocity_dashboard(
     max_cost = max((c.cost_usd for c in history), default=0.0)
     use_tokens = max_cost <= 0.0
     if use_tokens:
-        max_value = float(
-            max((c.input_tokens + c.output_tokens for c in history), default=1)
-        )
+        max_value = float(max((c.input_tokens + c.output_tokens for c in history), default=1))
     else:
         max_value = max_cost
 
@@ -493,11 +468,7 @@ def _print_velocity_dashboard(
     console.print(separator)
 
     for call in history:
-        value = (
-            float(call.input_tokens + call.output_tokens)
-            if use_tokens
-            else call.cost_usd
-        )
+        value = float(call.input_tokens + call.output_tokens) if use_tokens else call.cost_usd
         ratio = min(value / max_value, 1.0)
         filled = max(1, int(ratio * bar_width)) if value > 0 else 0
         empty = bar_width - filled
@@ -508,9 +479,7 @@ def _print_velocity_dashboard(
         else:
             metric_str = f"${call.cost_usd:.4f}"
 
-        console.print(
-            f"{call.iteration:>2}  {call.role:<10} {metric_str:>9}  {bar}"
-        )
+        console.print(f"{call.iteration:>2}  {call.role:<10} {metric_str:>9}  {bar}")
 
     console.print(separator)
 
@@ -589,9 +558,7 @@ def status(
 
     if state.final_verdict:
         color = "green" if state.final_verdict.decision == "STOP" else "yellow"
-        console.print(
-            f"\nVerdict : [{color}]{state.final_verdict.decision}[/{color}]"
-        )
+        console.print(f"\nVerdict : [{color}]{state.final_verdict.decision}[/{color}]")
         console.print(f"  {state.final_verdict.justification}")
 
 
@@ -627,9 +594,7 @@ def versions(
         iter_file = run_dir / f"iteration_{it}.txt"
         if iter_file.exists():
             iter_stat = iter_file.stat()
-            created_at = _dt.datetime.fromtimestamp(
-                iter_stat.st_mtime, tz=_dt.timezone.utc
-            ).isoformat()
+            created_at = _dt.datetime.fromtimestamp(iter_stat.st_mtime, tz=_dt.UTC).isoformat()
         else:
             created_at = ""
 
@@ -666,9 +631,7 @@ def versions(
         )
 
     if not versions_list:
-        console.print(
-            f"[yellow]Aucune version trouvée pour le run '{run_id}'.[/yellow]"
-        )
+        console.print(f"[yellow]Aucune version trouvée pour le run '{run_id}'.[/yellow]")
         return
 
     table = Table(title=f"Versions du run {run_id}")
@@ -718,12 +681,8 @@ def diff(
     cost_delta = state_2.accumulated_cost - state_1.accumulated_cost
     iter_delta = state_2.current_iteration - state_1.current_iteration
 
-    verdict_a = (
-        state_1.final_verdict.decision if state_1.final_verdict else state_1.status
-    )
-    verdict_b = (
-        state_2.final_verdict.decision if state_2.final_verdict else state_2.status
-    )
+    verdict_a = state_1.final_verdict.decision if state_1.final_verdict else state_1.status
+    verdict_b = state_2.final_verdict.decision if state_2.final_verdict else state_2.status
     verdict_changed = verdict_a != verdict_b
 
     # Artefacts
@@ -733,20 +692,14 @@ def diff(
     removed_artifacts = max(0, artifacts_1 - artifacts_2)
 
     summary_parts = []
-    summary_parts.append(
-        f"Coût : {'+' if cost_delta >= 0 else ''}{cost_delta:.4f} USD"
-    )
-    summary_parts.append(
-        f"Itérations : {'+' if iter_delta >= 0 else ''}{iter_delta}"
-    )
+    summary_parts.append(f"Coût : {'+' if cost_delta >= 0 else ''}{cost_delta:.4f} USD")
+    summary_parts.append(f"Itérations : {'+' if iter_delta >= 0 else ''}{iter_delta}")
     if verdict_changed:
         summary_parts.append(f"Verdict changé : {verdict_a} → {verdict_b}")
     else:
         summary_parts.append(f"Verdict inchangé : {verdict_a}")
     if new_artifacts or removed_artifacts:
-        summary_parts.append(
-            f"Artefacts : +{new_artifacts}/-{removed_artifacts}"
-        )
+        summary_parts.append(f"Artefacts : +{new_artifacts}/-{removed_artifacts}")
 
     version_diff = VersionDiff(
         run_id=f"{run_id_1}..{run_id_2}",
@@ -810,16 +763,12 @@ def inspect_run(
     ]
     if state.final_verdict:
         v_color = "green" if state.final_verdict.decision == "STOP" else "yellow"
-        header_lines.append(
-            f"Verdict      : [{v_color}]{state.final_verdict.decision}[/{v_color}]"
-        )
+        header_lines.append(f"Verdict      : [{v_color}]{state.final_verdict.decision}[/{v_color}]")
         header_lines.append(f"Justification: {state.final_verdict.justification}")
     if state.last_error:
         header_lines.append(f"Erreur       : [red]{state.last_error}[/red]")
 
-    console.print(
-        Panel.fit("\n".join(header_lines), border_style="cyan", title="État")
-    )
+    console.print(Panel.fit("\n".join(header_lines), border_style="cyan", title="État"))
 
     # ── Historique des appels ────────────────────────────────────
     if state.history:
@@ -834,18 +783,12 @@ def inspect_run(
         table.add_column("Latence", justify="right")
 
         for call in state.history:
-            cost_str = (
-                f"${call.cost_usd:.4f}" if call.cost_usd > 0 else "—"
-            )
+            cost_str = f"${call.cost_usd:.4f}" if call.cost_usd > 0 else "—"
             in_tok = (
-                f"~{call.input_tokens}"
-                if call.token_count_estimated
-                else str(call.input_tokens)
+                f"~{call.input_tokens}" if call.token_count_estimated else str(call.input_tokens)
             )
             out_tok = (
-                f"~{call.output_tokens}"
-                if call.token_count_estimated
-                else str(call.output_tokens)
+                f"~{call.output_tokens}" if call.token_count_estimated else str(call.output_tokens)
             )
             table.add_row(
                 str(call.iteration),
@@ -871,9 +814,7 @@ def inspect_run(
             content_preview = art.content[:120].replace("\n", " ")
             if len(art.content) > 120:
                 content_preview += "…"
-            console.print(
-                f"  [{i}] {art_type}{lang} — itération {art.source_iteration}"
-            )
+            console.print(f"  [{i}] {art_type}{lang} — itération {art.source_iteration}")
             console.print(f"      {content_preview}")
     else:
         console.print("[dim]Aucun artefact.[/dim]")
@@ -886,12 +827,8 @@ def inspect_run(
             f"Décisions  : {'; '.join(synth.key_decisions)}",
         ]
         if synth.uncertainties:
-            synth_lines.append(
-                f"Incertain  : {'; '.join(synth.uncertainties)}"
-            )
-        synth_lines.append(
-            f"Itérations : {synth.iteration_from} → {synth.iteration_to}"
-        )
+            synth_lines.append(f"Incertain  : {'; '.join(synth.uncertainties)}")
+        synth_lines.append(f"Itérations : {synth.iteration_from} → {synth.iteration_to}")
         synth_lines.append(f"Prochaine  : {synth.next_instruction}")
         console.print()
         console.print(
@@ -921,8 +858,9 @@ def list_cmd():
 
     if not runs:
         console.print("[yellow]Aucun run trouve.[/yellow]")
-        console.print("Lancez votre premiere cascade avec : "
-                      "[cyan]goal run --objective \"...\"[/cyan]")
+        console.print(
+            'Lancez votre premiere cascade avec : [cyan]goal run --objective "..."[/cyan]'
+        )
         return
 
     table = Table(title="Runs G.O.A.L. Cascade")
@@ -971,7 +909,7 @@ def rag_sync(
         path = RUNS_DIR / run_id / "rag-status.json"
         console.print(f"[bold red]Synchronisation RAG en échec : {exc}[/bold red]")
         console.print(f"Preuve locale : [cyan]{path}[/cyan]")
-        raise typer.Exit(1) from exc
+        raise typer.Exit(1) from None
     console.print("[bold green]Synchronisation RAG vérifiée.[/bold green]")
     console.print_json(data=result)
 
@@ -994,16 +932,15 @@ def init(
 
     # README minimal
     (project_dir / "README.md").write_text(
-        f"# {name}\n\nProjet G.O.A.L. Cascade.\n",
-        encoding="utf-8"
+        f"# {name}\n\nProjet G.O.A.L. Cascade.\n", encoding="utf-8"
     )
 
     console.print(f"[green]Projet '{name}' cree.[/green]")
-    console.print(f"\nStructure :")
+    console.print("\nStructure :")
     console.print(f"  {name}/")
-    console.print(f"  ├── .goal/       (config locale)")
-    console.print(f"  ├── output/      (livrables)")
-    console.print(f"  └── README.md")
+    console.print("  ├── .goal/       (config locale)")
+    console.print("  ├── output/      (livrables)")
+    console.print("  └── README.md")
 
 
 def _print_enrichment_summary(stats: dict) -> None:
@@ -1019,12 +956,10 @@ def _print_enrichment_summary(stats: dict) -> None:
     lines = [
         f"Modules enrichis    : {enriched}",
         f"Invariants générés  : {generated}",
-        f"Statut              : tous verified=False",
+        "Statut              : tous verified=False",
     ]
     if failed:
-        lines.append(
-            f"Modules en échec    : {len(failed)} ({', '.join(failed)})"
-        )
+        lines.append(f"Modules en échec    : {len(failed)} ({', '.join(failed)})")
 
     console.print(
         Panel.fit(
@@ -1048,18 +983,15 @@ def cascade_plan(
     config: Path | None = typer.Option(
         None,
         "--config",
-        help=(
-            "Chemin du fichier config TOML. "
-            f"Par défaut : {DEFAULT_CONFIG_PATH} si présent."
-        ),
+        help=(f"Chemin du fichier config TOML. Par défaut : {DEFAULT_CONFIG_PATH} si présent."),
     ),
     provider: ProviderChoice = typer.Option(
-        ProviderChoice.MOCK, "--provider", "-p",
-        help="Provider : mock, kimi-cli ou kimi-code"
+        ProviderChoice.MOCK, "--provider", "-p", help="Provider : mock, kimi-cli ou kimi-code"
     ),
     output: Path = typer.Option(
         Path("plan.json"),
-        "--output", "-o",
+        "--output",
+        "-o",
         help="Chemin de sortie pour le plan JSON (défaut : plan.json)",
     ),
     synthesizer_model: str | None = typer.Option(
@@ -1083,9 +1015,7 @@ def cascade_plan(
     # ── 1. Vérifier que le fichier spec existe ───────────────────
     spec_path = spec.expanduser().resolve()
     if not spec_path.exists():
-        console.print(
-            f"[bold red]Fichier spec introuvable : {spec_path}[/bold red]"
-        )
+        console.print(f"[bold red]Fichier spec introuvable : {spec_path}[/bold red]")
         raise typer.Exit(2)
 
     # ── 2. Charger la config TOML (optionnel) ───────────────────
@@ -1096,18 +1026,14 @@ def cascade_plan(
     if should_load_config:
         if config is not None and not candidate_config_path.exists():
             console.print(
-                f"[bold red]Config introuvable : "
-                f"{candidate_config_path.expanduser()}[/bold red]"
+                f"[bold red]Config introuvable : {candidate_config_path.expanduser()}[/bold red]"
             )
             raise typer.Exit(2)
         try:
             goal_config = load_goal_config(candidate_config_path)
         except (ValidationError, ValueError) as exc:
-            console.print(
-                f"[bold red]Config invalide ({candidate_config_path}): "
-                f"{exc}[/bold red]"
-            )
-            raise typer.Exit(1) from exc
+            console.print(f"[bold red]Config invalide ({candidate_config_path}): {exc}[/bold red]")
+            raise typer.Exit(1) from None
         _print_config_summary(candidate_config_path, goal_config.providers)
 
         # Les providers Kimi exigent un modèle explicite
@@ -1141,12 +1067,8 @@ def cascade_plan(
         )
 
     # ── 4. Appeler ModuleGraph.from_spec ─────────────────────────
-    console.print(
-        f"[cyan]Analyse du spec : {spec_path}[/cyan]"
-    )
-    console.print(
-        f"[cyan]Provider : {selected_provider.name}[/cyan]"
-    )
+    console.print(f"[cyan]Analyse du spec : {spec_path}[/cyan]")
+    console.print(f"[cyan]Provider : {selected_provider.name}[/cyan]")
 
     try:
         graph, plan, enrichment_stats = ModuleGraph.from_spec(
@@ -1155,10 +1077,8 @@ def cascade_plan(
             enrich=enrich_frozen_specs,
         )
     except Exception as exc:
-        console.print(
-            f"[bold red]Erreur lors de la planification : {exc}[/bold red]"
-        )
-        raise typer.Exit(1) from exc
+        console.print(f"[bold red]Erreur lors de la planification : {exc}[/bold red]")
+        raise typer.Exit(1) from None
 
     # ── 5. Sauvegarder le plan en plan.json ──────────────────────
     output_path = output.expanduser().resolve()
@@ -1187,13 +1107,9 @@ def cascade_plan(
     for mod in plan.modules:
         # Dépendances du module depuis le plan
         mod_deps = [
-            dep for dep in plan.dependencies
-            if dep.producer == mod.id or dep.consumer == mod.id
+            dep for dep in plan.dependencies if dep.producer == mod.id or dep.consumer == mod.id
         ]
-        deps = (
-            ", ".join(f"{d.producer}→{d.consumer}" for d in mod_deps)
-            if mod_deps else "—"
-        )
+        deps = ", ".join(f"{d.producer}→{d.consumer}" for d in mod_deps) if mod_deps else "—"
         # Comptage depuis la frozen spec du graphe (peut avoir été enrichie).
         frozen = graph._specs.get(mod.id)
         invariants_count = len(frozen.invariants) if frozen else 0
@@ -1236,7 +1152,9 @@ def cascade_plan(
         contracts_table.add_column("Description")
         for dep in plan.dependencies:
             contracts_table.add_row(
-                dep.producer, dep.consumer, dep.interface_description,
+                dep.producer,
+                dep.consumer,
+                dep.interface_description,
             )
         console.print(contracts_table)
 
@@ -1246,19 +1164,14 @@ def cascade_plan(
 @app.command()
 def resume(
     run_id: str = typer.Argument(..., help="Run ID à reprendre"),
-    audience: str = typer.Option(
-        "", "--audience", "-a", help="Public cible"
-    ),
+    audience: str = typer.Option("", "--audience", "-a", help="Public cible"),
     constraints: str = typer.Option(
         "", "--constraints", "-c", help="Contraintes (format, longueur, etc.)"
     ),
     config: Path | None = typer.Option(
         None,
         "--config",
-        help=(
-            "Chemin du fichier config TOML. "
-            f"Par défaut : {DEFAULT_CONFIG_PATH} si présent."
-        ),
+        help=(f"Chemin du fichier config TOML. Par défaut : {DEFAULT_CONFIG_PATH} si présent."),
     ),
     synthesizer_model: str | None = typer.Option(
         None,
@@ -1284,16 +1197,12 @@ def resume(
     checkpoint_path = checkpoint_dir / "checkpoint.db"
 
     if not checkpoint_path.exists():
-        console.print(
-            f"[bold red]Aucun checkpoint trouvé pour le run '{run_id}'[/bold red]"
-        )
+        console.print(f"[bold red]Aucun checkpoint trouvé pour le run '{run_id}'[/bold red]")
         console.print(f"  Chemin attendu : {checkpoint_path}")
         raise typer.Exit(1)
 
     # Charger l'état initial depuis le checkpoint
-    console.print(
-        f"[cyan]Reprise du run {run_id} depuis le checkpoint SQLite...[/cyan]"
-    )
+    console.print(f"[cyan]Reprise du run {run_id} depuis le checkpoint SQLite...[/cyan]")
     console.print(f"  Checkpoint : [cyan]{checkpoint_path}[/cyan]")
 
     # --- Construction des providers (même logique que run()) ---
@@ -1304,18 +1213,14 @@ def resume(
     if should_load_config:
         if config is not None and not candidate_config_path.exists():
             console.print(
-                f"[bold red]Config introuvable : "
-                f"{candidate_config_path.expanduser()}[/bold red]"
+                f"[bold red]Config introuvable : {candidate_config_path.expanduser()}[/bold red]"
             )
             raise typer.Exit(2)
         try:
             goal_config = load_goal_config(candidate_config_path)
         except (ValidationError, ValueError) as exc:
-            console.print(
-                f"[bold red]Config invalide ({candidate_config_path}): "
-                f"{exc}[/bold red]"
-            )
-            raise typer.Exit(1) from exc
+            console.print(f"[bold red]Config invalide ({candidate_config_path}): {exc}[/bold red]")
+            raise typer.Exit(1) from None
         _print_config_summary(candidate_config_path, goal_config.providers)
 
         if (
@@ -1352,18 +1257,21 @@ def resume(
 
     # ── Budget check fail fast (avant reprise) ──────────────────
     pre_state = load_state(run_id)
-    if pre_state is not None and budget_tracker is not None:
-        if budget_tracker.is_exceeded(run_id, pre_state.accumulated_cost):
-            console.print(
-                f"[bold yellow]⛔ Budget déjà dépassé pour le run '{run_id}' "
-                f"(${pre_state.accumulated_cost:.4f} / "
-                f"${budget_tracker.config.max_per_run_usd:.2f}).[/bold yellow]"
-            )
-            console.print(
-                "[yellow]Reprise impossible : ajustez le budget dans la config TOML "
-                "ou relancez un nouveau run.[/yellow]"
-            )
-            raise typer.Exit(1)
+    if (
+        pre_state is not None
+        and budget_tracker is not None
+        and budget_tracker.is_exceeded(run_id, pre_state.accumulated_cost)
+    ):
+        console.print(
+            f"[bold yellow]⛔ Budget déjà dépassé pour le run '{run_id}' "
+            f"(${pre_state.accumulated_cost:.4f} / "
+            f"${budget_tracker.config.max_per_run_usd:.2f}).[/bold yellow]"
+        )
+        console.print(
+            "[yellow]Reprise impossible : ajustez le budget dans la config TOML "
+            "ou relancez un nouveau run.[/yellow]"
+        )
+        raise typer.Exit(1)
 
     # ── Contexte de reprise (avant exécution) ───────────────────
     if pre_state is not None:
@@ -1377,8 +1285,7 @@ def resume(
 
         resume_lines = [
             f"[bold]Reprise du run {run_id}[/bold]",
-            f"Itération : [cyan]{pre_state.current_iteration}[/cyan]"
-            f"/{pre_state.max_iterations}",
+            f"Itération : [cyan]{pre_state.current_iteration}[/cyan]/{pre_state.max_iterations}",
             f"Statut : [{status_color}]{pre_state.status}[/{status_color}]",
             f"Coût accumulé : [yellow]${pre_state.accumulated_cost:.4f}[/yellow]",
         ]
@@ -1405,10 +1312,10 @@ def resume(
         )
     except FileNotFoundError as exc:
         console.print(f"[bold red]{exc}[/bold red]")
-        raise typer.Exit(1) from exc
+        raise typer.Exit(1) from None
     except Exception as exc:
         console.print(f"[bold red]Erreur lors de la reprise : {exc}[/bold red]")
-        raise typer.Exit(1) from exc
+        raise typer.Exit(1) from None
 
     # Afficher le résultat
     console.print()
@@ -1423,16 +1330,12 @@ def resume(
             f"après {state.current_iteration} iterations[/bold yellow]"
         )
     else:
-        console.print(
-            f"[bold cyan]Cascade reprise — statut : {state.status}[/bold cyan]"
-        )
+        console.print(f"[bold cyan]Cascade reprise — statut : {state.status}[/bold cyan]")
 
     if state.final_verdict:
         verdict = state.final_verdict
         color = "green" if verdict.decision == "STOP" else "yellow"
-        console.print(
-            f"\nVerdict : [{color}]{verdict.decision}[/{color}]"
-        )
+        console.print(f"\nVerdict : [{color}]{verdict.decision}[/{color}]")
         console.print(f"Justification : {verdict.justification}")
 
     console.print(f"\nRun ID : [cyan]{state.run_id}[/cyan]")
@@ -1445,10 +1348,7 @@ def cascade_run(
     config: Path | None = typer.Option(
         None,
         "--config",
-        help=(
-            "Chemin du fichier config TOML. "
-            f"Par défaut : {DEFAULT_CONFIG_PATH} si présent."
-        ),
+        help=(f"Chemin du fichier config TOML. Par défaut : {DEFAULT_CONFIG_PATH} si présent."),
     ),
     synthesizer_model: str | None = typer.Option(
         None,
@@ -1466,6 +1366,7 @@ def cascade_run(
         synthesizer_model = synthesizer_model.strip()
 
     import json as _json
+
     from .multicascade.module_graph import ModuleGraph
     from .multicascade.multi_executor import MultiCascadeExecutor
 
@@ -1478,7 +1379,7 @@ def cascade_run(
         graph = ModuleGraph.from_plan_file(plan_file)
     except Exception as exc:
         console.print(f"[red]Plan invalide : {exc}[/red]")
-        raise typer.Exit(1)
+        raise typer.Exit(1) from None
 
     plan_data = _json.loads(plan_file.read_text(encoding="utf-8"))
     module_count = len(plan_data.get("modules", []))
@@ -1487,7 +1388,7 @@ def cascade_run(
     console.print(f"[blue]Exécution du plan : {module_count} modules, {batch_count} batches[/blue]")
     console.print(f"  Ordre topologique : {graph.topological_order()}")
     for i, batch in enumerate(graph.parallel_batches()):
-        console.print(f"  Batch {i+1} : {batch}")
+        console.print(f"  Batch {i + 1} : {batch}")
 
     # --- Construction des providers et du budget tracker (même logique que run/resume) ---
     # NOTE (commit 1) : suppression du hardcode MockProvider. Avant ce patch,
@@ -1499,23 +1400,19 @@ def cascade_run(
     budget_tracker: BudgetTracker | None = None
     selected_provider: BaseProvider
     selected_synthesizer_provider: BaseProvider
-    goal_config: "GoalConfig | None" = None
+    goal_config: GoalConfig | None = None
 
     if should_load_config:
         if config is not None and not candidate_config_path.exists():
             console.print(
-                f"[bold red]Config introuvable : "
-                f"{candidate_config_path.expanduser()}[/bold red]"
+                f"[bold red]Config introuvable : {candidate_config_path.expanduser()}[/bold red]"
             )
             raise typer.Exit(2)
         try:
             goal_config = load_goal_config(candidate_config_path)
         except (ValidationError, ValueError) as exc:
-            console.print(
-                f"[bold red]Config invalide ({candidate_config_path}): "
-                f"{exc}[/bold red]"
-            )
-            raise typer.Exit(1) from exc
+            console.print(f"[bold red]Config invalide ({candidate_config_path}): {exc}[/bold red]")
+            raise typer.Exit(1) from None
         _print_config_summary(candidate_config_path, goal_config.providers)
 
         # Validation Kimi : --synthesizer-model obligatoire avec kimi-cli/kimi-code
@@ -1562,21 +1459,21 @@ def cascade_run(
         module_results = multi_executor.run_all()
     except Exception as exc:
         console.print(f"[red]Échec d'un module : {exc}[/red]")
-        raise typer.Exit(1)
+        raise typer.Exit(1) from None
 
     console.print("\n[blue]Cascade d'intégration...[/blue]")
     try:
         integration_state = multi_executor.run_integration(module_results)
     except Exception as exc:
         console.print(f"[red]Intégration échouée : {exc}[/red]")
-        raise typer.Exit(1)
+        raise typer.Exit(1) from None
 
     total_cost = sum(s.accumulated_cost for s in module_results.values())
     total_cost += integration_state.accumulated_cost
     total_iterations = sum(s.current_iteration for s in module_results.values())
     total_iterations += integration_state.current_iteration
 
-    console.print(f"\n[green]Multi-cascade terminée[/green]")
+    console.print("\n[green]Multi-cascade terminée[/green]")
     console.print(f"  Modules : {len(module_results)}")
     console.print(f"  Itérations totales : {total_iterations}")
     console.print(f"  Coût total : ${total_cost:.4f}")

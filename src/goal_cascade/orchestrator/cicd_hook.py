@@ -7,6 +7,7 @@ appel LLM dans la cascade d'intégration.
 Règle absolue : ne jamais déléguer au LLM une vérification qu'un
 compilateur ou un linter peut faire à 100% de précision.
 """
+
 from __future__ import annotations
 
 import logging
@@ -14,8 +15,9 @@ import os
 import subprocess
 import sys
 import tempfile
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Any, Callable
+from typing import Any
 
 try:
     import structlog
@@ -112,9 +114,7 @@ def _check_python_code(artifact: ImmutableArtifact) -> dict[str, Any] | None:
     est contrôlé par le hook ; il n'est jamais interpolé dans une
     commande shell.
     """
-    with tempfile.NamedTemporaryFile(
-        mode="w", suffix=".py", delete=False, encoding="utf-8"
-    ) as tmp:
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False, encoding="utf-8") as tmp:
         tmp.write(artifact.content)
         tmp_path = tmp.name
 
@@ -124,9 +124,7 @@ def _check_python_code(artifact: ImmutableArtifact) -> dict[str, Any] | None:
         try:
             os.unlink(tmp_path)
         except OSError as exc:
-            logger.warning(
-                "cicd_temp_cleanup_failed path=%s error=%s", tmp_path, str(exc)
-            )
+            logger.warning("cicd_temp_cleanup_failed path=%s error=%s", tmp_path, str(exc))
 
 
 def _check_json_schema(artifact: ImmutableArtifact) -> dict[str, Any] | None:
@@ -182,9 +180,7 @@ class CICDHook:
         for artifact in artifacts:
             checker = self._checkers.get(artifact.artifact_type)
             if checker is None:
-                logger.debug(
-                    "cicd_no_checker artifact_type=%s", artifact.artifact_type
-                )
+                logger.debug("cicd_no_checker artifact_type=%s", artifact.artifact_type)
                 continue
 
             try:

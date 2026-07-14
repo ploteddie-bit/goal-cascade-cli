@@ -42,10 +42,7 @@ class AuditProvider(BaseProvider):
                 ensure_ascii=False,
             )
         elif role == "arbiter":
-            text = (
-                "Résultat final\n"
-                '{"decision":"STOP","justification":"Audit complet."}'
-            )
+            text = 'Résultat final\n{"decision":"STOP","justification":"Audit complet."}'
         else:
             text = f"Sortie visible du rôle {role}"
         return LLMResponse(text=text, provider=self.name, model=f"test-{tier}")
@@ -112,9 +109,7 @@ def test_journal_is_permanent_readable_and_sequential(tmp_path, monkeypatch) -> 
     ]
     assert [event["sequence"] for event in events] == list(range(1, len(events) + 1))
     all_text = "\n".join(
-        path.read_text(encoding="utf-8")
-        for path in journal.run_dir.iterdir()
-        if path.is_file()
+        path.read_text(encoding="utf-8") for path in journal.run_dir.iterdir() if path.is_file()
     )
     assert "ne-doit-pas-sortir" not in all_text
     assert "secret-erreur" not in all_text
@@ -163,9 +158,7 @@ def test_executor_persists_provider_error_before_raising(tmp_path, monkeypatch) 
     assert persisted.status == "failed"
     assert (run_dir / "timeline.md").exists()
     combined = "\n".join(
-        path.read_text(encoding="utf-8")
-        for path in run_dir.iterdir()
-        if path.is_file()
+        path.read_text(encoding="utf-8") for path in run_dir.iterdir() if path.is_file()
     )
     assert "provider_error" in combined
     assert "secret-a-ne-pas-conserver" not in combined
@@ -319,9 +312,7 @@ def test_rag_bridge_distinguishes_postgres_index_from_pending_embedding(
     assert "--index-only" in calls[1]
 
 
-def test_incomplete_embedded_receipt_is_rejected_and_terminalized(
-    tmp_path, monkeypatch
-) -> None:
+def test_incomplete_embedded_receipt_is_rejected_and_terminalized(tmp_path, monkeypatch) -> None:
     monkeypatch.setattr(state_manager, "RUNS_DIR", tmp_path / "runs")
     journal = AuditJournal("rag-invalid")
     journal.finalize({"status": "stopped"})

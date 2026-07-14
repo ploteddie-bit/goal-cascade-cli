@@ -107,20 +107,19 @@ class Synthesizer:
 
         if drift_status == DriftStatus.CRITICAL:
             _logger.warning(
-                "drift_critical_detected iteration=%d similarity=%.4f "
-                "action=forced_stop",
-                iteration_to, similarity_score or 0.0,
+                "drift_critical_detected iteration=%d similarity=%.4f action=forced_stop",
+                iteration_to,
+                similarity_score or 0.0,
             )
         elif drift_status == DriftStatus.WARNING:
             _logger.info(
-                "drift_warning iteration=%d similarity=%.4f "
-                "action=verify_new_content",
-                iteration_to, similarity_score or 0.0,
+                "drift_warning iteration=%d similarity=%.4f action=verify_new_content",
+                iteration_to,
+                similarity_score or 0.0,
             )
         elif drift_status == DriftStatus.ERROR:
             _logger.warning(
-                "drift_embedding_unavailable iteration=%d "
-                "action=continue_without_drift_check",
+                "drift_embedding_unavailable iteration=%d action=continue_without_drift_check",
                 iteration_to,
             )
 
@@ -128,9 +127,9 @@ class Synthesizer:
         coverage_score = self._compute_coverage(raw_output, synthesis)
         if coverage_score is not None and coverage_score < 0.30:
             _logger.warning(
-                "synthesis_low_coverage iteration=%d coverage=%.3f "
-                "action=check_synthesis_quality",
-                iteration_to, coverage_score,
+                "synthesis_low_coverage iteration=%d coverage=%.3f action=check_synthesis_quality",
+                iteration_to,
+                coverage_score,
             )
 
         return SynthesisResult(
@@ -157,9 +156,7 @@ class Synthesizer:
             objective=objective,
             previous_output=raw_output,
             previous_synthesis=(
-                previous_synthesis.model_dump_json(indent=2)
-                if previous_synthesis
-                else ""
+                previous_synthesis.model_dump_json(indent=2) if previous_synthesis else ""
             ),
             iteration_from=iteration_from,
             iteration_to=iteration_to,
@@ -216,7 +213,7 @@ class Synthesizer:
             checksum = hashlib.sha256(content.encode("utf-8")).hexdigest()
             artifacts.append(
                 ImmutableArtifact(
-                    artifact_type=artifact_type,
+                    artifact_type=artifact_type,  # type: ignore[arg-type]
                     language=language,
                     content=content,
                     checksum=checksum,
@@ -232,9 +229,7 @@ class Synthesizer:
     ) -> list[ImmutableArtifact]:
         merged: dict[str, ImmutableArtifact] = {}
         for artifact in [*previous, *current]:
-            key = artifact.checksum or hashlib.sha256(
-                artifact.content.encode("utf-8")
-            ).hexdigest()
+            key = artifact.checksum or hashlib.sha256(artifact.content.encode("utf-8")).hexdigest()
             merged[key] = artifact
         return list(merged.values())
 
@@ -252,14 +247,71 @@ class Synthesizer:
         pour réduire le bruit.
         """
         STOP_WORDS = {
-            "the", "a", "an", "is", "are", "was", "were", "be", "been",
-            "have", "has", "had", "do", "does", "did", "will", "would",
-            "shall", "should", "may", "might", "can", "could", "not",
-            "and", "but", "or", "nor", "for", "yet", "so", "if", "then",
-            "that", "this", "these", "those", "with", "from", "into",
-            "le", "la", "les", "un", "une", "des", "est", "sont", "ont",
-            "et", "ou", "mais", "donc", "car", "pour", "dans", "par",
-            "pas", "qui", "que", "quoi", "dont", "avec", "sur", "sous",
+            "the",
+            "a",
+            "an",
+            "is",
+            "are",
+            "was",
+            "were",
+            "be",
+            "been",
+            "have",
+            "has",
+            "had",
+            "do",
+            "does",
+            "did",
+            "will",
+            "would",
+            "shall",
+            "should",
+            "may",
+            "might",
+            "can",
+            "could",
+            "not",
+            "and",
+            "but",
+            "or",
+            "nor",
+            "for",
+            "yet",
+            "so",
+            "if",
+            "then",
+            "that",
+            "this",
+            "these",
+            "those",
+            "with",
+            "from",
+            "into",
+            "le",
+            "la",
+            "les",
+            "un",
+            "une",
+            "des",
+            "est",
+            "sont",
+            "ont",
+            "et",
+            "ou",
+            "mais",
+            "donc",
+            "car",
+            "pour",
+            "dans",
+            "par",
+            "pas",
+            "qui",
+            "que",
+            "quoi",
+            "dont",
+            "avec",
+            "sur",
+            "sous",
         }
 
         def _significant_words(text: str) -> set[str]:
@@ -290,4 +342,4 @@ class Synthesizer:
 
     def reset_drift(self) -> None:
         """🆕 DRIFT — Réinitialiser le détecteur (nouvelle cascade)."""
-        self.drift_detector.reset()
+        self.drift_detector.reset()  # type: ignore[union-attr]

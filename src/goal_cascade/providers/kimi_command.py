@@ -55,9 +55,7 @@ class KimiCommandProvider(BaseProvider):
 
     def call(self, prompt: str, role: str, tier: str = "medium") -> LLMResponse:
         if role == "synthesizer" and not self.model:
-            raise ProviderCommandError(
-                "Un modèle de synthèse explicite et non vide est requis"
-            )
+            raise ProviderCommandError("Un modèle de synthèse explicite et non vide est requis")
         isolated_prompt = f"{self.SAFETY_PREFIX}{prompt}"
         command = self._command(isolated_prompt)
         started = time.monotonic()
@@ -75,8 +73,7 @@ class KimiCommandProvider(BaseProvider):
         if result.returncode != 0:
             details = (result.stderr or result.stdout or "erreur inconnue").strip()
             raise ProviderCommandError(
-                f"{self.backend.value} a quitté avec le code {result.returncode}: "
-                f"{details}"
+                f"{self.backend.value} a quitté avec le code {result.returncode}: {details}"
             )
 
         text = self.extract_assistant_text(result.stdout)
@@ -155,8 +152,8 @@ class KimiCommandProvider(BaseProvider):
     def _default_executable(backend: KimiBackend) -> str:
         if backend == KimiBackend.CLI:
             configured = os.environ.get("GOAL_KIMI_CLI_BIN")
-            return configured or shutil.which("kimi") or str(
-                Path.home() / ".local" / "bin" / "kimi"
+            return (
+                configured or shutil.which("kimi") or str(Path.home() / ".local" / "bin" / "kimi")
             )
         return os.environ.get("GOAL_KIMI_CODE_BIN") or str(
             Path.home() / ".kimi-code" / "bin" / "kimi"

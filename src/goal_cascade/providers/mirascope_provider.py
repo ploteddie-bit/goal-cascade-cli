@@ -10,13 +10,11 @@ import logging
 import time
 from typing import Any
 
-from pydantic import BaseModel, Field
-
-from .base import BaseProvider, LLMResponse
 from .anthropic_cache import is_anthropic_sdk_available
+from .base import BaseProvider, LLMResponse
 from .rate_limiter import (
-    Backend,
     FALLBACK_CHAIN,
+    Backend,
     ProviderExhaustedError,
     ProviderUnavailableError,
     RateLimitConfig,
@@ -44,8 +42,7 @@ try:
 except ImportError:
     logger = logging.getLogger(__name__)
     logger.warning(
-        "structlog non installé. Logs dégradés. "
-        "Installez avec: pip install goal-cascade[llm]"
+        "structlog non installé. Logs dégradés. Installez avec: pip install goal-cascade[llm]"
     )
 
 
@@ -73,8 +70,7 @@ TIER_MODEL_MAP: dict[Backend, dict[str, str]] = {
 
 def _missing_llm_extra_message() -> str:
     return (
-        "mirascope requis pour les providers réels. "
-        "Installez avec: pip install goal-cascade[llm]"
+        "mirascope requis pour les providers réels. Installez avec: pip install goal-cascade[llm]"
     )
 
 
@@ -180,30 +176,18 @@ def _estimate_cost_openai(model: str, usage: Any) -> float:
     if usage is None:
         return 0.0
     input_price, output_price = OPENAI_PRICES.get(model, (0.0, 0.0))
-    input_tokens = (
-        getattr(usage, "input_tokens", 0)
-        or getattr(usage, "prompt_tokens", 0)
-        or 0
-    )
+    input_tokens = getattr(usage, "input_tokens", 0) or getattr(usage, "prompt_tokens", 0) or 0
     output_tokens = (
-        getattr(usage, "output_tokens", 0)
-        or getattr(usage, "completion_tokens", 0)
-        or 0
+        getattr(usage, "output_tokens", 0) or getattr(usage, "completion_tokens", 0) or 0
     )
     return input_tokens * input_price + output_tokens * output_price
 
 
 def _estimate_cost_google(model: str, usage: Any) -> float:
     input_price, output_price = GOOGLE_PRICES.get(model, (0.0, 0.0))
-    input_tokens = (
-        getattr(usage, "input_tokens", 0)
-        or getattr(usage, "prompt_token_count", 0)
-        or 0
-    )
+    input_tokens = getattr(usage, "input_tokens", 0) or getattr(usage, "prompt_token_count", 0) or 0
     output_tokens = (
-        getattr(usage, "output_tokens", 0)
-        or getattr(usage, "candidates_token_count", 0)
-        or 0
+        getattr(usage, "output_tokens", 0) or getattr(usage, "candidates_token_count", 0) or 0
     )
     return input_tokens * input_price + output_tokens * output_price
 
@@ -282,9 +266,7 @@ class MirascopeProvider(BaseProvider):
     async def _call_google(self, prompt: str, prompt_model: str) -> LLMResponse:
         return await self._call_mirascope_v2(Backend.GOOGLE, prompt, prompt_model)
 
-    async def _call_mirascope_v2(
-        self, backend: Backend, prompt: str, model: str
-    ) -> LLMResponse:
+    async def _call_mirascope_v2(self, backend: Backend, prompt: str, model: str) -> LLMResponse:
         """Appel Mirascope v2 unifié (anthropic/openai/google via `mirascope.llm.call`).
 
         Utilise la version synchrone de ``llm.call`` exécutée dans un thread
@@ -364,7 +346,6 @@ class MirascopeProvider(BaseProvider):
             excs = _get_mirascope_exceptions()
         except ImportError:
             return
-        names = {RateLimitError, ProviderUnavailableError}
         for name in (RateLimitError, ProviderUnavailableError, Exception):
             cls = getattr(excs, name.__name__, None)
             if cls is not None and isinstance(exc, cls):

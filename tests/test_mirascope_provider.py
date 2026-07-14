@@ -18,10 +18,10 @@ from goal_cascade.providers.base import LLMResponse
 from goal_cascade.providers.families import PROVIDER_FAMILIES
 from goal_cascade.providers.mirascope_provider import (
     FALLBACK_CHAIN,
+    TIER_MODEL_MAP,
     Backend,
     MirascopeProvider,
     RateLimitConfig,
-    TIER_MODEL_MAP,
     _estimate_cost_anthropic,
     _estimate_cost_google,
     _estimate_cost_openai,
@@ -101,9 +101,7 @@ def test_call_backend_delegates_to_backend_method(monkeypatch: pytest.MonkeyPatc
 
     monkeypatch.setattr(provider, "_call_anthropic", fake_call)
 
-    response = asyncio.run(
-        provider._call_backend(Backend.ANTHROPIC, "hello", "producer", "small")
-    )
+    response = asyncio.run(provider._call_backend(Backend.ANTHROPIC, "hello", "producer", "small"))
 
     assert response.text.startswith("claude-haiku")
     assert response.provider == "anthropic"

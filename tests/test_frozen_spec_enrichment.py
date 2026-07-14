@@ -22,8 +22,7 @@ from goal_cascade.cli import app
 from goal_cascade.multicascade.module_graph import ModuleGraph
 from goal_cascade.providers.base import BaseProvider, LLMResponse
 from goal_cascade.schemas.models import FrozenSpec, Invariant
-from goal_cascade.schemas.plan import CascadePlan, DependencySpec, ModuleSpec
-
+from goal_cascade.schemas.plan import CascadePlan, ModuleSpec
 
 # ── Fixtures ─────────────────────────────────────────────────────
 
@@ -45,9 +44,7 @@ class _ScriptedProvider(BaseProvider):
         for key, response in self.scripts.items():
             if key in prompt:
                 return LLMResponse(text=response, provider=self._name, model=f"test-{tier}")
-        raise AssertionError(
-            f"Aucun script ne correspond au prompt reçu : {prompt[:120]!r}"
-        )
+        raise AssertionError(f"Aucun script ne correspond au prompt reçu : {prompt[:120]!r}")
 
 
 def _make_module(id_: str, name: str, responsibility: str) -> ModuleSpec:
@@ -158,8 +155,7 @@ class TestEnrichFrozenSpecs:
 
         for inv in graph._specs["M1"].invariants:
             assert inv.verified is False, (
-                f"Invariant llm-generated ne doit JAMAIS être verified=True : "
-                f"{inv.description!r}"
+                f"Invariant llm-generated ne doit JAMAIS être verified=True : {inv.description!r}"
             )
 
     def test_module_failure_keeps_skeletal_and_reports_failure(self) -> None:
@@ -184,9 +180,7 @@ class TestEnrichFrozenSpecs:
         modules = [_make_module("M1", "Auth", "authentifier")]
         graph, plan = _build_graph_with_skeletal(modules)
 
-        provider = _ScriptedProvider(
-            {"MODULE :": json.dumps({"invariants": []})}
-        )
+        provider = _ScriptedProvider({"MODULE :": json.dumps({"invariants": []})})
 
         stats = ModuleGraph._enrich_frozen_specs(graph, plan, provider)
 
@@ -273,7 +267,8 @@ class TestCLIEnrichFlag:
                 "plan",
                 str(spec_path),
                 "--enrich-frozen-specs",
-                "--output", str(output_path),
+                "--output",
+                str(output_path),
             ],
         )
 

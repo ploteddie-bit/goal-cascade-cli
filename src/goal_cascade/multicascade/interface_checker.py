@@ -8,7 +8,6 @@ Phase 2 (v1 placeholder) : vérifications LLM (cohérence sémantique,
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any
 
 from goal_cascade.orchestrator.cicd_hook import CICDHook, DeterministicCheckResult
 from goal_cascade.schemas.models import CascadeState, InterfaceContract
@@ -70,8 +69,7 @@ class InterfaceChecker:
         relevant = [
             c
             for c in contracts
-            if c.producer_module == current_module_id
-            or c.consumer_module == current_module_id
+            if c.producer_module == current_module_id or c.consumer_module == current_module_id
         ]
 
         for contract in relevant:

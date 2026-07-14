@@ -12,10 +12,11 @@ Les chemins inexistants sont filtrés à l'initialisation.
 from __future__ import annotations
 
 import logging
+from collections.abc import Sequence
 from pathlib import Path
-from typing import Any, Sequence
+from typing import Any
 
-from jinja2 import Environment, FileSystemLoader, StrictUndefined, TemplateNotFound
+from jinja2 import FileSystemLoader, StrictUndefined, TemplateNotFound
 from jinja2.sandbox import SandboxedEnvironment
 
 try:
@@ -42,9 +43,7 @@ class PromptNotFoundError(FileNotFoundError):
         self.name = name
         self.searched = list(searched)
         paths = "\n  ".join(str(p) for p in self.searched) or "(aucun)"
-        super().__init__(
-            f"Template '{name}' introuvable. Chemins cherchés :\n  {paths}"
-        )
+        super().__init__(f"Template '{name}' introuvable. Chemins cherchés :\n  {paths}")
 
 
 class InvalidTemplateNameError(ValueError):
@@ -149,7 +148,7 @@ class PromptLoader:
             template = self._env.get_template(prompt_name)
         except TemplateNotFound as exc:
             raise PromptNotFoundError(
-                name=exc.name or prompt_name,
+                name=exc.name or prompt_name,  # type: ignore[arg-type]
                 searched=self._search_paths,
             ) from exc
         return template.render(**context)

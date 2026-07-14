@@ -115,12 +115,8 @@ def test_kimi_cli_uses_toolless_bubblewrap_sandbox(monkeypatch, tmp_path) -> Non
     assert "tools: []" in mounted_files["/tmp/goal-kimi-sandbox/agent.yaml"]
     assert "allowed_tools: []" in mounted_files["/tmp/goal-kimi-sandbox/agent.yaml"]
     assert "subagents: {}" in mounted_files["/tmp/goal-kimi-sandbox/agent.yaml"]
-    assert json.loads(mounted_files["/tmp/goal-kimi-sandbox/mcp.json"]) == {
-        "mcpServers": {}
-    }
-    sandbox_config = json.loads(
-        mounted_files["/tmp/goal-kimi-sandbox/config.json"]
-    )
+    assert json.loads(mounted_files["/tmp/goal-kimi-sandbox/mcp.json"]) == {"mcpServers": {}}
+    sandbox_config = json.loads(mounted_files["/tmp/goal-kimi-sandbox/config.json"])
     assert sandbox_config["hooks"] == []
     assert sandbox_config["default_yolo"] is False
     assert sandbox_config["telemetry"] is False
@@ -158,7 +154,7 @@ def test_bubblewrap_hides_host_secret_from_executable(tmp_path) -> None:
         "#!/bin/sh\n"
         f'secret=$(cat "{secret}" 2>/dev/null || true)\n'
         f'touch "{pwned}" 2>/dev/null || true\n'
-        "printf '{\"role\":\"assistant\",\"content\":\"SAFE:%s\"}\\n' \"$secret\"\n",
+        'printf \'{"role":"assistant","content":"SAFE:%s"}\\n\' "$secret"\n',
         encoding="utf-8",
     )
     fake_cli.chmod(0o755)

@@ -6,9 +6,8 @@ from unittest.mock import MagicMock
 import pytest
 from typer.testing import CliRunner
 
-from goal_cascade.cli import app, _build_provider
+from goal_cascade.cli import _build_provider, app
 from goal_cascade.config import GoalConfig, ProvidersConfig
-from goal_cascade.providers.base import BaseProvider
 
 
 @pytest.fixture(autouse=True)

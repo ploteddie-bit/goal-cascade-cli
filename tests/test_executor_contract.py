@@ -94,9 +94,7 @@ def test_verdict_parser_rejects_legacy_text_marker() -> None:
     )
 
     try:
-        executor._parse_verdict(
-            "**Verdict** : STOP\nJUSTIFICATION : ancien format non structuré"
-        )
+        executor._parse_verdict("**Verdict** : STOP\nJUSTIFICATION : ancien format non structuré")
     except ValueError as error:
         assert "JSON" in str(error)
     else:

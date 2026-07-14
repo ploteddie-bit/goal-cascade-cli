@@ -12,7 +12,6 @@ from typing import Any
 
 from .orchestrator import state_manager
 
-
 SECRET_KEY = (
     r"[A-Z0-9_-]*(?:API[_-]?KEY|SECRET[_-]?ACCESS[_-]?KEY|"
     r"ACCESS[_-]?TOKEN|REFRESH[_-]?TOKEN|PASSWORD|PASSWD|"
@@ -28,9 +27,7 @@ UNQUOTED_SECRET_RE = re.compile(
     rf"(?P<value>(?!\[MASQUÉ\])[^\s,;]+)",
     re.IGNORECASE,
 )
-AUTHORIZATION_RE = re.compile(
-    r"(?i)\bauthorization\s*:\s*bearer\s+[^\s,;]+"
-)
+AUTHORIZATION_RE = re.compile(r"(?i)\bauthorization\s*:\s*bearer\s+[^\s,;]+")
 PRIVATE_KEY_RE = re.compile(
     r"-----BEGIN(?: [A-Z0-9]+)* PRIVATE KEY-----.*?"
     r"-----END(?: [A-Z0-9]+)* PRIVATE KEY-----",
@@ -45,8 +42,7 @@ def redact_sensitive(value: str) -> str:
     result = AUTHORIZATION_RE.sub("Authorization: Bearer [MASQUÉ]", result)
     result = QUOTED_SECRET_RE.sub(
         lambda match: (
-            f"{match.group('prefix')}{match.group('quote')}"
-            f"[MASQUÉ]{match.group('quote')}"
+            f"{match.group('prefix')}{match.group('quote')}[MASQUÉ]{match.group('quote')}"
         ),
         result,
     )
@@ -220,8 +216,7 @@ class AuditJournal:
         artifact_paths: list[Path] = []
         for event in events:
             lines.append(
-                f"### {event.get('sequence')} — {event.get('event')} "
-                f"({event.get('timestamp_utc')})"
+                f"### {event.get('sequence')} — {event.get('event')} ({event.get('timestamp_utc')})"
             )
             lines.append("")
             lines.append("```json")

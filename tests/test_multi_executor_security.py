@@ -7,9 +7,9 @@ C4 : cascade d'intégration bornée à 5 itérations.
 C5 : pas de parallélisme non contrôlé.
 C6 : contrats d'interface vérifiés après chaque batch.
 """
+
 from __future__ import annotations
 
-import sys
 from pathlib import Path
 from typing import Any
 from unittest.mock import MagicMock, patch
@@ -21,7 +21,6 @@ from goal_cascade.multicascade.interface_checker import CheckResult
 from goal_cascade.multicascade.module_graph import ModuleGraph
 from goal_cascade.multicascade.multi_executor import (
     InterfaceViolationError,
-    IntegrationFailedError,
     ModuleFailedError,
     MultiCascadeExecutor,
 )
@@ -32,7 +31,6 @@ from goal_cascade.schemas.models import (
     InterfaceContract,
     Verdict,
 )
-
 
 # ── Helpers ─────────────────────────────────────────────────────────
 
@@ -211,9 +209,11 @@ def test_failed_module_saves_checkpoint_before_raising() -> None:
         interface_checker=mock_checker,
     )
 
-    with patch("goal_cascade.multicascade.multi_executor.state_manager.save_state") as mock_save:
-        with pytest.raises(ModuleFailedError) as exc_info:
-            multi.run_all(verbose=False)
+    with (
+        patch("goal_cascade.multicascade.multi_executor.state_manager.save_state") as mock_save,
+        pytest.raises(ModuleFailedError) as exc_info,
+    ):
+        multi.run_all(verbose=False)
 
     mock_save.assert_called_once()
     assert exc_info.value.state is failed_state
@@ -290,13 +290,13 @@ def test_interface_check_called_after_batch_with_correct_signature() -> None:
     assert mock_checker.check.call_count == 2
 
     checked_modules = {
-        call.kwargs["current_module_id"]
-        for call in mock_checker.check.call_args_list
+        call.kwargs["current_module_id"] for call in mock_checker.check.call_args_list
     }
     assert checked_modules == {"A", "B"}
 
     b_call = next(
-        call for call in mock_checker.check.call_args_list
+        call
+        for call in mock_checker.check.call_args_list
         if call.kwargs["current_module_id"] == "B"
     )
     assert any(c.contract_id == "A->B" for c in b_call.kwargs["contracts"])

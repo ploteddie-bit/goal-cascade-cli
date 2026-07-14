@@ -4,6 +4,7 @@ Structure : fixtures pytest, classes logiques, API BudgetTracker enrichie.
 Fusion des tests Eddie (check_budget, warning, daily, exception) et des
 tests existants (record, projected_monthly, explain, is_warning).
 """
+
 from __future__ import annotations
 
 import json
@@ -14,7 +15,6 @@ import pytest
 
 from goal_cascade.config import BudgetConfig
 from goal_cascade.orchestrator.budget_tracker import BudgetExceeded, BudgetTracker
-
 
 # ── Fixtures ────────────────────────────────────────────────────
 
@@ -103,7 +103,9 @@ class TestWarningThreshold:
         return "budget_warning" in capsys.readouterr().out
 
     def test_warning_logged_at_80_percent(
-        self, tracker: BudgetTracker, caplog: pytest.LogCaptureFixture,
+        self,
+        tracker: BudgetTracker,
+        caplog: pytest.LogCaptureFixture,
         capsys: pytest.CaptureFixture[str],
     ) -> None:
         tracker.check_budget("run-warn", 0.41)  # 82% de 0.50
@@ -111,7 +113,9 @@ class TestWarningThreshold:
         assert self._has_budget_warning(caplog, capsys)
 
     def test_warning_fired_only_once_per_run(
-        self, tracker: BudgetTracker, caplog: pytest.LogCaptureFixture,
+        self,
+        tracker: BudgetTracker,
+        caplog: pytest.LogCaptureFixture,
         capsys: pytest.CaptureFixture[str],
     ) -> None:
         tracker.check_budget("run-once", 0.41)
@@ -125,9 +129,7 @@ class TestWarningThreshold:
         assert not tracker.is_warning(0.39)
         assert tracker.is_warning(0.40)
 
-    def test_is_warning_disabled_when_max_per_run_zero(
-        self, tmp_path: Path
-    ) -> None:
+    def test_is_warning_disabled_when_max_per_run_zero(self, tmp_path: Path) -> None:
         config = BudgetConfig.model_construct(max_per_run_usd=0, max_per_day_usd=10.0)
         tracker = BudgetTracker(config=config, runs_dir=tmp_path)
 
@@ -138,9 +140,7 @@ class TestWarningThreshold:
 
 
 class TestDailyBudget:
-    def _create_today_run(
-        self, runs_dir: Path, run_id: str, cost: float
-    ) -> None:
+    def _create_today_run(self, runs_dir: Path, run_id: str, cost: float) -> None:
         run_dir = runs_dir / run_id
         run_dir.mkdir(parents=True, exist_ok=True)
         today = date.today().isoformat()
@@ -154,9 +154,7 @@ class TestDailyBudget:
         )
 
     def test_daily_budget_exceeded_raises(self, tmp_path: Path) -> None:
-        config = BudgetConfig(
-            max_per_run_usd=1.0, max_per_day_usd=0.10, hard_stop=True
-        )
+        config = BudgetConfig(max_per_run_usd=1.0, max_per_day_usd=0.10, hard_stop=True)
         tracker = BudgetTracker(config=config, runs_dir=tmp_path)
 
         self._create_today_run(tmp_path, "run-daily", 0.15)
@@ -165,9 +163,7 @@ class TestDailyBudget:
             tracker.check_budget("run-new", 0.0)
 
     def test_daily_budget_under_limit_passes(self, tmp_path: Path) -> None:
-        config = BudgetConfig(
-            max_per_run_usd=1.0, max_per_day_usd=10.0, hard_stop=True
-        )
+        config = BudgetConfig(max_per_run_usd=1.0, max_per_day_usd=10.0, hard_stop=True)
         tracker = BudgetTracker(config=config, runs_dir=tmp_path)
 
         self._create_today_run(tmp_path, "run-ok", 0.05)
@@ -208,9 +204,7 @@ class TestRecordAndPersistence:
     def test_record_persists_to_daily_total_path(self, tmp_path: Path) -> None:
         daily_path = tmp_path / "budget_daily.json"
         config = BudgetConfig()
-        tracker = BudgetTracker(
-            config=config, runs_dir=tmp_path, daily_total_path=daily_path
-        )
+        tracker = BudgetTracker(config=config, runs_dir=tmp_path, daily_total_path=daily_path)
 
         tracker.record(0.10)
 
@@ -233,15 +227,11 @@ class TestRecordAndPersistence:
 
 
 class TestProjectionAndExplain:
-    def test_projected_monthly_multiplies_correctly(
-        self, tracker: BudgetTracker
-    ) -> None:
+    def test_projected_monthly_multiplies_correctly(self, tracker: BudgetTracker) -> None:
         # 0.08 * 30 * 10 = 24.0
         assert tracker.projected_monthly(0.08) == 24.0
 
-    def test_explain_returns_human_readable_string(
-        self, tracker: BudgetTracker
-    ) -> None:
+    def test_explain_returns_human_readable_string(self, tracker: BudgetTracker) -> None:
         msg = tracker.explain(0.25)
         assert "coût=0.2500" in msg
         assert "max_run=0.50" in msg

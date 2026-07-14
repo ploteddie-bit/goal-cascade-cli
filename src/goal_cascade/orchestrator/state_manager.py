@@ -6,12 +6,12 @@ Phase 4 : migration vers SQLite avec LangGraph.
 
 from __future__ import annotations
 
+import contextlib
 import json
 import os
 from pathlib import Path
 
 from ..schemas.models import CascadeState, RunReceipt
-
 
 GOAL_DIR = Path(os.environ.get("GOAL_HOME", Path.home() / ".goal")).expanduser()
 RUNS_DIR = GOAL_DIR / "runs"
@@ -27,11 +27,8 @@ def ensure_private_dir(path: Path, mode: int = PRIVATE_DIR_MODE) -> Path:
     lisibles par les autres utilisateurs du système (E2/E3).
     """
     path.mkdir(parents=True, exist_ok=True)
-    try:
+    with contextlib.suppress(OSError):
         path.chmod(mode)
-    except OSError:
-        # FS ne supporte pas chmod (ex: certains mounts Windows) : ignorer.
-        pass
     return path
 
 
@@ -58,10 +55,7 @@ def save_state(state: CascadeState) -> Path:
     """Sauvegarde l'etat d'une cascade en JSON."""
     run_dir = get_run_dir(state.run_id)
     state_file = run_dir / "state.json"
-    state_file.write_text(
-        state.model_dump_json(indent=2),
-        encoding="utf-8"
-    )
+    state_file.write_text(state.model_dump_json(indent=2), encoding="utf-8")
     return state_file
 
 
@@ -128,10 +122,12 @@ def list_runs() -> list[dict]:
             state_file = run_dir / "state.json"
             if state_file.exists():
                 data = json.loads(state_file.read_text(encoding="utf-8"))
-                runs.append({
-                    "run_id": data.get("run_id", run_dir.name),
-                    "objective": data.get("objective", "")[:60],
-                    "status": data.get("status", "unknown"),
-                    "iterations": data.get("current_iteration", 0),
-                })
+                runs.append(
+                    {
+                        "run_id": data.get("run_id", run_dir.name),
+                        "objective": data.get("objective", "")[:60],
+                        "status": data.get("status", "unknown"),
+                        "iterations": data.get("current_iteration", 0),
+                    }
+                )
     return runs

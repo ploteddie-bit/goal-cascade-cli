@@ -49,8 +49,7 @@ class ModuleGraph:
         for mid in (producer, consumer):
             if mid not in self._dag:
                 raise ValueError(
-                    f"Module '{mid}' absent du graphe. "
-                    "Appelez add_module() avant add_dependency()."
+                    f"Module '{mid}' absent du graphe. Appelez add_module() avant add_dependency()."
                 )
         self._dag.add_edge(producer, consumer, contract=contract)
         self._contracts[contract.contract_id] = contract
@@ -102,7 +101,7 @@ class ModuleGraph:
         max_level = max(levels.values()) if levels else -1
         batches: list[list[str]] = []
         for lvl in range(max_level + 1):
-            batch = sorted(m for m, l in levels.items() if l == lvl)
+            batch = sorted(m for m, level in levels.items() if level == lvl)
             batches.append(batch)
         return batches
 
@@ -133,7 +132,7 @@ class ModuleGraph:
         """
         roots = [n for n in self._dag.nodes if self._dag.in_degree(n) == 0]
         if len(roots) == 1:
-            return roots[0]
+            return roots[0]  # type: ignore[no-any-return]
         return None
 
     # ------------------------------------------------------------------
@@ -158,7 +157,7 @@ class ModuleGraph:
             }
         """
         path = Path(plan_path)
-        with open(path, "r", encoding="utf-8") as fh:
+        with open(path, encoding="utf-8") as fh:
             data = json.load(fh)
 
         graph = cls()
@@ -241,16 +240,15 @@ class ModuleGraph:
         # Essai 1 : bloc de code markdown
         match = re.search(r"```(?:json)?\s*\n(.*?)\n```", text, re.DOTALL)
         if match:
-            return json.loads(match.group(1))
+            return json.loads(match.group(1))  # type: ignore[no-any-return]
 
         # Essai 2 : premier objet JSON dans le texte
         match = re.search(r"\{.*\}", text, re.DOTALL)
         if match:
-            return json.loads(match.group(0))
+            return json.loads(match.group(0))  # type: ignore[no-any-return]
 
         raise ValueError(
-            "Impossible d'extraire un JSON de la réponse LLM. "
-            f"Début de la réponse : {text[:200]!r}"
+            f"Impossible d'extraire un JSON de la réponse LLM. Début de la réponse : {text[:200]!r}"
         )
 
     @classmethod
@@ -313,7 +311,7 @@ class ModuleGraph:
         prompt = cls._build_planning_prompt(spec_content)
 
         # 2. Appel LLM (planification)
-        response = provider.call(prompt, role="producer", tier="medium")
+        response = provider.call(prompt, role="producer", tier="medium")  # type: ignore[attr-defined]
         logger.info("Réponse LLM reçue (%d caractères)", len(response.text))
 
         # 3. Parsing
@@ -338,9 +336,7 @@ class ModuleGraph:
         # 5. Validation des contraintes
         constraint_errors = plan.validate_constraints()
         if constraint_errors:
-            raise ValueError(
-                "Plan invalide : " + "; ".join(constraint_errors)
-            )
+            raise ValueError("Plan invalide : " + "; ".join(constraint_errors))
 
         # 6. Construction du graphe avec frozen specs squelettiques
         graph = cls()
@@ -409,13 +405,11 @@ class ModuleGraph:
     ) -> str:
         """Construit le prompt d'enrichissement pour un module donné."""
         try:
-            from jinja2 import Environment, FileSystemLoader, select_autoescape
-
             from ..prompts import PromptLoader
 
             # Utilise PromptLoader pour respecter la hiérarchie de surcharge
             loader = PromptLoader()
-            return loader.load(
+            return loader.load(  # type: ignore[no-any-return, attr-defined]
                 "frozen_spec_gen",
                 module_name=module_name,
                 responsibility=responsibility,
@@ -446,20 +440,18 @@ class ModuleGraph:
         """
         match = re.search(r"```(?:json)?\s*\n(.*?)\n```", text, re.DOTALL)
         if match:
-            return json.loads(match.group(1)).get("invariants", [])
+            return json.loads(match.group(1)).get("invariants", [])  # type: ignore[no-any-return]
 
         match = re.search(r"\{.*\}", text, re.DOTALL)
         if match:
-            return json.loads(match.group(0)).get("invariants", [])
+            return json.loads(match.group(0)).get("invariants", [])  # type: ignore[no-any-return]
 
-        raise ValueError(
-            "Impossible d'extraire le JSON d'invariants de la réponse LLM."
-        )
+        raise ValueError("Impossible d'extraire le JSON d'invariants de la réponse LLM.")
 
     @classmethod
     def _enrich_frozen_specs(
         cls,
-        graph: "ModuleGraph",
+        graph: ModuleGraph,
         plan: CascadePlan,
         provider: object,
     ) -> dict:
@@ -483,12 +475,13 @@ class ModuleGraph:
                 objective=plan.objective,
             )
             try:
-                response = provider.call(prompt, role="producer", tier="medium")
+                response = provider.call(prompt, role="producer", tier="medium")  # type: ignore[attr-defined]
                 raw_inv = cls._parse_enrichment_response(response.text)
             except Exception as exc:
                 logger.warning(
                     "frozen_spec_enrich_failed module=%s error=%s action=keep_skeletal",
-                    mod.id, exc,
+                    mod.id,
+                    exc,
                 )
                 modules_failed.append(mod.id)
                 continue
@@ -507,7 +500,7 @@ class ModuleGraph:
                 new_invariants.append(
                     Invariant(
                         description=description,
-                        category=category,  # type: ignore[arg-type]
+                        category=category,
                         verified=False,
                         source="llm-generated",
                     )
@@ -554,15 +547,19 @@ class ModuleGraph:
         """Exporte le graphe sous forme de dictionnaire sérialisable."""
         modules = []
         for mid in sorted(self._specs):
-            modules.append({
-                "module_id": mid,
-                "spec": self._specs[mid].model_dump(),
-            })
+            modules.append(
+                {
+                    "module_id": mid,
+                    "spec": self._specs[mid].model_dump(),
+                }
+            )
         contracts = []
         for src, tgt, data in sorted(self._dag.edges(data=True)):
-            contracts.append({
-                "producer": src,
-                "consumer": tgt,
-                "contract": data["contract"].model_dump(),
-            })
+            contracts.append(
+                {
+                    "producer": src,
+                    "consumer": tgt,
+                    "contract": data["contract"].model_dump(),
+                }
+            )
         return {"modules": modules, "contracts": contracts}

@@ -5,18 +5,15 @@ E2 : traces de run isolées (permissions 0o700).
 E3 : cache sémantique local à l'utilisateur avec permissions restreintes.
 E4 : .gitignore exclut les traces.
 """
+
 from __future__ import annotations
 
-import logging
 from pathlib import Path
 from unittest.mock import MagicMock, patch
-
-import pytest
 
 from goal_cascade.audit_journal import AuditJournal, redact_sensitive
 from goal_cascade.orchestrator import state_manager
 from goal_cascade.orchestrator.state_manager import ensure_private_dir, get_run_dir
-
 
 # ── E1 : pas de secrets dans les logs ──────────────────────────────
 
@@ -59,9 +56,7 @@ def test_semantic_cache_error_logs_do_not_leak_query() -> None:
 
     secret_query = "Ma clé API est sk-cache-secret-999"
     mock_client = MagicMock()
-    mock_client.embed.side_effect = RuntimeError(
-        f"Connection failed for {secret_query}"
-    )
+    mock_client.embed.side_effect = RuntimeError(f"Connection failed for {secret_query}")
 
     cache = SemanticCache(
         db_path=Path("/tmp/should_not_exist_for_test_semantic_cache.db"),
@@ -158,7 +153,7 @@ def test_semantic_cache_creates_private_db(tmp_path: Path) -> None:
     )
 
     db_path = tmp_path / ".goal" / "semantic_cache.db"
-    cache = SemanticCache(db_path=db_path, embedding_client=MagicMock())
+    SemanticCache(db_path=db_path, embedding_client=MagicMock())
 
     assert db_path.exists()
     assert (db_path.parent.stat().st_mode & 0o777) == 0o700

@@ -11,6 +11,7 @@ from pydantic import BaseModel, Field
 
 class RunVersion(BaseModel):
     """Version individuelle d'un run Cascade."""
+
     version_id: str
     run_id: str
     parent_version: str | None = None
@@ -32,6 +33,7 @@ class RunVersion(BaseModel):
 
 class VersionDiff(BaseModel):
     """Comparaison entre deux versions d'un meme run."""
+
     run_id: str
     version_a: str
     version_b: str
@@ -56,6 +58,7 @@ class VersionDiff(BaseModel):
 
 class RunVersionsList(BaseModel):
     """Liste des versions d'un run, triee par date de creation."""
+
     run_id: str
     versions: list[RunVersion] = Field(default_factory=list)
     latest_version: str | None = None

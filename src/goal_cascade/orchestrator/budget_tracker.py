@@ -12,6 +12,7 @@ Fusion des deux versions :
 
 from __future__ import annotations
 
+import contextlib
 import json
 import logging
 import os
@@ -49,8 +50,7 @@ class BudgetExceeded(Exception):
         self.limit = limit
         self.scope = scope  # "per_run" ou "per_day"
         super().__init__(
-            f"Budget dépassé ({scope}): ${accumulated:.3f} / ${limit:.3f} "
-            f"(run {run_id})"
+            f"Budget dépassé ({scope}): ${accumulated:.3f} / ${limit:.3f} (run {run_id})"
         )
 
 
@@ -230,9 +230,7 @@ class BudgetTracker:
 
             # Sommer les coûts
             try:
-                for line in (
-                    events_file.read_text(encoding="utf-8").strip().split("\n")
-                ):
+                for line in events_file.read_text(encoding="utf-8").strip().split("\n"):
                     if not line.strip():
                         continue
                     event = json.loads(line)
@@ -283,11 +281,8 @@ class BudgetTracker:
             # Restreint au propriétaire : budget_daily.json révèle des
             # métadonnées d'usage (fréquence, volume) qui n'ont rien
             # à faire dans un fichier lisible par tous.
-            try:
+            with contextlib.suppress(OSError):
                 os.chmod(self._daily_total_path, 0o600)
-            except OSError:
-                # FS ne supporte pas chmod (ex: certains mounts Windows).
-                pass
         except OSError:
             # FS readonly ou permissions : on accepte la dégradation en mémoire seule.
             pass

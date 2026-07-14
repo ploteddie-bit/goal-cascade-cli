@@ -23,8 +23,8 @@ from goal_cascade.providers.anthropic_cache import (
     split_prompt_for_caching,
 )
 
-
 # ---------- is_anthropic_sdk_available ----------
+
 
 def test_sdk_availability_reflects_actual_install(monkeypatch: pytest.MonkeyPatch) -> None:
     """Si anthropic est installe (cas actuel : non), retourne True."""
@@ -57,6 +57,7 @@ def test_sdk_availability_handles_missing_module(monkeypatch: pytest.MonkeyPatch
 
 
 # ---------- build_cached_messages ----------
+
 
 def test_build_messages_without_cache_returns_plain() -> None:
     """enable_cache=False : messages bruts, aucun marqueur cache_control."""
@@ -126,6 +127,7 @@ def test_build_messages_with_sdk_applies_cache_control(
 
 # ---------- split_prompt_for_caching ----------
 
+
 def test_split_prompt_with_full_inputs() -> None:
     prefix, suffix = split_prompt_for_caching(
         objective="Audit d'un argument",
@@ -172,6 +174,7 @@ def test_split_prompt_with_both_empty() -> None:
 
 
 # ---------- estimate_cache_savings ----------
+
 
 def test_estimate_savings_basic() -> None:
     """Calcul basique : 1200 tokens, 4 iterations, cout Sonnet input 3e-6."""

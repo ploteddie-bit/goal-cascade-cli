@@ -5,11 +5,10 @@ from __future__ import annotations
 import hashlib
 import json
 import os
-import re
 import subprocess
 import sys
+from collections.abc import Callable
 from pathlib import Path
-from typing import Any, Callable
 
 from .audit_journal import AuditJournal, redact_sensitive
 from .rag import (
@@ -136,13 +135,9 @@ class RagBridge:
                 **failure,
             )
             journal.refresh_timeline()
-            index_receipt = self._index_only(
-                command, env, journal.timeline_path, run_id
-            )
+            index_receipt = self._index_only(command, env, journal.timeline_path, run_id)
             if index_receipt:
-                receipt_status = index_receipt.pop(
-                    "status", "indexed_pending_embedding"
-                )
+                receipt_status = index_receipt.pop("status", "indexed_pending_embedding")
                 combined_receipt = {**failure, **index_receipt}
                 journal.update_rag_status(
                     receipt_status,
@@ -172,13 +167,9 @@ class RagBridge:
                 embedding_model=ollama_embed_model,
             )
             journal.refresh_timeline()
-            index_receipt = self._index_only(
-                command, env, journal.timeline_path, run_id
-            )
+            index_receipt = self._index_only(command, env, journal.timeline_path, run_id)
             if index_receipt:
-                receipt_status = index_receipt.pop(
-                    "status", "indexed_pending_embedding"
-                )
+                receipt_status = index_receipt.pop("status", "indexed_pending_embedding")
                 journal.update_rag_status(
                     receipt_status,
                     message=message,
@@ -213,13 +204,17 @@ class RagBridge:
             if not isinstance(value, dict) or value.get("status") != "embedded":
                 continue
             errors = []
-            if not isinstance(value.get("document_id"), int) or isinstance(
-                value.get("document_id"), bool
-            ) or value.get("document_id", 0) <= 0:
+            if (
+                not isinstance(value.get("document_id"), int)
+                or isinstance(value.get("document_id"), bool)
+                or value.get("document_id", 0) <= 0
+            ):
                 errors.append("document_id")
-            if not isinstance(value.get("chunks"), int) or isinstance(
-                value.get("chunks"), bool
-            ) or value.get("chunks", 0) <= 0:
+            if (
+                not isinstance(value.get("chunks"), int)
+                or isinstance(value.get("chunks"), bool)
+                or value.get("chunks", 0) <= 0
+            ):
                 errors.append("chunks")
             if value.get("dimensions") != 1024:
                 errors.append("dimensions")
@@ -228,9 +223,11 @@ class RagBridge:
             if value.get("endpoint") != expected_endpoint:
                 errors.append("endpoint")
             similarity = value.get("cosine_similarity")
-            if not isinstance(similarity, (int, float)) or isinstance(
-                similarity, bool
-            ) or not 0.99 <= float(similarity) <= 1.0001:
+            if (
+                not isinstance(similarity, (int, float))
+                or isinstance(similarity, bool)
+                or not 0.99 <= float(similarity) <= 1.0001
+            ):
                 errors.append("cosine_similarity")
             if value.get("postgres_indexed") is not True:
                 errors.append("postgres_indexed")
@@ -240,9 +237,7 @@ class RagBridge:
             if value.get("source") != expected_source:
                 errors.append("source")
             if errors:
-                raise RagSyncError(
-                    "Reçu embedded invalide : " + ", ".join(errors)
-                )
+                raise RagSyncError("Reçu embedded invalide : " + ", ".join(errors))
             return value
         raise RagSyncError("Reçu embedded invalide : preuve JSON absente")
 

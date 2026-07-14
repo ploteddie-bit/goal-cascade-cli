@@ -13,7 +13,6 @@ Couvre :
 
 from __future__ import annotations
 
-import sys
 from pathlib import Path
 
 import pytest
@@ -26,8 +25,8 @@ from goal_cascade.providers.rate_limiter import (
     RateLimitConfig,
 )
 
-
 # ---------- Constantes module-level ----------
+
 
 def test_module_constants_match_documented_values() -> None:
     """Les 3 constantes module-level sont celles affichees par Eddie."""
@@ -46,14 +45,17 @@ def test_module_constants_match_field_defaults() -> None:
 
 # ---------- GoalConfig : champ ratelimit + AliasChoices ----------
 
+
 def test_goal_config_has_default_ratelimit() -> None:
     """GoalConfig inclut un ratelimit par defaut meme si le TOML ne le specifie pas."""
-    goal = GoalConfig.model_validate({
-        "providers": {
-            "enabled": ["mock"],
-            "synthesizer": "mock",
+    goal = GoalConfig.model_validate(
+        {
+            "providers": {
+                "enabled": ["mock"],
+                "synthesizer": "mock",
+            }
         }
-    })
+    )
     assert isinstance(goal.ratelimit, RateLimitConfig)
     assert goal.ratelimit.max_retries == MAX_RETRIES
 
@@ -61,17 +63,21 @@ def test_goal_config_has_default_ratelimit() -> None:
 def test_goal_config_accepts_ratelimit_alias() -> None:
     """Le TOML peut utiliser [ratelimit] (canonique) ou [rate_limit] (alias)."""
     # Forme canonique
-    canonical = GoalConfig.model_validate({
-        "providers": {"enabled": ["mock"], "synthesizer": "mock"},
-        "ratelimit": {"max_retries": 5},
-    })
+    canonical = GoalConfig.model_validate(
+        {
+            "providers": {"enabled": ["mock"], "synthesizer": "mock"},
+            "ratelimit": {"max_retries": 5},
+        }
+    )
     assert canonical.ratelimit.max_retries == 5
 
     # Forme alias (compatibilite ascendante)
-    alias = GoalConfig.model_validate({
-        "providers": {"enabled": ["mock"], "synthesizer": "mock"},
-        "rate_limit": {"max_retries": 9},
-    })
+    alias = GoalConfig.model_validate(
+        {
+            "providers": {"enabled": ["mock"], "synthesizer": "mock"},
+            "rate_limit": {"max_retries": 9},
+        }
+    )
     assert alias.ratelimit.max_retries == 9
 
 
@@ -79,14 +85,14 @@ def test_load_goal_config_with_ratelimit_section(tmp_path: Path) -> None:
     """La section [ratelimit] du TOML surcharge les defauts."""
     config_path = tmp_path / "config.toml"
     config_path.write_text(
-        '[providers]\n'
+        "[providers]\n"
         'enabled = ["mock"]\n'
         'synthesizer = "mock"\n'
-        '\n'
-        '[ratelimit]\n'
-        'max_retries = 7\n'
-        'initial_backoff_s = 0.5\n'
-        'backoff_multiplier = 3.0\n',
+        "\n"
+        "[ratelimit]\n"
+        "max_retries = 7\n"
+        "initial_backoff_s = 0.5\n"
+        "backoff_multiplier = 3.0\n",
         encoding="utf-8",
     )
 
@@ -101,9 +107,7 @@ def test_load_goal_config_without_ratelimit_uses_defaults(tmp_path: Path) -> Non
     """Sans section [ratelimit], les defauts s'appliquent."""
     config_path = tmp_path / "config.toml"
     config_path.write_text(
-        '[providers]\n'
-        'enabled = ["mock"]\n'
-        'synthesizer = "mock"\n',
+        '[providers]\nenabled = ["mock"]\nsynthesizer = "mock"\n',
         encoding="utf-8",
     )
 
@@ -120,12 +124,7 @@ def test_load_goal_config_partial_ratelimit_uses_partial_defaults(
     """Section [ratelimit] partielle : les champs non specifies gardent les defauts."""
     config_path = tmp_path / "config.toml"
     config_path.write_text(
-        '[providers]\n'
-        'enabled = ["mock"]\n'
-        'synthesizer = "mock"\n'
-        '\n'
-        '[ratelimit]\n'
-        'max_retries = 10\n',
+        '[providers]\nenabled = ["mock"]\nsynthesizer = "mock"\n\n[ratelimit]\nmax_retries = 10\n',
         encoding="utf-8",
     )
 
@@ -145,12 +144,12 @@ def test_load_goal_config_rejects_out_of_range_ratelimit(
 
     config_path = tmp_path / "config.toml"
     config_path.write_text(
-        '[providers]\n'
+        "[providers]\n"
         'enabled = ["mock"]\n'
         'synthesizer = "mock"\n'
-        '\n'
-        '[ratelimit]\n'
-        'max_retries = 99\n',  # au-dela de le=10
+        "\n"
+        "[ratelimit]\n"
+        "max_retries = 99\n",  # au-dela de le=10
         encoding="utf-8",
     )
 
@@ -160,23 +159,26 @@ def test_load_goal_config_rejects_out_of_range_ratelimit(
 
 # ---------- _build_provider : cablage config.ratelimit ----------
 
+
 def test_build_provider_uses_config_ratelimit_when_provided() -> None:
     """Quand GoalConfig a un ratelimit surcharge, _build_provider le respecte.
 
     Le cablage est garanti par l'edit de cli.py :
     ``RateLimitConfig(**config.ratelimit.model_dump())`` est passe au provider.
     """
-    custom_config = GoalConfig.model_validate({
-        "providers": {
-            "enabled": ["anthropic"],
-            "synthesizer": "anthropic",
-        },
-        "ratelimit": {
-            "max_retries": 7,
-            "initial_backoff_s": 0.5,
-            "backoff_multiplier": 3.0,
-        },
-    })
+    custom_config = GoalConfig.model_validate(
+        {
+            "providers": {
+                "enabled": ["anthropic"],
+                "synthesizer": "anthropic",
+            },
+            "ratelimit": {
+                "max_retries": 7,
+                "initial_backoff_s": 0.5,
+                "backoff_multiplier": 3.0,
+            },
+        }
+    )
     # Verifie la copie defensive : model_dump() doit retourner un dict
     # independant de la config source.
     dumped = custom_config.ratelimit.model_dump()
@@ -196,12 +198,7 @@ def test_build_provider_uses_ratelimit_from_ratelimit_alias() -> None:
     """Le TOML avec [rate_limit] (alias) charge bien config.ratelimit."""
     config_path = Path("/tmp/_test_alias_config.toml")
     config_path.write_text(
-        '[providers]\n'
-        'enabled = ["mock"]\n'
-        'synthesizer = "mock"\n'
-        '\n'
-        '[rate_limit]\n'
-        'max_retries = 4\n',
+        '[providers]\nenabled = ["mock"]\nsynthesizer = "mock"\n\n[rate_limit]\nmax_retries = 4\n',
         encoding="utf-8",
     )
     goal = load_goal_config(config_path)

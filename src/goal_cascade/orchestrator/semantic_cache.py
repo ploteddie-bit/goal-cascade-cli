@@ -11,11 +11,12 @@ Embeddings : bge-m3:latest sur ia-general (1024D, timeout 2s)
 
 from __future__ import annotations
 
+import contextlib
 import hashlib
 import json
 import logging
 import sqlite3
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -87,11 +88,8 @@ class SemanticCache:
                 ON semantic_entries(query_hash)
             """)
             conn.commit()
-        try:
+        with contextlib.suppress(OSError):
             self._db_path.chmod(CACHE_DB_MODE)
-        except OSError:
-            # FS ne supporte pas chmod : ignorer (ex: certains mounts Windows).
-            pass
 
     # ── Lookup (lecture seule) ──────────────────────────────────
 
@@ -119,9 +117,7 @@ class SemanticCache:
         best_similarity = 0.0
 
         with sqlite3.connect(str(self._db_path)) as conn:
-            cursor = conn.execute(
-                "SELECT embedding, result_json, run_id FROM semantic_entries"
-            )
+            cursor = conn.execute("SELECT embedding, result_json, run_id FROM semantic_entries")
             for row in cursor:
                 stored_vec = np.frombuffer(row[0], dtype=np.float64)
                 similarity = self._cosine_similarity(query_vec, stored_vec)
@@ -136,14 +132,17 @@ class SemanticCache:
         if best_match and best_similarity >= self._threshold:
             logger.info(
                 "semantic_cache_hit similarity=%.4f run_id=%s threshold=%.2f",
-                best_similarity, best_match["run_id"], self._threshold,
+                best_similarity,
+                best_match["run_id"],
+                self._threshold,
             )
             self._increment_access(best_match["run_id"])
             return best_match
 
         logger.debug(
             "semantic_cache_miss best_similarity=%.4f threshold=%.2f",
-            best_similarity, self._threshold,
+            best_similarity,
+            self._threshold,
         )
         return None
 
@@ -175,7 +174,7 @@ class SemanticCache:
         query_hash = hashlib.sha256(query.encode("utf-8")).hexdigest()[:16]
         embedding_blob = np.array(embedding, dtype=np.float64).tobytes()
         result_json = json.dumps(result, ensure_ascii=False)
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(UTC).isoformat()
 
         try:
             with sqlite3.connect(str(self._db_path)) as conn:
@@ -188,7 +187,9 @@ class SemanticCache:
                 conn.commit()
             logger.info(
                 "semantic_cache_stored hash=%s run_id=%s dim=%d",
-                query_hash, run_id, EMBEDDING_DIM,
+                query_hash,
+                run_id,
+                EMBEDDING_DIM,
             )
             return True
         except sqlite3.Error as exc:
@@ -229,7 +230,7 @@ class SemanticCache:
             conn.execute("DELETE FROM semantic_entries")
             conn.commit()
         logger.info("semantic_cache_cleared entries=%d", count)
-        return count
+        return count  # type: ignore[no-any-return]
 
     # ── Internes ────────────────────────────────────────────────
 
@@ -241,7 +242,7 @@ class SemanticCache:
                 return None
             vec = vectors[0]
             if hasattr(vec, "tolist"):
-                return vec.tolist()
+                return vec.tolist()  # type: ignore[no-any-return]
             return list(vec)
         except Exception as exc:
             logger.warning(

@@ -9,14 +9,10 @@ Couvre :
 
 from __future__ import annotations
 
-import re
-from dataclasses import dataclass
-
 import pytest
 from pydantic import ValidationError
 
 from goal_cascade.schemas.models import GoalOrientedSynthesis
-
 
 # ---------- Validation Pydantic renforcée ----------
 
@@ -222,16 +218,17 @@ class TestSynthesisResultCoverage:
     """Vérifie que SynthesisResult a le champ coverage_score."""
 
     def test_synthesis_result_has_coverage_field(self):
-        from goal_cascade.orchestrator.synthesizer import SynthesisResult
         import dataclasses
+
+        from goal_cascade.orchestrator.synthesizer import SynthesisResult
 
         field_names = {f.name for f in dataclasses.fields(SynthesisResult)}
         assert "coverage_score" in field_names
 
     def test_coverage_score_defaults_to_none(self):
         from goal_cascade.orchestrator.synthesizer import SynthesisResult
-        from goal_cascade.schemas.models import GoalOrientedSynthesis, ImmutableArtifact
         from goal_cascade.providers.base import LLMResponse
+        from goal_cascade.schemas.models import GoalOrientedSynthesis
 
         result = SynthesisResult(
             synthesis=GoalOrientedSynthesis(

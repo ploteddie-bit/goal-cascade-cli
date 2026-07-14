@@ -1,5 +1,3 @@
-from pathlib import Path
-
 from goal_cascade.rag import (
     default_ollama_embed_model,
     default_ollama_embed_url,

@@ -9,6 +9,7 @@ from dataclasses import dataclass
 @dataclass
 class LLMResponse:
     """Reponse d'un provider LLM."""
+
     text: str
     provider: str
     model: str

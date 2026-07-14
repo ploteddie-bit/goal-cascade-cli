@@ -17,7 +17,9 @@ class NamedProvider(BaseProvider):
 
     def call(self, prompt: str, role: str, tier: str = "medium") -> LLMResponse:
         self.calls.append((prompt, role, tier))
-        return LLMResponse(text=f"{self._name}:{role}:{tier}", provider=self._name, model=f"{self._name}-{tier}")
+        return LLMResponse(
+            text=f"{self._name}:{role}:{tier}", provider=self._name, model=f"{self._name}-{tier}"
+        )
 
 
 def test_role_mapped_provider_delegates_by_role() -> None:

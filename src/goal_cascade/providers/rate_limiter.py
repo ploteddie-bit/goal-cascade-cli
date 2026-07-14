@@ -118,30 +118,40 @@ async def call_with_retry_and_fallback(
             response = await backend_call(backend, prompt, role, tier)
             logger.info(
                 "provider_call_success backend=%s role=%s tier=%s attempt=%d",
-                backend.value, role, tier, attempt + 1,
+                backend.value,
+                role,
+                tier,
+                attempt + 1,
             )
             return response
         except RateLimitError as exc:
             last_error = exc
             if attempt < rate_config.max_retries - 1:
-                wait = rate_config.initial_backoff_s * (
-                    rate_config.backoff_multiplier ** attempt
-                )
+                wait = rate_config.initial_backoff_s * (rate_config.backoff_multiplier**attempt)
                 logger.warning(
                     "rate_limit_retry backend=%s role=%s tier=%s attempt=%d wait_s=%.3f",
-                    backend.value, role, tier, attempt + 1, wait,
+                    backend.value,
+                    role,
+                    tier,
+                    attempt + 1,
+                    wait,
                 )
                 await asyncio.sleep(wait)
             else:
                 logger.error(
                     "rate_limit_exhausted backend=%s role=%s tier=%s max_retries=%d",
-                    backend.value, role, tier, rate_config.max_retries,
+                    backend.value,
+                    role,
+                    tier,
+                    rate_config.max_retries,
                 )
         except ProviderUnavailableError as exc:
             last_error = exc
             logger.error(
                 "provider_unavailable backend=%s role=%s error=%s",
-                backend.value, role, redact_sensitive(str(exc)),
+                backend.value,
+                role,
+                redact_sensitive(str(exc)),
             )
             break
     return await _try_fallback(
@@ -170,32 +180,37 @@ async def _try_fallback(
         if fallback_backend not in available_backends:
             continue
         # Defense en profondeur : refuser le fallback si meme famille
-        fallback_family = PROVIDER_FAMILIES.get(
-            fallback_backend.value, fallback_backend.value
-        )
+        fallback_family = PROVIDER_FAMILIES.get(fallback_backend.value, fallback_backend.value)
         if fallback_family == primary_family:
             logger.warning(
                 "provider_fallback_skipped from=%s to=%s reason=same_family",
-                backend.value, fallback_backend.value,
+                backend.value,
+                fallback_backend.value,
             )
             continue
         try:
             logger.warning(
                 "provider_fallback from=%s to=%s role=%s tier=%s",
-                backend.value, fallback_backend.value, role, tier,
+                backend.value,
+                fallback_backend.value,
+                role,
+                tier,
             )
             response = await backend_call(fallback_backend, prompt, role, tier)
             logger.info(
                 "fallback_success backend=%s role=%s tier=%s",
-                fallback_backend.value, role, tier,
+                fallback_backend.value,
+                role,
+                tier,
             )
             return response
         except Exception as exc:
             logger.error(
                 "fallback_failed backend=%s role=%s error=%s",
-                fallback_backend.value, role, redact_sensitive(str(exc)),
+                fallback_backend.value,
+                role,
+                redact_sensitive(str(exc)),
             )
     raise ProviderExhaustedError(
-        f"Tous les providers epuises pour {backend.value}. "
-        f"Derniere erreur : {original_error}"
+        f"Tous les providers epuises pour {backend.value}. Derniere erreur : {original_error}"
     )

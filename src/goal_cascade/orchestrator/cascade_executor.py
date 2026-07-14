@@ -17,8 +17,7 @@ from __future__ import annotations
 import json
 import logging
 import uuid
-from datetime import datetime, timezone
-from pathlib import Path
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
 from pydantic import ValidationError
@@ -43,8 +42,8 @@ from ..schemas.models import (
     IterationRole,
     LLMCallRecord,
     RunReceipt,
-    Verdict,
     Variant,
+    Verdict,
 )
 from . import state_manager
 from .budget_tracker import BudgetTracker
@@ -96,9 +95,7 @@ class CascadeExecutor:
         cicd_hook: CICDHook | None = None,
     ):
         if synthesizer_provider is provider:
-            raise ValueError(
-                "Le synthétiseur exige une instance de provider distincte"
-            )
+            raise ValueError("Le synthétiseur exige une instance de provider distincte")
         self.provider = provider
         self.synthesizer_provider = synthesizer_provider
         self.prompt_loader = prompt_loader or PromptLoader()
@@ -155,7 +152,9 @@ class CascadeExecutor:
         constraints = redact_sensitive(constraints)
 
         try:
-            state = self._run_with_graph(state, audience, constraints, verbose, journal, no_synth=no_synth)
+            state = self._run_with_graph(
+                state, audience, constraints, verbose, journal, no_synth=no_synth
+            )
         except Exception as exc:
             state.status = "failed"
             state.last_error = redact_sensitive(str(exc))
@@ -188,9 +187,7 @@ class CascadeExecutor:
             "synthesizer_provider": self.synthesizer_provider.name,
             "status": state.status,
             "iterations": state.current_iteration,
-            "verdict": (
-                state.final_verdict.decision if state.final_verdict else "absent"
-            ),
+            "verdict": (state.final_verdict.decision if state.final_verdict else "absent"),
             "last_error": state.last_error or "aucune",
         }
         journal.finalize(metadata)
@@ -230,14 +227,15 @@ class CascadeExecutor:
             if state.current_iteration >= state.max_iterations:
                 state.status = "forced_stop"
                 state.final_verdict = Verdict(
-                    decision="STOP",
-                    justification="Limite absolue de 5 iterations atteinte"
+                    decision="STOP", justification="Limite absolue de 5 iterations atteinte"
                 )
                 state_manager.save_state(state)
                 break
 
             # Kill switch budgetaire (section 9 du plan v2)
-            if self._budget is not None and self._budget.is_exceeded(state.run_id, state.accumulated_cost):
+            if self._budget is not None and self._budget.is_exceeded(
+                state.run_id, state.accumulated_cost
+            ):
                 state.status = "budget_exceeded"
                 state.final_verdict = Verdict(
                     decision="STOP",
@@ -254,16 +252,17 @@ class CascadeExecutor:
             iteration = state.current_iteration
 
             # Apres l'iteration 4, on reboucle vers le critique (iteration 5 max)
-            if iteration <= 4:
-                role = state.role_for_iteration(iteration)
-            else:
-                role = IterationRole.CRITIC
+            role = state.role_for_iteration(iteration) if iteration <= 4 else IterationRole.CRITIC
 
             if verbose:
                 tier = ROLE_TIERS.get(role, "medium")
                 label = ROLE_LABELS.get(role, role.value)
-                print(f"\n  Iteration {iteration}/{state.max_iterations} "
-                      f"-- {label} ({self.provider.name}/{tier}) ...", end=" ", flush=True)
+                print(
+                    f"\n  Iteration {iteration}/{state.max_iterations} "
+                    f"-- {label} ({self.provider.name}/{tier}) ...",
+                    end=" ",
+                    flush=True,
+                )
 
             # Construire le prompt
             prompt = self._build_prompt(state, role, audience, constraints)
@@ -302,7 +301,7 @@ class CascadeExecutor:
                 latency_ms=response.latency_ms,
                 raw_output=response.text,
                 token_count_estimated=response.token_count_estimated,
-                timestamp_utc=datetime.now(timezone.utc).isoformat(),
+                timestamp_utc=datetime.now(UTC).isoformat(),
             )
             state.history.append(call_record)
             state.accumulated_cost += response.cost_usd
@@ -367,9 +366,7 @@ class CascadeExecutor:
                             else ["Synthèse arbitre"]
                         ),
                         uncertainties=(
-                            state.last_synthesis.uncertainties
-                            if state.last_synthesis
-                            else []
+                            state.last_synthesis.uncertainties if state.last_synthesis else []
                         ),
                         next_instruction=verdict.justification,
                         iteration_from=4,
@@ -389,11 +386,7 @@ class CascadeExecutor:
             # En mode --no-synth, on passe la sortie brute a l'iteration suivante
             # sans filtrage. Utile pour debugger une synthese qui ecrase des
             # informations critiques.
-            if (
-                role != IterationRole.ARBITER
-                and state.status == "running"
-                and not no_synth
-            ):
+            if role != IterationRole.ARBITER and state.status == "running" and not no_synth:
                 synthesis_prompt = self.synthesizer.build_prompt(
                     raw_output=response.text,
                     objective=state.objective,
@@ -446,10 +439,8 @@ class CascadeExecutor:
                                 cost_usd=failed_response.cost_usd,
                                 latency_ms=failed_response.latency_ms,
                                 raw_output=failed_response.text,
-                                token_count_estimated=(
-                                    failed_response.token_count_estimated
-                                ),
-                                timestamp_utc=datetime.now(timezone.utc).isoformat(),
+                                token_count_estimated=(failed_response.token_count_estimated),
+                                timestamp_utc=datetime.now(UTC).isoformat(),
                             )
                         )
                         state.accumulated_cost += failed_response.cost_usd
@@ -489,7 +480,7 @@ class CascadeExecutor:
                         latency_ms=synthesis_response.latency_ms,
                         raw_output=synthesis_response.text,
                         token_count_estimated=synthesis_response.token_count_estimated,
-                        timestamp_utc=datetime.now(timezone.utc).isoformat(),
+                        timestamp_utc=datetime.now(UTC).isoformat(),
                     )
                 )
                 state.accumulated_cost += synthesis_response.cost_usd
@@ -530,7 +521,8 @@ class CascadeExecutor:
                 # signale juste la non-conformité dans le journal.
                 if state.artifacts:
                     cicd_result = self._run_cicd_checks(
-                        state.artifacts, journal,
+                        state.artifacts,
+                        journal,
                     )
                     if not cicd_result.passed:
                         logger.warning(
@@ -568,21 +560,15 @@ class CascadeExecutor:
 
         # Sauvegarder le livrable final
         if state.history:
-            main_outputs = [
-                call.raw_output for call in state.history if call.role != "synthesizer"
-            ]
+            main_outputs = [call.raw_output for call in state.history if call.role != "synthesizer"]
             if state.current_iteration > 4:
                 # L'itération 5 a tourné : sa sortie prime sur l'arbitre.
                 final_output = main_outputs[-1]
             else:
                 arbiter_outputs = [
-                    call.raw_output
-                    for call in state.history
-                    if call.role == "arbiter"
+                    call.raw_output for call in state.history if call.role == "arbiter"
                 ]
-                final_output = (
-                    arbiter_outputs[-1] if arbiter_outputs else main_outputs[-1]
-                )
+                final_output = arbiter_outputs[-1] if arbiter_outputs else main_outputs[-1]
             final_path = state_manager.save_final_output(state.run_id, final_output)
             journal.record_file("final_output_saved", final_path)
 
@@ -618,10 +604,7 @@ class CascadeExecutor:
         def iteration_node(graph_state: dict) -> dict:
             # Désérialiser le CascadeState depuis le dict du graphe
             cascade_dict = graph_state.get("cascade", {})
-            if cascade_dict:
-                current_state = CascadeState(**cascade_dict)
-            else:
-                current_state = state
+            current_state = CascadeState(**cascade_dict) if cascade_dict else state
 
             # Exécuter une itération
             self._run_loop(
@@ -700,9 +683,7 @@ class CascadeExecutor:
         if config is not None:
             from .execution_context import build_execution_context
 
-            if hasattr(self, "__slots__") or getattr(
-                type(self), "__frozen__", False
-            ):
+            if hasattr(self, "__slots__") or getattr(type(self), "__frozen__", False):
                 raise TypeError(
                     "CascadeExecutor est frozen/slots — impossible de "
                     "reconstruire les providers dans resume(). "
@@ -712,9 +693,7 @@ class CascadeExecutor:
             ctx = build_execution_context(config)
             self.provider = ctx.provider
             self.synthesizer_provider = ctx.synthesizer_provider
-            self.synthesizer = Synthesizer(
-                self.synthesizer_provider, self.prompt_loader
-            )
+            self.synthesizer = Synthesizer(self.synthesizer_provider, self.prompt_loader)
             self._budget = ctx.budget_tracker
 
         run_dir = state_manager.get_run_dir(run_id)
@@ -738,16 +717,12 @@ class CascadeExecutor:
         saved = app.get_state(config_dict)
 
         if not saved or not saved.values:
-            raise FileNotFoundError(
-                f"Checkpoint vide pour le run {run_id}"
-            )
+            raise FileNotFoundError(f"Checkpoint vide pour le run {run_id}")
 
         checkpointed = saved.values
         cascade_dict = checkpointed.get("cascade", {})
         if not cascade_dict:
-            raise FileNotFoundError(
-                f"Pas de CascadeState dans le checkpoint du run {run_id}"
-            )
+            raise FileNotFoundError(f"Pas de CascadeState dans le checkpoint du run {run_id}")
 
         state = CascadeState(**cascade_dict)
         journal = AuditJournal(run_id)
@@ -911,17 +886,12 @@ class CascadeExecutor:
         automatiquement total_cost, cache_hit_rate et projected_monthly_cost.
         """
         runs_per_day = (
-            self._budget.config.runs_per_day_projection
-            if self._budget is not None
-            else 10
+            self._budget.config.runs_per_day_projection if self._budget is not None else 10
         )
         return RunReceipt.from_calls(
             run_id=state.run_id,
             objective=state.objective,
-            verdict=(
-                state.final_verdict.decision
-                if state.final_verdict else "absent"
-            ),
+            verdict=(state.final_verdict.decision if state.final_verdict else "absent"),
             duration_s=duration_s,
             calls=list(state.history),
             runs_per_day=runs_per_day,

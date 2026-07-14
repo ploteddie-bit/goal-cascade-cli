@@ -16,7 +16,9 @@ class ModuleSpec(BaseModel):
     name: str = Field(..., description="Nom lisible du module")
     responsibility: str = Field(..., description="Responsabilite du module")
     estimated_lines: int = Field(
-        ..., ge=100, le=10000,
+        ...,
+        ge=100,
+        le=10000,
         description="Nombre estime de lignes de code",
     )
     frozen_spec_prompt: str = Field(
@@ -31,7 +33,8 @@ class DependencySpec(BaseModel):
     producer: str = Field(..., description="ID du module producteur")
     consumer: str = Field(..., description="ID du module consommateur")
     interface_description: str = Field(
-        ..., description="Description de l'interface entre les deux modules",
+        ...,
+        description="Description de l'interface entre les deux modules",
     )
 
 
@@ -66,9 +69,7 @@ class CascadePlan(BaseModel):
 
         # 1. Contrainte de taille totale
         if self.total_estimated_lines >= 3000:
-            errors.append(
-                f"total_estimated_lines ({self.total_estimated_lines}) >= 3000"
-            )
+            errors.append(f"total_estimated_lines ({self.total_estimated_lines}) >= 3000")
 
         # 2. Unicite des IDs
         seen_ids: set[str] = set()
@@ -80,21 +81,15 @@ class CascadePlan(BaseModel):
         # 3. Validite referentielle des dependances
         for dep in self.dependencies:
             if dep.producer not in module_ids:
-                errors.append(
-                    f"Dependance : producteur inconnu '{dep.producer}'"
-                )
+                errors.append(f"Dependance : producteur inconnu '{dep.producer}'")
             if dep.consumer not in module_ids:
-                errors.append(
-                    f"Dependance : consommateur inconnu '{dep.consumer}'"
-                )
+                errors.append(f"Dependance : consommateur inconnu '{dep.consumer}'")
 
         # 4. Detection de cycle (Kahn's algorithm)
         if self.dependencies and not errors:
             cycle = self._detect_cycle(module_ids)
             if cycle:
-                errors.append(
-                    f"Dependance circulaire detectee : {' -> '.join(cycle)}"
-                )
+                errors.append(f"Dependance circulaire detectee : {' -> '.join(cycle)}")
 
         return errors
 
@@ -106,7 +101,7 @@ class CascadePlan(BaseModel):
         """
         # Construire le graphe d'adjacence
         adj: dict[str, list[str]] = {mid: [] for mid in module_ids}
-        in_degree: dict[str, int] = {mid: 0 for mid in module_ids}
+        in_degree: dict[str, int] = dict.fromkeys(module_ids, 0)
 
         for dep in self.dependencies:
             adj[dep.producer].append(dep.consumer)

@@ -13,13 +13,13 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
+from jinja2.exceptions import SecurityError, UndefinedError
 
 from goal_cascade.orchestrator.prompt_loader import (
     InvalidTemplateNameError,
     PromptLoader,
     PromptNotFoundError,
 )
-
 
 # ── B1 : Traversal de chemin ────────────────────────────────────
 
@@ -91,18 +91,22 @@ class TestB3Sandboxing:
             encoding="utf-8",
         )
         loader = PromptLoader(extra_paths=[tmp_path])
-        with pytest.raises(Exception):  # SecurityError ou UndefinedError
+        with pytest.raises((SecurityError, UndefinedError)):
             loader.load("evil.j2")
 
     def test_blocks_import(self, tmp_path: Path) -> None:
         """Un template ne peut pas importer des modules."""
+        from jinja2.exceptions import TemplateNotFound
+
         malicious = tmp_path / "import_evil.j2"
         malicious.write_text(
             "{% import 'os' as os %}{{ os.system('whoami') }}",
             encoding="utf-8",
         )
         loader = PromptLoader(extra_paths=[tmp_path])
-        with pytest.raises(Exception):
+        # Jinja2 {% import %} cherche un template nommé 'os' (pas le module Python).
+        # Le loader échoue avant que le sandbox n'intervienne → TemplateNotFound.
+        with pytest.raises((SecurityError, UndefinedError, TemplateNotFound)):
             loader.load("import_evil.j2")
 
 
@@ -142,7 +146,7 @@ class TestB5StrictUndefined:
         template = tmp_path / "strict_test.j2"
         template.write_text("Hello {{ nonexistent_var }}", encoding="utf-8")
         loader = PromptLoader(extra_paths=[tmp_path])
-        with pytest.raises(Exception):  # UndefinedError
+        with pytest.raises((SecurityError, UndefinedError)):
             loader.load("strict_test.j2")
 
     def test_provided_variable_works(self, tmp_path: Path) -> None:
