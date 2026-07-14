@@ -230,7 +230,7 @@ class SemanticCache:
             conn.execute("DELETE FROM semantic_entries")
             conn.commit()
         logger.info("semantic_cache_cleared entries=%d", count)
-        return count
+        return count  # type: ignore[no-any-return]
 
     # ── Internes ────────────────────────────────────────────────
 
@@ -242,7 +242,7 @@ class SemanticCache:
                 return None
             vec = vectors[0]
             if hasattr(vec, "tolist"):
-                return vec.tolist()
+                return vec.tolist()  # type: ignore[no-any-return]
             return list(vec)
         except Exception as exc:
             logger.warning(

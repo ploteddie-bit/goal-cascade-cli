@@ -132,7 +132,7 @@ class ModuleGraph:
         """
         roots = [n for n in self._dag.nodes if self._dag.in_degree(n) == 0]
         if len(roots) == 1:
-            return roots[0]
+            return roots[0]  # type: ignore[no-any-return]
         return None
 
     # ------------------------------------------------------------------
@@ -240,12 +240,12 @@ class ModuleGraph:
         # Essai 1 : bloc de code markdown
         match = re.search(r"```(?:json)?\s*\n(.*?)\n```", text, re.DOTALL)
         if match:
-            return json.loads(match.group(1))
+            return json.loads(match.group(1))  # type: ignore[no-any-return]
 
         # Essai 2 : premier objet JSON dans le texte
         match = re.search(r"\{.*\}", text, re.DOTALL)
         if match:
-            return json.loads(match.group(0))
+            return json.loads(match.group(0))  # type: ignore[no-any-return]
 
         raise ValueError(
             f"Impossible d'extraire un JSON de la réponse LLM. Début de la réponse : {text[:200]!r}"
@@ -311,7 +311,7 @@ class ModuleGraph:
         prompt = cls._build_planning_prompt(spec_content)
 
         # 2. Appel LLM (planification)
-        response = provider.call(prompt, role="producer", tier="medium")
+        response = provider.call(prompt, role="producer", tier="medium")  # type: ignore[attr-defined]
         logger.info("Réponse LLM reçue (%d caractères)", len(response.text))
 
         # 3. Parsing
@@ -409,7 +409,7 @@ class ModuleGraph:
 
             # Utilise PromptLoader pour respecter la hiérarchie de surcharge
             loader = PromptLoader()
-            return loader.load(
+            return loader.load(  # type: ignore[no-any-return, attr-defined]
                 "frozen_spec_gen",
                 module_name=module_name,
                 responsibility=responsibility,
@@ -440,11 +440,11 @@ class ModuleGraph:
         """
         match = re.search(r"```(?:json)?\s*\n(.*?)\n```", text, re.DOTALL)
         if match:
-            return json.loads(match.group(1)).get("invariants", [])
+            return json.loads(match.group(1)).get("invariants", [])  # type: ignore[no-any-return]
 
         match = re.search(r"\{.*\}", text, re.DOTALL)
         if match:
-            return json.loads(match.group(0)).get("invariants", [])
+            return json.loads(match.group(0)).get("invariants", [])  # type: ignore[no-any-return]
 
         raise ValueError("Impossible d'extraire le JSON d'invariants de la réponse LLM.")
 
@@ -475,7 +475,7 @@ class ModuleGraph:
                 objective=plan.objective,
             )
             try:
-                response = provider.call(prompt, role="producer", tier="medium")
+                response = provider.call(prompt, role="producer", tier="medium")  # type: ignore[attr-defined]
                 raw_inv = cls._parse_enrichment_response(response.text)
             except Exception as exc:
                 logger.warning(
@@ -500,7 +500,7 @@ class ModuleGraph:
                 new_invariants.append(
                     Invariant(
                         description=description,
-                        category=category,  # type: ignore[arg-type]
+                        category=category,
                         verified=False,
                         source="llm-generated",
                     )

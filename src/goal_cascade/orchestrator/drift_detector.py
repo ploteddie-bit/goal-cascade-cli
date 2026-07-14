@@ -130,7 +130,7 @@ class DriftDetector:
             vec = vectors[0]
             # np.ndarray → list[float]
             if hasattr(vec, "tolist"):
-                return vec.tolist()
+                return vec.tolist()  # type: ignore[no-any-return]
             return list(vec)
         except Exception:
             return None

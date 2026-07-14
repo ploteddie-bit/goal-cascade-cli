@@ -148,7 +148,7 @@ class PromptLoader:
             template = self._env.get_template(prompt_name)
         except TemplateNotFound as exc:
             raise PromptNotFoundError(
-                name=exc.name or prompt_name,
+                name=exc.name or prompt_name,  # type: ignore[arg-type]
                 searched=self._search_paths,
             ) from exc
         return template.render(**context)

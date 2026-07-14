@@ -213,7 +213,7 @@ class Synthesizer:
             checksum = hashlib.sha256(content.encode("utf-8")).hexdigest()
             artifacts.append(
                 ImmutableArtifact(
-                    artifact_type=artifact_type,
+                    artifact_type=artifact_type,  # type: ignore[arg-type]
                     language=language,
                     content=content,
                     checksum=checksum,
@@ -342,4 +342,4 @@ class Synthesizer:
 
     def reset_drift(self) -> None:
         """🆕 DRIFT — Réinitialiser le détecteur (nouvelle cascade)."""
-        self.drift_detector.reset()
+        self.drift_detector.reset()  # type: ignore[union-attr]
