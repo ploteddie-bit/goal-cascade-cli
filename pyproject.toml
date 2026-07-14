@@ -1,6 +1,6 @@
 [project]
 name = "goal-cascade"
-version = "0.3.0"
+version = "0.4.0"
 description = "G.O.A.L. Cascade — Multi-agent cascade framework for high-quality AI deliverables"
 readme = "README.md"
 requires-python = ">=3.11"
