@@ -93,21 +93,33 @@ class TestPerRunBudget:
 
 
 class TestWarningThreshold:
+    @staticmethod
+    def _has_budget_warning(
+        caplog: pytest.LogCaptureFixture, capsys: pytest.CaptureFixture[str]
+    ) -> bool:
+        """Détecte 'budget_warning' dans caplog (logging std) OU stdout (structlog)."""
+        if any("budget_warning" in r.message for r in caplog.records):
+            return True
+        return "budget_warning" in capsys.readouterr().out
+
     def test_warning_logged_at_80_percent(
-        self, tracker: BudgetTracker, caplog: pytest.LogCaptureFixture
+        self, tracker: BudgetTracker, caplog: pytest.LogCaptureFixture,
+        capsys: pytest.CaptureFixture[str],
     ) -> None:
         tracker.check_budget("run-warn", 0.41)  # 82% de 0.50
 
-        assert any("budget_warning" in r.message for r in caplog.records)
+        assert self._has_budget_warning(caplog, capsys)
 
     def test_warning_fired_only_once_per_run(
-        self, tracker: BudgetTracker, caplog: pytest.LogCaptureFixture
+        self, tracker: BudgetTracker, caplog: pytest.LogCaptureFixture,
+        capsys: pytest.CaptureFixture[str],
     ) -> None:
         tracker.check_budget("run-once", 0.41)
         caplog.clear()
+        capsys.readouterr()  # clear stdout
         tracker.check_budget("run-once", 0.42)
 
-        assert not any("budget_warning" in r.message for r in caplog.records)
+        assert not self._has_budget_warning(caplog, capsys)
 
     def test_is_warning_at_threshold(self, tracker: BudgetTracker) -> None:
         assert not tracker.is_warning(0.39)
