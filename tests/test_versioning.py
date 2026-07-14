@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from goal_cascade.schemas.versioning import RunVersion, RunVersionsList, VersionDiff
 
-
 # ── Helpers ─────────────────────────────────────────────────────
 
 

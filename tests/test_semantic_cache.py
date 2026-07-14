@@ -13,7 +13,6 @@ import pytest
 
 from goal_cascade.orchestrator.semantic_cache import SemanticCache
 
-
 # ── Helper ────────────────────────────────────────────────────────
 
 

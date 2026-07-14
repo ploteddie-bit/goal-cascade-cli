@@ -18,8 +18,8 @@ import pytest
 
 from goal_cascade.providers.base import LLMResponse
 from goal_cascade.providers.rate_limiter import (
-    Backend,
     FALLBACK_CHAIN,
+    Backend,
     ProviderExhaustedError,
     ProviderUnavailableError,
     RateLimitConfig,

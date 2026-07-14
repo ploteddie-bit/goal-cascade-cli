@@ -306,9 +306,11 @@ def test_provider_construction_failure_wraps_error() -> None:
     def _failing_build(name, **kwargs):
         raise RuntimeError("credentials invalid")
 
-    with patch("goal_cascade.cli._build_provider", side_effect=_failing_build):
-        with __import__("pytest").raises(ValueError, match="Échec de construction"):
-            build_execution_context(config)
+    with (
+        patch("goal_cascade.cli._build_provider", side_effect=_failing_build),
+        __import__("pytest").raises(ValueError, match="Échec de construction"),
+    ):
+        build_execution_context(config)
 
 
 def test_create_executor_returns_cascade_executor() -> None:

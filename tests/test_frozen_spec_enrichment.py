@@ -22,8 +22,7 @@ from goal_cascade.cli import app
 from goal_cascade.multicascade.module_graph import ModuleGraph
 from goal_cascade.providers.base import BaseProvider, LLMResponse
 from goal_cascade.schemas.models import FrozenSpec, Invariant
-from goal_cascade.schemas.plan import CascadePlan, DependencySpec, ModuleSpec
-
+from goal_cascade.schemas.plan import CascadePlan, ModuleSpec
 
 # ── Fixtures ─────────────────────────────────────────────────────
 

@@ -236,10 +236,10 @@ class TestSynthesizerDriftIntegration:
     """Vérifie que Synthesizer intègre le drift detector correctement."""
 
     def test_synthesis_result_has_drift_fields(self):
-        from goal_cascade.orchestrator.synthesizer import SynthesisResult
-
         # Vérifier que SynthesisResult a les nouveaux champs
         import dataclasses
+
+        from goal_cascade.orchestrator.synthesizer import SynthesisResult
 
         field_names = {f.name for f in dataclasses.fields(SynthesisResult)}
         assert "similarity_score" in field_names
@@ -248,8 +248,8 @@ class TestSynthesizerDriftIntegration:
     def test_synthesizer_accepts_drift_detector_param(self):
         """Le constructeur de Synthesizer accepte drift_detector optionnel."""
         from goal_cascade.orchestrator.synthesizer import Synthesizer
-        from goal_cascade.providers.mock import MockProvider
         from goal_cascade.prompts import PromptLoader
+        from goal_cascade.providers.mock import MockProvider
 
         mock_det = MagicMock()
         synth = Synthesizer(
@@ -267,8 +267,8 @@ class TestSynthesizerDriftIntegration:
         quand la détection de dérive est activée.
         """
         from goal_cascade.orchestrator.synthesizer import Synthesizer
-        from goal_cascade.providers.mock import MockProvider
         from goal_cascade.prompts import PromptLoader
+        from goal_cascade.providers.mock import MockProvider
 
         synth = Synthesizer(
             provider=MockProvider(),

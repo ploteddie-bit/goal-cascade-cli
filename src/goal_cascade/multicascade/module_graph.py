@@ -101,7 +101,7 @@ class ModuleGraph:
         max_level = max(levels.values()) if levels else -1
         batches: list[list[str]] = []
         for lvl in range(max_level + 1):
-            batch = sorted(m for m, l in levels.items() if l == lvl)
+            batch = sorted(m for m, level in levels.items() if level == lvl)
             batches.append(batch)
         return batches
 
@@ -157,7 +157,7 @@ class ModuleGraph:
             }
         """
         path = Path(plan_path)
-        with open(path, "r", encoding="utf-8") as fh:
+        with open(path, encoding="utf-8") as fh:
             data = json.load(fh)
 
         graph = cls()
@@ -405,7 +405,6 @@ class ModuleGraph:
     ) -> str:
         """Construit le prompt d'enrichissement pour un module donné."""
         try:
-            from jinja2 import Environment, FileSystemLoader, select_autoescape
 
             from ..prompts import PromptLoader
 
@@ -453,7 +452,7 @@ class ModuleGraph:
     @classmethod
     def _enrich_frozen_specs(
         cls,
-        graph: "ModuleGraph",
+        graph: ModuleGraph,
         plan: CascadePlan,
         provider: object,
     ) -> dict:

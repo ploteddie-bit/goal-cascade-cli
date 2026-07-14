@@ -8,7 +8,6 @@ Phase 2 (v1 placeholder) : vérifications LLM (cohérence sémantique,
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any
 
 from goal_cascade.orchestrator.cicd_hook import CICDHook, DeterministicCheckResult
 from goal_cascade.schemas.models import CascadeState, InterfaceContract

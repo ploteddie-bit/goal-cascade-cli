@@ -20,7 +20,6 @@ from goal_cascade.orchestrator.prompt_loader import (
     PromptNotFoundError,
 )
 
-
 # ── B1 : Traversal de chemin ────────────────────────────────────
 
 
@@ -91,7 +90,7 @@ class TestB3Sandboxing:
             encoding="utf-8",
         )
         loader = PromptLoader(extra_paths=[tmp_path])
-        with pytest.raises(Exception):  # SecurityError ou UndefinedError
+        with pytest.raises(Exception):  # noqa: B017 — SecurityError ou UndefinedError
             loader.load("evil.j2")
 
     def test_blocks_import(self, tmp_path: Path) -> None:
@@ -102,7 +101,7 @@ class TestB3Sandboxing:
             encoding="utf-8",
         )
         loader = PromptLoader(extra_paths=[tmp_path])
-        with pytest.raises(Exception):
+        with pytest.raises(Exception):  # noqa: B017
             loader.load("import_evil.j2")
 
 
@@ -142,7 +141,7 @@ class TestB5StrictUndefined:
         template = tmp_path / "strict_test.j2"
         template.write_text("Hello {{ nonexistent_var }}", encoding="utf-8")
         loader = PromptLoader(extra_paths=[tmp_path])
-        with pytest.raises(Exception):  # UndefinedError
+        with pytest.raises(Exception):  # noqa: B017 — UndefinedError
             loader.load("strict_test.j2")
 
     def test_provided_variable_works(self, tmp_path: Path) -> None:

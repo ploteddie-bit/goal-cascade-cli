@@ -21,12 +21,12 @@ from __future__ import annotations
 import json
 import logging
 import re
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from langgraph.graph import END, StateGraph
 from langgraph.checkpoint.sqlite import SqliteSaver
+from langgraph.graph import END, StateGraph
 
 from ..audit_journal import redact_sensitive
 from ..schemas.models import (
@@ -35,8 +35,8 @@ from ..schemas.models import (
     LLMCallRecord,
     Verdict,
 )
-from .drift_detector import DriftDetector, DriftStatus
 from .budget_tracker import BudgetExceeded, BudgetTracker
+from .drift_detector import DriftDetector, DriftStatus
 
 try:
     import structlog
@@ -304,15 +304,7 @@ class CascadeGraph:
 
         # Router vers le prochain rôle selon l'itération courante
         current = cascade.current_iteration
-        if current == 1:
-            return "critic"
-        elif current == 2:
-            return "adversary"
-        elif current == 3:
-            return "arbiter"
-        else:
-            # Itération 5 (après CONTINUE) ou erreur
-            return "forced_stop"
+        return {1: "critic", 2: "adversary", 3: "arbiter"}.get(current, "forced_stop")
 
     def _route_after_verdict(self, state: dict) -> str:
         """Route après verdict : STOP ou CONTINUE (max 5)."""
@@ -399,7 +391,7 @@ class CascadeGraph:
             cache_read_tokens=getattr(response, "cache_read_tokens", 0),
             cost_usd=getattr(response, "cost_usd", 0.0),
             latency_ms=getattr(response, "latency_ms", 0),
-            timestamp_utc=datetime.now(timezone.utc).isoformat(),
+            timestamp_utc=datetime.now(UTC).isoformat(),
         )
 
     def _parse_verdict(self, raw_output: str) -> Verdict:

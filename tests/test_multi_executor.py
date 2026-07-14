@@ -12,8 +12,7 @@ from goal_cascade.multicascade.multi_executor import (
     ModuleFailedError,
     MultiCascadeExecutor,
 )
-from goal_cascade.schemas.models import CascadeState, FrozenSpec, InterfaceContract
-
+from goal_cascade.schemas.models import CascadeState, FrozenSpec
 
 # ------------------------------------------------------------------
 # Helpers

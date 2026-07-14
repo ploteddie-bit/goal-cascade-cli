@@ -8,7 +8,6 @@ import pytest
 
 from goal_cascade.orchestrator.prompt_loader import PromptLoader, PromptNotFoundError
 
-
 # -- Tests demandés (chargeur hiérarchique) -----------------------------------
 
 

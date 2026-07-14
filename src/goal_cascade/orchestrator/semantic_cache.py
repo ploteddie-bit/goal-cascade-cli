@@ -11,11 +11,12 @@ Embeddings : bge-m3:latest sur ia-general (1024D, timeout 2s)
 
 from __future__ import annotations
 
+import contextlib
 import hashlib
 import json
 import logging
 import sqlite3
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -87,11 +88,8 @@ class SemanticCache:
                 ON semantic_entries(query_hash)
             """)
             conn.commit()
-        try:
+        with contextlib.suppress(OSError):
             self._db_path.chmod(CACHE_DB_MODE)
-        except OSError:
-            # FS ne supporte pas chmod : ignorer (ex: certains mounts Windows).
-            pass
 
     # ── Lookup (lecture seule) ──────────────────────────────────
 
@@ -176,7 +174,7 @@ class SemanticCache:
         query_hash = hashlib.sha256(query.encode("utf-8")).hexdigest()[:16]
         embedding_blob = np.array(embedding, dtype=np.float64).tobytes()
         result_json = json.dumps(result, ensure_ascii=False)
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(UTC).isoformat()
 
         try:
             with sqlite3.connect(str(self._db_path)) as conn:

@@ -16,7 +16,6 @@ import pytest
 from goal_cascade.config import BudgetConfig
 from goal_cascade.orchestrator.budget_tracker import BudgetExceeded, BudgetTracker
 
-
 # ── Fixtures ────────────────────────────────────────────────────
 
 

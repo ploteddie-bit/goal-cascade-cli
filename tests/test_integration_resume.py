@@ -15,7 +15,6 @@ from typer.testing import CliRunner
 from goal_cascade.cli import app
 from goal_cascade.orchestrator.budget_tracker import BudgetExceeded
 
-
 runner = CliRunner()
 
 

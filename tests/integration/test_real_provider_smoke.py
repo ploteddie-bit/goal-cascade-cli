@@ -86,7 +86,7 @@ max_per_run_usd = 0.05
     monkeypatch.setattr("goal_cascade.cli.DEFAULT_CONFIG_PATH", tmp_path / "absent.toml")
     monkeypatch.chdir(tmp_path)
 
-    result = CliRunner().invoke(
+    CliRunner().invoke(
         app,
         [
             "run",

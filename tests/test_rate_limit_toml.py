@@ -13,7 +13,6 @@ Couvre :
 
 from __future__ import annotations
 
-import sys
 from pathlib import Path
 
 import pytest
@@ -25,7 +24,6 @@ from goal_cascade.providers.rate_limiter import (
     MAX_RETRIES,
     RateLimitConfig,
 )
-
 
 # ---------- Constantes module-level ----------
 

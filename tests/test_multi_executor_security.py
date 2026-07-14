@@ -10,7 +10,6 @@ C6 : contrats d'interface vérifiés après chaque batch.
 
 from __future__ import annotations
 
-import sys
 from pathlib import Path
 from typing import Any
 from unittest.mock import MagicMock, patch
@@ -22,7 +21,6 @@ from goal_cascade.multicascade.interface_checker import CheckResult
 from goal_cascade.multicascade.module_graph import ModuleGraph
 from goal_cascade.multicascade.multi_executor import (
     InterfaceViolationError,
-    IntegrationFailedError,
     ModuleFailedError,
     MultiCascadeExecutor,
 )
@@ -33,7 +31,6 @@ from goal_cascade.schemas.models import (
     InterfaceContract,
     Verdict,
 )
-
 
 # ── Helpers ─────────────────────────────────────────────────────────
 
@@ -212,9 +209,11 @@ def test_failed_module_saves_checkpoint_before_raising() -> None:
         interface_checker=mock_checker,
     )
 
-    with patch("goal_cascade.multicascade.multi_executor.state_manager.save_state") as mock_save:
-        with pytest.raises(ModuleFailedError) as exc_info:
-            multi.run_all(verbose=False)
+    with (
+        patch("goal_cascade.multicascade.multi_executor.state_manager.save_state") as mock_save,
+        pytest.raises(ModuleFailedError) as exc_info,
+    ):
+        multi.run_all(verbose=False)
 
     mock_save.assert_called_once()
     assert exc_info.value.state is failed_state

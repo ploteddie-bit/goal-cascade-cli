@@ -11,11 +11,11 @@ Usage:
 
 from __future__ import annotations
 
-from enum import Enum
-from pathlib import Path
-
 import datetime as _dt
 import json
+from enum import Enum
+from pathlib import Path
+from typing import TYPE_CHECKING
 
 import typer
 from pydantic import ValidationError
@@ -23,24 +23,25 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 
-from .config import DEFAULT_CONFIG_PATH, ProvidersConfig, load_goal_config
 from .audit_journal import redact_sensitive
-from .orchestrator.budget_tracker import BudgetConfig, BudgetTracker
+from .config import DEFAULT_CONFIG_PATH, ProvidersConfig, load_goal_config
+from .multicascade.module_graph import ModuleGraph
+from .orchestrator.budget_tracker import BudgetTracker
 from .orchestrator.cascade_executor import CascadeExecutor
 from .orchestrator.execution_context import (
-    ExecutionContext,
     build_execution_context,
 )
 from .orchestrator.state_manager import RUNS_DIR, list_runs, load_state
 from .providers.base import BaseProvider
 from .providers.kimi_command import KimiBackend, KimiCommandProvider
 from .providers.mock import MockProvider
-from .providers.router import RoleMappedProvider
 from .rag_bridge import RagBridge, RagSyncError
-from .multicascade.module_graph import ModuleGraph
 from .schemas.models import Variant
-from .schemas.plan import CascadePlan
 from .schemas.versioning import RunVersion, VersionDiff
+
+if TYPE_CHECKING:
+    from .config import GoalConfig
+    from .schemas.models import LLMCallRecord
 
 app = typer.Typer(
     name="goal",
@@ -101,7 +102,7 @@ def _build_provider(
     provider_id: str,
     *,
     synthesizer_model: str | None = None,
-    config: "GoalConfig | None" = None,
+    config: GoalConfig | None = None,
 ) -> BaseProvider:
     """Construit l'instance de provider effective pour un identifiant résolu.
 
@@ -594,7 +595,7 @@ def versions(
         if iter_file.exists():
             iter_stat = iter_file.stat()
             created_at = _dt.datetime.fromtimestamp(
-                iter_stat.st_mtime, tz=_dt.timezone.utc
+                iter_stat.st_mtime, tz=_dt.UTC
             ).isoformat()
         else:
             created_at = ""
@@ -937,11 +938,11 @@ def init(
     )
 
     console.print(f"[green]Projet '{name}' cree.[/green]")
-    console.print(f"\nStructure :")
+    console.print("\nStructure :")
     console.print(f"  {name}/")
-    console.print(f"  ├── .goal/       (config locale)")
-    console.print(f"  ├── output/      (livrables)")
-    console.print(f"  └── README.md")
+    console.print("  ├── .goal/       (config locale)")
+    console.print("  ├── output/      (livrables)")
+    console.print("  └── README.md")
 
 
 def _print_enrichment_summary(stats: dict) -> None:
@@ -957,7 +958,7 @@ def _print_enrichment_summary(stats: dict) -> None:
     lines = [
         f"Modules enrichis    : {enriched}",
         f"Invariants générés  : {generated}",
-        f"Statut              : tous verified=False",
+        "Statut              : tous verified=False",
     ]
     if failed:
         lines.append(f"Modules en échec    : {len(failed)} ({', '.join(failed)})")
@@ -1258,18 +1259,21 @@ def resume(
 
     # ── Budget check fail fast (avant reprise) ──────────────────
     pre_state = load_state(run_id)
-    if pre_state is not None and budget_tracker is not None:
-        if budget_tracker.is_exceeded(run_id, pre_state.accumulated_cost):
-            console.print(
-                f"[bold yellow]⛔ Budget déjà dépassé pour le run '{run_id}' "
-                f"(${pre_state.accumulated_cost:.4f} / "
-                f"${budget_tracker.config.max_per_run_usd:.2f}).[/bold yellow]"
-            )
-            console.print(
-                "[yellow]Reprise impossible : ajustez le budget dans la config TOML "
-                "ou relancez un nouveau run.[/yellow]"
-            )
-            raise typer.Exit(1)
+    if (
+        pre_state is not None
+        and budget_tracker is not None
+        and budget_tracker.is_exceeded(run_id, pre_state.accumulated_cost)
+    ):
+        console.print(
+            f"[bold yellow]⛔ Budget déjà dépassé pour le run '{run_id}' "
+            f"(${pre_state.accumulated_cost:.4f} / "
+            f"${budget_tracker.config.max_per_run_usd:.2f}).[/bold yellow]"
+        )
+        console.print(
+            "[yellow]Reprise impossible : ajustez le budget dans la config TOML "
+            "ou relancez un nouveau run.[/yellow]"
+        )
+        raise typer.Exit(1)
 
     # ── Contexte de reprise (avant exécution) ───────────────────
     if pre_state is not None:
@@ -1364,6 +1368,7 @@ def cascade_run(
         synthesizer_model = synthesizer_model.strip()
 
     import json as _json
+
     from .multicascade.module_graph import ModuleGraph
     from .multicascade.multi_executor import MultiCascadeExecutor
 
@@ -1376,7 +1381,7 @@ def cascade_run(
         graph = ModuleGraph.from_plan_file(plan_file)
     except Exception as exc:
         console.print(f"[red]Plan invalide : {exc}[/red]")
-        raise typer.Exit(1)
+        raise typer.Exit(1) from exc
 
     plan_data = _json.loads(plan_file.read_text(encoding="utf-8"))
     module_count = len(plan_data.get("modules", []))
@@ -1397,7 +1402,7 @@ def cascade_run(
     budget_tracker: BudgetTracker | None = None
     selected_provider: BaseProvider
     selected_synthesizer_provider: BaseProvider
-    goal_config: "GoalConfig | None" = None
+    goal_config: GoalConfig | None = None
 
     if should_load_config:
         if config is not None and not candidate_config_path.exists():
@@ -1456,21 +1461,21 @@ def cascade_run(
         module_results = multi_executor.run_all()
     except Exception as exc:
         console.print(f"[red]Échec d'un module : {exc}[/red]")
-        raise typer.Exit(1)
+        raise typer.Exit(1) from exc
 
     console.print("\n[blue]Cascade d'intégration...[/blue]")
     try:
         integration_state = multi_executor.run_integration(module_results)
     except Exception as exc:
         console.print(f"[red]Intégration échouée : {exc}[/red]")
-        raise typer.Exit(1)
+        raise typer.Exit(1) from exc
 
     total_cost = sum(s.accumulated_cost for s in module_results.values())
     total_cost += integration_state.accumulated_cost
     total_iterations = sum(s.current_iteration for s in module_results.values())
     total_iterations += integration_state.current_iteration
 
-    console.print(f"\n[green]Multi-cascade terminée[/green]")
+    console.print("\n[green]Multi-cascade terminée[/green]")
     console.print(f"  Modules : {len(module_results)}")
     console.print(f"  Itérations totales : {total_iterations}")
     console.print(f"  Coût total : ${total_cost:.4f}")

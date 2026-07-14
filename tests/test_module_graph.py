@@ -19,7 +19,6 @@ import pytest
 from goal_cascade.multicascade.module_graph import ModuleGraph
 from goal_cascade.schemas.models import FrozenSpec, InterfaceContract
 
-
 # ── Helpers ──────────────────────────────────────────────────────
 
 

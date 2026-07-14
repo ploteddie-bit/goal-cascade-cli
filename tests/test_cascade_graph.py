@@ -12,21 +12,17 @@ Couvre :
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
 from unittest.mock import MagicMock
 
 import pytest
 
+from goal_cascade.orchestrator.budget_tracker import BudgetConfig, BudgetTracker
+from goal_cascade.orchestrator.cascade_graph import CascadeGraph
+from goal_cascade.orchestrator.drift_detector import DriftStatus
 from goal_cascade.schemas.models import (
-    CascadeState,
-    IterationRole,
     Verdict,
 )
-from goal_cascade.orchestrator.cascade_graph import CascadeGraph
-from goal_cascade.orchestrator.budget_tracker import BudgetConfig, BudgetTracker
-from goal_cascade.orchestrator.drift_detector import DriftStatus
-
 
 # ── Fixtures ────────────────────────────────────────────────────
 

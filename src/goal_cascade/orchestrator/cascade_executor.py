@@ -17,8 +17,7 @@ from __future__ import annotations
 import json
 import logging
 import uuid
-from datetime import datetime, timezone
-from pathlib import Path
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
 from pydantic import ValidationError
@@ -43,8 +42,8 @@ from ..schemas.models import (
     IterationRole,
     LLMCallRecord,
     RunReceipt,
-    Verdict,
     Variant,
+    Verdict,
 )
 from . import state_manager
 from .budget_tracker import BudgetTracker
@@ -253,10 +252,7 @@ class CascadeExecutor:
             iteration = state.current_iteration
 
             # Apres l'iteration 4, on reboucle vers le critique (iteration 5 max)
-            if iteration <= 4:
-                role = state.role_for_iteration(iteration)
-            else:
-                role = IterationRole.CRITIC
+            role = state.role_for_iteration(iteration) if iteration <= 4 else IterationRole.CRITIC
 
             if verbose:
                 tier = ROLE_TIERS.get(role, "medium")
@@ -305,7 +301,7 @@ class CascadeExecutor:
                 latency_ms=response.latency_ms,
                 raw_output=response.text,
                 token_count_estimated=response.token_count_estimated,
-                timestamp_utc=datetime.now(timezone.utc).isoformat(),
+                timestamp_utc=datetime.now(UTC).isoformat(),
             )
             state.history.append(call_record)
             state.accumulated_cost += response.cost_usd
@@ -444,7 +440,7 @@ class CascadeExecutor:
                                 latency_ms=failed_response.latency_ms,
                                 raw_output=failed_response.text,
                                 token_count_estimated=(failed_response.token_count_estimated),
-                                timestamp_utc=datetime.now(timezone.utc).isoformat(),
+                                timestamp_utc=datetime.now(UTC).isoformat(),
                             )
                         )
                         state.accumulated_cost += failed_response.cost_usd
@@ -484,7 +480,7 @@ class CascadeExecutor:
                         latency_ms=synthesis_response.latency_ms,
                         raw_output=synthesis_response.text,
                         token_count_estimated=synthesis_response.token_count_estimated,
-                        timestamp_utc=datetime.now(timezone.utc).isoformat(),
+                        timestamp_utc=datetime.now(UTC).isoformat(),
                     )
                 )
                 state.accumulated_cost += synthesis_response.cost_usd
@@ -608,10 +604,7 @@ class CascadeExecutor:
         def iteration_node(graph_state: dict) -> dict:
             # Désérialiser le CascadeState depuis le dict du graphe
             cascade_dict = graph_state.get("cascade", {})
-            if cascade_dict:
-                current_state = CascadeState(**cascade_dict)
-            else:
-                current_state = state
+            current_state = CascadeState(**cascade_dict) if cascade_dict else state
 
             # Exécuter une itération
             self._run_loop(

@@ -10,13 +10,11 @@ import logging
 import time
 from typing import Any
 
-from pydantic import BaseModel, Field
-
-from .base import BaseProvider, LLMResponse
 from .anthropic_cache import is_anthropic_sdk_available
+from .base import BaseProvider, LLMResponse
 from .rate_limiter import (
-    Backend,
     FALLBACK_CHAIN,
+    Backend,
     ProviderExhaustedError,
     ProviderUnavailableError,
     RateLimitConfig,
@@ -348,7 +346,6 @@ class MirascopeProvider(BaseProvider):
             excs = _get_mirascope_exceptions()
         except ImportError:
             return
-        names = {RateLimitError, ProviderUnavailableError}
         for name in (RateLimitError, ProviderUnavailableError, Exception):
             cls = getattr(excs, name.__name__, None)
             if cls is not None and isinstance(exc, cls):

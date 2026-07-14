@@ -6,6 +6,7 @@ Phase 4 : migration vers SQLite avec LangGraph.
 
 from __future__ import annotations
 
+import contextlib
 import json
 import os
 from pathlib import Path
@@ -26,11 +27,8 @@ def ensure_private_dir(path: Path, mode: int = PRIVATE_DIR_MODE) -> Path:
     lisibles par les autres utilisateurs du système (E2/E3).
     """
     path.mkdir(parents=True, exist_ok=True)
-    try:
+    with contextlib.suppress(OSError):
         path.chmod(mode)
-    except OSError:
-        # FS ne supporte pas chmod (ex: certains mounts Windows) : ignorer.
-        pass
     return path
 
 

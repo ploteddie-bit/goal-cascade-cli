@@ -101,7 +101,7 @@ class CascadePlan(BaseModel):
         """
         # Construire le graphe d'adjacence
         adj: dict[str, list[str]] = {mid: [] for mid in module_ids}
-        in_degree: dict[str, int] = {mid: 0 for mid in module_ids}
+        in_degree: dict[str, int] = dict.fromkeys(module_ids, 0)
 
         for dep in self.dependencies:
             adj[dep.producer].append(dep.consumer)

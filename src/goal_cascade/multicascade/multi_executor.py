@@ -26,15 +26,12 @@ from goal_cascade.multicascade.interface_checker import (
 )
 from goal_cascade.multicascade.module_graph import ModuleGraph
 from goal_cascade.orchestrator import state_manager
-from goal_cascade.orchestrator.budget_tracker import BudgetExceeded, BudgetTracker
+from goal_cascade.orchestrator.budget_tracker import BudgetTracker
 from goal_cascade.orchestrator.cascade_executor import CascadeExecutor
 from goal_cascade.schemas.models import (
     CascadeState,
     FrozenSpec,
-    InterfaceContract,
-    Verdict,
 )
-
 
 # ------------------------------------------------------------------
 # Erreurs métier
