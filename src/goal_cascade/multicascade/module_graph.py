@@ -405,7 +405,6 @@ class ModuleGraph:
     ) -> str:
         """Construit le prompt d'enrichissement pour un module donné."""
         try:
-
             from ..prompts import PromptLoader
 
             # Utilise PromptLoader pour respecter la hiérarchie de surcharge

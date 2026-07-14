@@ -594,9 +594,7 @@ def versions(
         iter_file = run_dir / f"iteration_{it}.txt"
         if iter_file.exists():
             iter_stat = iter_file.stat()
-            created_at = _dt.datetime.fromtimestamp(
-                iter_stat.st_mtime, tz=_dt.UTC
-            ).isoformat()
+            created_at = _dt.datetime.fromtimestamp(iter_stat.st_mtime, tz=_dt.UTC).isoformat()
         else:
             created_at = ""
 
