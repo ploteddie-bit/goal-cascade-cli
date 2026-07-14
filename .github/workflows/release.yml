@@ -1,66 +1,85 @@
-name: Publish to TestPyPI
+name: Release to PyPI
 
 on:
+  push:
+    tags:
+      - 'v*.*.*'
   workflow_dispatch:
+    inputs:
+      test_pypi:
+        description: 'Publish to TestPyPI instead of PyPI'
+        required: false
+        default: false
+        type: boolean
 
 concurrency:
-  group: testpypi-release
+  group: release-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
-  build:
-    name: Test and build
+  test:
+    name: Run Tests
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
         with:
           persist-credentials: false
 
       - name: Install uv
         uses: astral-sh/setup-uv@v5
         with:
-          version: "0.5.0"
+          enable-cache: true
+          cache-dependency-glob: "uv.lock"
 
-      - name: Install Python
+      - name: Set up Python
         run: uv python install 3.11
 
       - name: Install dependencies
-        run: uv sync --dev
+        run: uv sync --all-extras --dev
 
       - name: Run tests
-        run: uv run pytest -p no:cacheprovider -q
+        run: uv run pytest -x -v
 
-      - name: Build distributions
+  build:
+    name: Build Package
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Build package
         run: uv build
 
-      - name: Verify distributions
+      - name: Validate package
         run: uvx twine check dist/*
 
-      - name: Store distributions
-        uses: actions/upload-artifact@v5
+      - name: Store distribution packages
+        uses: actions/upload-artifact@v4
         with:
           name: python-package-distributions
           path: dist/
-          if-no-files-found: error
-          retention-days: 1
 
-  publish:
+  publish-testpypi:
     name: Publish to TestPyPI
     needs: build
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.test_pypi == 'true'
     runs-on: ubuntu-latest
     environment:
-      name: release
+      name: testpypi
       url: https://test.pypi.org/p/goal-cascade
     permissions:
       id-token: write
-
+      contents: read
     steps:
       - name: Download distributions
-        uses: actions/download-artifact@v6
+        uses: actions/download-artifact@v4
         with:
           name: python-package-distributions
           path: dist/
@@ -69,3 +88,69 @@ jobs:
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           repository-url: https://test.pypi.org/legacy/
+          skip-existing: true
+
+  publish-pypi:
+    name: Publish to PyPI
+    needs: build
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/p/goal-cascade
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - name: Download distributions
+        uses: actions/download-artifact@v4
+        with:
+          name: python-package-distributions
+          path: dist/
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+
+  github-release:
+    name: Create GitHub Release
+    needs: publish-pypi
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Download distributions
+        uses: actions/download-artifact@v4
+        with:
+          name: python-package-distributions
+          path: dist/
+
+      - name: Sign distributions with Sigstore
+        uses: sigstore/gh-action-sigstore-python@v3.0.0
+        with:
+          inputs: >-
+            ./dist/*.tar.gz
+            ./dist/*.whl
+
+      - name: Create GitHub Release
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: >-
+          gh release create
+          '${{ github.ref_name }}'
+          --repo '${{ github.repository }}'
+          --notes "Release ${{ github.ref_name }}"
+          --title "Release ${{ github.ref_name }}"
+
+      - name: Upload artifacts to GitHub Release
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: >-
+          gh release upload
+          '${{ github.ref_name }}' dist/**
+          --repo '${{ github.repository }}'
