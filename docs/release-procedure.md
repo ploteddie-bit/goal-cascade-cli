@@ -35,16 +35,17 @@ Aller sur <https://github.com/ploteddie-bit/goal-cascade-cli/settings/environmen
 
 ## Séquence de release
 
-### Checklist (~16 min)
+### Checklist (~20 min)
 
 | # | Action | Où | Durée |
 |---|---|---|---|
-| 1 | Créer environment `testpypi` | GitHub → Settings → Environments | 2 min |
-| 2 | Créer environment `pypi` | GitHub → Settings → Environments | 2 min |
-| 3 | Ajouter trusted publisher | TestPyPI → Settings → Publishing | 3 min |
-| 4 | Ajouter trusted publisher | PyPI → Settings → Publishing | 3 min |
-| 5 | **Dry-run TestPyPI** (obligatoire) | `workflow_dispatch` + cocher `test_pypi` | 5 min |
-| 6 | Release production | `git tag vX.Y.Z && git push origin vX.Y.Z` | 1 min |
+| 1 | Commit + push workflow | `git push origin main` | 1 min |
+| 2 | Créer environments `pypi` + `testpypi` | GitHub → Settings → Environments | 2 min |
+| 3 | Premier run du workflow | GitHub Actions → Run workflow (échec attendu) | 2 min |
+| 4 | Ajouter trusted publisher TestPyPI | TestPyPI → Settings → Publishing | 3 min |
+| 5 | Ajouter trusted publisher PyPI | PyPI → Settings → Publishing | 3 min |
+| 6 | **Dry-run TestPyPI** (obligatoire) | `workflow_dispatch` + cocher `test_pypi` | 5 min |
+| 7 | Release production | `git tag vX.Y.Z && git push origin vX.Y.Z` | 1 min |
 
 ### 1. Committer et pousser
 
@@ -54,12 +55,53 @@ git commit -m "ci: release workflow with OIDC trusted publishing"
 git push origin main
 ```
 
-### 2. Configurer les environments et trusted publishers (manuel)
+### 2. Créer les environments GitHub (manuel)
 
-- Créer `pypi` et `testpypi` sur [GitHub Environments](https://github.com/ploteddie-bit/goal-cascade-cli/settings/environments) (pas de secrets nécessaires avec OIDC)
-- Configurer les trusted publishers sur [PyPI](https://pypi.org/manage/project/goal-cascade/settings/publishing/) et [TestPyPI](https://test.pypi.org/manage/project/goal-cascade/settings/publishing/)
+Sur <https://github.com/ploteddie-bit/goal-cascade-cli/settings/environments> :
+- Créer `pypi` (pas de secrets nécessaires avec OIDC)
+- Créer `testpypi` (pas de secrets nécessaires avec OIDC)
 
-### 3. ⚠️ Dry-run TestPyPI (OBLIGATOIRE avant tag)
+### 3. Premier run du workflow (enregistrement GitHub)
+
+> **Problème œuf/poule** : PyPI ne peut vérifier l'existence du workflow que s'il a
+> déjà été exécuté au moins une fois. Sans cela, la configuration du trusted publisher
+> affiche un warning au lieu d'un statut vert.
+
+1. Aller sur <https://github.com/ploteddie-bit/goal-cascade-cli/actions/workflows/release.yml>
+2. Cliquer **"Run workflow"**
+3. Cocher **"Publish to TestPyPI instead of PyPI"**
+4. Valider
+
+Le workflow **échouera** à l'étape `publish-testpypi` (trusted publisher pas encore configuré),
+mais GitHub aura enregistré que le workflow existe. C'est normal et nécessaire.
+
+| Cas | PyPI peut vérifier ? | Raison |
+|---|---|---|
+| Workflow sur main mais jamais exécuté | ❌ Non | L'API GitHub ne retourne pas les workflows non exécutés |
+| Workflow dans un tag (pas encore poussé) | ❌ Non | Le tag n'existe pas encore |
+| Repo privé | ❌ Non | PyPI n'a pas accès à l'API GitHub du repo privé |
+| Workflow sur main et déjà exécuté | ✅ Oui | PyPI peut vérifier via l'API |
+
+### 4. Configurer les trusted publishers (manuel)
+
+**TestPyPI** → <https://test.pypi.org/manage/project/goal-cascade/settings/publishing/>
+
+| Champ | Valeur |
+|---|---|
+| Owner | `ploteddie-bit` |
+| Repository | `goal-cascade-cli` |
+| Workflow | `release.yml` |
+| Environment | `testpypi` |
+
+**PyPI** → <https://pypi.org/manage/project/goal-cascade/settings/publishing/>
+
+Mêmes valeurs avec `Environment: pypi`.
+
+Après le premier run (étape 3), PyPI devrait afficher un **statut vert (active)**.
+
+### 5. ⚠️ Dry-run TestPyPI (OBLIGATOIRE avant tag)
+
+Relancer le workflow pour vérifier que l'OIDC fonctionne maintenant :
 
 1. Aller sur <https://github.com/ploteddie-bit/goal-cascade-cli/actions/workflows/release.yml>
 2. Cliquer **"Run workflow"**
@@ -73,7 +115,7 @@ git push origin main
 > - Si le dry-run **passe** → taguer en confiance.
 > - Si le dry-run **échoue** → corriger sans polluer l'historique des versions.
 
-### 4. Taguer et pousser (seulement si dry-run réussi)
+### 6. Taguer et pousser (seulement si dry-run réussi)
 
 ```bash
 # Bumper la version dans pyproject.toml au préalable
@@ -81,7 +123,7 @@ git tag vX.Y.Z
 git push origin vX.Y.Z
 ```
 
-### 5. Suivre la release production
+### 7. Suivre la release production
 
 ```bash
 gh run watch
