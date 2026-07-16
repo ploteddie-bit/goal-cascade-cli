@@ -255,9 +255,13 @@ class CascadeExecutor:
             audience=audience,
             constraints=constraints,
             no_synth=no_synth,
+            prompt_resolver=self._prompt_resolver,
         )
 
         app, checkpointer = graph_instance.compile_with_sqlite(checkpoint_path)
+
+        # Q1 : fermer la connexion SQLite après chaque cascade terminée.
+        # Le caller (run ou resume) doit appeler close_sqlite() dans finally.
 
         # État initial : CascadeState sérialisé en dict
         initial_state = state.model_dump()
@@ -266,7 +270,12 @@ class CascadeExecutor:
         if verbose:
             print(f"\n  Cascade 6 nœuds démarrée pour {state.run_id}")
 
-        result = app.invoke(initial_state, config)
+        try:
+            result = app.invoke(initial_state, config)
+        finally:
+            # Q1 : fermer la connexion SQLite pour éviter les fuites
+            # et les verrous persistants sur les runs dashboard.
+            graph_instance.close_sqlite()
 
         # Le résultat est un dict conforme au schéma CascadeState
         return CascadeState.model_validate(result)
@@ -294,6 +303,24 @@ class CascadeExecutor:
         Raises:
             TypeError: Si CascadeExecutor est frozen/slots (mutation impossible).
             FileNotFoundError: Si aucun checkpoint valide n'existe pour run_id.
+
+        Q4 — LIMITATION DOCUMENTÉE : double comptage coût possible.
+        ============================================================
+        ``resume()`` recharge l'état depuis le checkpoint SQLite (via
+        ``app.get_state()``) puis relance ``_run_with_graph()`` qui
+        ré-exécute la cascade depuis le début du checkpoint. Si LangGraph
+        ré-exécute des nœuds déjà terminés (bug connu de certaines versions),
+        le coût des appels LLM peut être compté deux fois : une fois dans
+        le checkpoint et une fois dans la re-exécution.
+
+        Mitigation : ``state.accumulated_cost`` est repris du checkpoint AVANT
+        la reprise. Si LangGraph ré-exécute les nœuds, les coûts SONT ajoutés
+        une seconde fois à ``state.history``. Le budget_tracker n'a pas de
+        mémoire persistante entre les sessions (il reprend à 0).
+
+        Incertitude : ce comportement dépend de la version de LangGraph.
+        Testé avec ``langgraph==1.2.9`` (see A6) et fonctionne correctement
+        (ré-exécution propre). Mettre à jour la doc si LangGraph est upgradé.
         """
         from .cascade_graph import CascadeGraph
 

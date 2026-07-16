@@ -19,6 +19,22 @@ RUNS_DIR = GOAL_DIR / "runs"
 
 PRIVATE_DIR_MODE = 0o700
 
+# Q3 — Validation run_id : 8 hex lowercase (uuid4().hex[:8]).
+# Un run_id contenant `../` ou `/` causait un path traversal.
+_RUN_ID_RE = __import__("re").compile(r"^[0-9a-f]{4,16}$")
+
+
+def _validate_run_id(run_id: str) -> None:
+    """Lève ValueError si run_id n'est pas un identifiant hex valide.
+
+    Empêche le path traversal (resume ../../x ou d'autres chemins
+    malveillants traversant les répertoires de runs).
+    """
+    if not _RUN_ID_RE.match(run_id):
+        raise ValueError(
+            f"run_id invalide (hex 4-16 attendu) : {run_id!r}"
+        )
+
 
 def ensure_private_dir(path: Path, mode: int = PRIVATE_DIR_MODE) -> Path:
     """Crée un répertoire (et ses parents) avec des permissions restreintes.
@@ -64,19 +80,34 @@ def get_run_dir(run_id: str, create: bool = True) -> Path:
 
 
 def save_state(state: CascadeState) -> Path:
-    """Sauvegarde l'etat d'une cascade en JSON."""
+    """Sauvegarde l'etat d'une cascade en JSON (écriture atomique).
+
+    Q2 : écriture atomique via temp file + os.replace() — évite
+    la corruption de state.json en cas de crash en cours d'écriture.
+    """
     run_dir = get_run_dir(state.run_id)
     state_file = run_dir / "state.json"
-    state_file.write_text(state.model_dump_json(indent=2), encoding="utf-8")
+    tmp_file = run_dir / ".state.json.tmp"
+    content = state.model_dump_json(indent=2)
+    tmp_file.write_text(content, encoding="utf-8")
+    os.replace(str(tmp_file), str(state_file))
     return state_file
 
 
 def load_state(run_id: str) -> CascadeState | None:
-    """Charge l'etat d'une cascade depuis JSON."""
+    """Charge l'etat d'une cascade depuis JSON.
+
+    Q3 : validation du run_id contre path traversal. Un run_id ne
+    contenir que des hex lowercase (uuid4().hex[:8]).
+    """
+    _validate_run_id(run_id)
     state_file = RUNS_DIR / run_id / "state.json"
     if not state_file.exists():
         return None
-    data = json.loads(state_file.read_text(encoding="utf-8"))
+    try:
+        data = json.loads(state_file.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return None
     return CascadeState(**data)
 
 

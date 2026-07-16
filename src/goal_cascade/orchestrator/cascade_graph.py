@@ -91,6 +91,7 @@ class CascadeGraph:
         audience: str = "",
         constraints: str = "",
         no_synth: bool = False,
+        prompt_resolver: Any = None,
     ):
         self.provider = provider
         self.synthesizer_provider = synthesizer_provider
@@ -103,6 +104,8 @@ class CascadeGraph:
         self._audience = audience
         self._constraints = constraints
         self._no_synth = no_synth
+        # O4 : support des overrides par run (injecté par CascadeExecutor)
+        self._prompt_resolver = prompt_resolver
 
     def _build_graph(self) -> Any:
         """Construit le graphe d'états G.O.A.L. à 6 nœuds."""
@@ -151,11 +154,35 @@ class CascadeGraph:
         return graph
 
     def compile_with_sqlite(self, db_path: Path | str) -> Any:
-        """Compile le graphe avec checkpointing SQLite."""
+        """Compile le graphe avec checkpointing SQLite.
+
+        Q1 : la connexion SQLite est stockée sur l'instance pour pouvoir
+        être fermée proprement quand le graph n'est plus nécessaire.
+        Sans ce stockage, les connexions restent ouvertes indéfiniment,
+        verrouillant le fichier et consommant des descripteurs.
+
+        Returns:
+            Tuple (graph_compiled, checkpointer). Le caller doit
+            fermer la connexion via ``graph_instance.close_sqlite()``
+            quand la cascade est terminée.
+        """
         graph = self._build_graph()
-        conn = sqlite3.connect(str(db_path), check_same_thread=False)
-        checkpointer = SqliteSaver(conn)
+        self._sqlite_conn = sqlite3.connect(str(db_path), check_same_thread=False)
+        checkpointer = SqliteSaver(self._sqlite_conn)
         return graph.compile(checkpointer=checkpointer), checkpointer
+
+    def close_sqlite(self) -> None:
+        """Ferme proprement la connexion SQLite (Q1 — fuite de connexion).
+
+        À appeler après chaque cascade terminée, avant de détruire
+        l'instance CascadeGraph.
+        """
+        if hasattr(self, "_sqlite_conn") and self._sqlite_conn is not None:
+            try:
+                self._sqlite_conn.close()
+            except Exception:
+                pass
+            self._sqlite_conn = None
 
     # ── Helper : exécution d'une itération complète ────────────
 
@@ -603,7 +630,11 @@ class CascadeGraph:
         raise TypeError(f"Type de state non supporté : {type(state).__name__}")
 
     def _build_prompt(self, state: CascadeState, role: IterationRole) -> str:
-        """Construit le prompt pour un rôle donné."""
+        """Construit le prompt pour un rôle donné.
+
+        O4 : si un prompt_resolver est injecté, vérifie d'abord
+        l'override du run dans ~/.goal/runs/{run_id}/prompts/.
+        """
         if self._prompt_loader is None:
             return f"Role: {role.value}\nObjective: {state.objective}"
 
@@ -624,6 +655,25 @@ class CascadeGraph:
             },
         }.get(state.variant, {}).get(role, "iteration_1.j2")
 
+        # O4 : chercher un override du prompt pour ce run spécifique
+        override_source = None
+        if self._prompt_resolver is not None:
+            try:
+                override_source = self._prompt_resolver.charger(
+                    template_name, id_cascade=state.run_id
+                )
+                # Vérifier que c'est un vrai override (pas identique au défaut)
+                try:
+                    default_source = self._prompt_loader.env.loader.get_source(
+                        self._prompt_loader.env, template_name
+                    )[0]
+                    if override_source == default_source:
+                        override_source = None  # identique → pas un override
+                except Exception:
+                    pass
+            except Exception:
+                override_source = None  # pas de fichier override
+
         previous_output = ""
         if state.history and role != IterationRole.ARBITER:
             previous_output = state.history[-1].raw_output
@@ -640,15 +690,28 @@ class CascadeGraph:
                 blocks.append(f"```{language}\n{artifact.content}\n```")
             artifacts = "\n\n".join(blocks)
 
-        return self._prompt_loader.render(
-            template_name,
-            objective=state.objective,
-            previous_output=previous_output,
-            last_synthesis=last_synthesis,
-            audience=self._audience,
-            constraints=self._constraints,
-            artifacts=artifacts,
-        )
+        context = {
+            "objective": state.objective,
+            "previous_output": previous_output,
+            "last_synthesis": last_synthesis,
+            "audience": self._audience,
+            "constraints": self._constraints,
+            "artifacts": artifacts,
+        }
+
+        # O4 : si un override existe pour ce (run_id, template_name),
+        # on le rend via Jinja2 directly (pas via prompt_loader.render
+        # qui chercherait le template par nom).
+        if override_source is not None:
+            try:
+                return self._prompt_loader.env.from_string(override_source).render(**context)
+            except Exception as exc:
+                logger.warning(
+                    "prompt_override_render_echec template=%s exc=%s fallback_defaut",
+                    template_name, exc,
+                )
+
+        return self._prompt_loader.render(template_name, **context)
 
     def _make_call_record(
         self, iteration: int, response: Any, role: str, tier: str
