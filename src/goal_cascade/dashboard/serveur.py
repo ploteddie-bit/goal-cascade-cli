@@ -158,24 +158,38 @@ async def lire_evenements(
 
 @app.get("/api/cascades/{id_cascade}/evenements/flux")
 async def flux_evenements(id_cascade: str, request: Request) -> StreamingResponse:
-    """SSE : tail temps réel des événements (polling 5s)."""
+    """SSE : tail temps réel des événements (détection par mtime, pas de polling fixe).
+
+    Surveille events.jsonl via ``os.stat()`` (mtime + taille).
+    Délai adaptatif : 0.3s quand le fichier change, jusqu'à 5s
+    quand il est stable. Zéro dépendance externe.
+    """
     _verifier_id_securise(id_cascade, "id_cascade")
 
     async def generateur():
         derniere_seq = etat_tableau.obtenir_derniere_sequence(id_cascade)
         yield f"event: snapshot\ndata: {json.dumps({'sequence': derniere_seq})}\n\n"
+        chemin_fichier = (
+            etat_tableau.state_manager.get_run_dir(id_cascade, create=False)
+            / "events.jsonl"
+        )
+        etat_fichier = _EtatFichier(chemin_fichier)
         try:
             while True:
                 if await request.is_disconnected():
                     break
+
+                # Attendre la prochaine modification (mtime ou taille)
+                await etat_fichier.attendre_modification()
+
                 evenements = etat_tableau.lire_evenements_depuis(
                     id_cascade, depuis_sequence=derniere_seq
                 )
                 for ev in evenements:
                     derniere_seq = max(derniere_seq, ev.get("sequence", 0))
                     yield f"event: journal\ndata: {json.dumps(ev)}\n\n"
-                yield "event: battement\ndata: {}\n\n"
-                await asyncio.sleep(_INTERVALLE_SONDAGE_SSE_S)
+
+                yield "event: batement\ndata: {}\n\n"
         except asyncio.CancelledError:
             return
 
@@ -187,6 +201,61 @@ async def flux_evenements(id_cascade: str, request: Request) -> StreamingRespons
             "X-Accel-Buffering": "no",
         },
     )
+
+
+class _EtatFichier:
+    """Surveille un fichier via os.stat (mtime + taille) avec délai adaptatif.
+
+    Pas de dépendance externe (stdlib uniquement). Détecte les
+    modifications en comparant mtime et taille entre deux lectures.
+    Délai adaptatif : rapide (0.3s) quand le fichier change,
+    lent (5s) quand il est stable.
+    """
+
+    _DELAI_RAPIDE = 0.3
+    _DELAI_LENT = 5.0
+    _SEUIL_STABLE = 5  # nombre de checks sans changement avant passage lent
+
+    def __init__(self, chemin: Path) -> None:
+        self._chemin = chemin
+        self._dernier_mtime = 0.0
+        self._derniere_taille = 0
+        self._compteur_stable = 0
+
+    async def attendre_modification(self) -> None:
+        """Attend que le fichier soit modifié (mtime ou taille change).
+
+        Délai adaptatif : 0.3s si changement récent, 5s si stable.
+        """
+        loop = asyncio.get_event_loop()
+        await loop.run_in_executor(None, self._boucle_attente)
+
+    def _boucle_attente(self) -> None:
+        """Boucle bloquante (exécutée dans un thread) qui surveille le fichier."""
+        import time as _time
+
+        while True:
+            try:
+                stat = os.stat(self._chemin)
+                mtime = stat.st_mtime
+                taille = stat.st_size
+            except (OSError, FileNotFoundError):
+                mtime, taille = 0.0, 0
+
+            if mtime != self._dernier_mtime or taille != self._derniere_taille:
+                self._dernier_mtime = mtime
+                self._derniere_taille = taille
+                self._compteur_stable = 0
+                return  # fichier modifié → retour immédiat
+
+            # Fichier inchangé → délai adaptatif
+            self._compteur_stable = min(self._compteur_stable + 1, 20)
+            delai = (
+                self._DELAI_RAPIDE
+                if self._compteur_stable < self._SEUIL_STABLE
+                else self._DELAI_LENT
+            )
+            _time.sleep(delai)
 
 
 @app.get("/api/cascades/{id_cascade}/prompts")
