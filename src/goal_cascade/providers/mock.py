@@ -6,6 +6,20 @@ La difference avec un mock naif :
 - L'iteration 4 (Arbitre) lit la synthese filtree et les artefacts
 
 Chaque transformation est VISIBLE dans le output. On voit la cascade travailler.
+
+⚠️  AVERTISSEMENT — couplage aux templates Jinja2
+=================================================
+Ce module parse les prompts Jinja2 produits par ``src/goal_cascade/prompts/``
+(``iteration_1.j2``, ``iteration_2.j2``, etc.) pour en extraire l'objectif et le
+travail précédent. Les marqueurs textuels suivants sont codés en dur :
+
+  * OBJECTIF, OBJECTIF INITIAL, OBJECTIF A GARDER EN TETE
+  * DRAFT A VERIFIER, TRAVAIL ACTUEL, TRAVAIL CUMULE
+
+Si vous modifiez ces marqueurs dans un template ``.j2``, **vous devez mettre
+à jour les constantes ci-dessous ET les méthodes ``_extract_*`` en parallèle**.
+Ces deux sources de vérité doivent rester synchronisées à la main — il n'y a
+pas de garde-fou automatique.
 """
 
 from __future__ import annotations

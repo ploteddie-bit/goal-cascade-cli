@@ -4,9 +4,9 @@
 
 Framework **Goal-Oriented Agentic Loop** : cascade multi-agents pour produire des livrables de haute qualité avec transparence radicale des coûts, sécurité E2E et résilience provider.
 
-## État — version `0.3.0`
+## État — version `0.4.0`
 
-La source de vérité du produit est la [spécification d'implémentation V2](docs/specs/goal-cascade-implementation-v2.md). Les jalons S1 à S6 sont implémentés et testés (273 tests passent) :
+La source de vérité du produit est la [spécification d'implémentation V2](docs/specs/goal-cascade-implementation-v2.md). Les jalons S1 à S6 sont implémentés et testés (282 tests passent) :
 
 - **S1 Fondations** : cascade unique 4 rôles (producteur, critique, adversaire, arbitre), synthèse orientée objectif, artefacts immuables séparés, verdict JSON validé, borne stricte de 5 itérations.
 - **S2 Multi-provider** : `anthropic`, `openai`, `google` via Mirascope, plus `mock`, `kimi-cli`, `kimi-code`. Rate limit configurable, chaîne de fallback respectant la diversité de familles (Pilier 1).
@@ -84,6 +84,27 @@ Options globales utiles :
 | `--variant A\|B` | A = rédactionnel, B = technique |
 | `--no-synth` | Désactiver la synthèse orientée objectif (debug) |
 | `--enrich-frozen-specs` | 2e appel LLM pour enrichir les frozen specs (opt-in) |
+
+### Note : `--provider` (singulier) vs `--providers` (pluriel selon spec)
+
+La spec d'implémentation V2 mentionne `--providers anthropic,openai,google` (pluriel, liste séparée par virgules). **Le flag implémenté est `--provider` au singulier** — la cascade utilise un seul provider pour tous les rôles.
+
+Pour mapper un provider différent par rôle (par exemple `anthropic` pour le producteur, `openai` pour le critique), utilisez le fichier de configuration TOML avec `role_mapping` :
+
+```toml
+[providers]
+enabled = ["anthropic", "openai", "google"]
+role_mapping = { producer = "anthropic", critic = "openai", adversary = "google", arbiter = "google" }
+```
+
+Voir la section [Configuration TOML](#configuration-toml) pour le schéma complet.
+
+> **Note** : les providers réels (`anthropic`, `openai`, `google`) nécessitent l'installation de l'extra `llm` :
+> ```bash
+> uv pip install -e '.[llm]'
+> export ANTHROPIC_API_KEY=sk-ant-...
+> # puis utiliser --config ~/.goal/config.toml
+> ```
 
 ## Configuration TOML
 
@@ -192,7 +213,7 @@ Variables d'environnement :
 ## Tests
 
 ```bash
-# Suite complète (273 tests, 1 skip intégration vrai provider)
+# Suite complète (282 tests, 4 skip)
 uv run pytest -p no:cacheprovider -q
 
 # Tests d'intégration avec un vrai provider LLM

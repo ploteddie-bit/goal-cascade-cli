@@ -10,13 +10,18 @@ keywords = ["ai", "llm", "cascade", "multi-agent", "pydantic", "typer"]
 dependencies = [
     "typer>=0.12",
     "rich>=13.0",
-    "pydantic>=2.0",
+    # Pydantic 2.x — 3.0 serait breaking (API complètement réécrite)
+    "pydantic>=2.0,<3.0",
     "jinja2>=3.1",
     "numpy>=2.4.6",
     "psycopg2-binary>=2.9",
-    "langgraph>=0.2",
-    "langgraph-checkpoint-sqlite>=2.0",
+    # Versions EXACTES pour LangGraph : l'API des graphs/edges est instable
+    # historiquement. À mettre à jour manuellement après validation.
+    "langgraph==1.2.9",
+    "langgraph-checkpoint-sqlite==3.1.0",
     "networkx>=3.0",
+    "fastapi>=0.110",
+    "uvicorn>=0.27",
 ]
 
 [project.optional-dependencies]

@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>G.O.A.L. Cascade — Tableau de bord</title>
+  <link rel="stylesheet" href="/statique/style.css">
+</head>
+<body>
+  <header>
+    <h1>G.O.A.L. Cascade — Tableau de bord</h1>
+    <div class="actions-entete">
+      <button id="bouton-rafraichir" title="Rafraîchir">↻</button>
+      <span id="etat-connexion" class="pastille-statut deconnecte">● déconnecté</span>
+    </div>
+  </header>
+
+  <main>
+    <aside id="barre-laterale">
+      <h2>Cascades</h2>
+      <div class="filtres-cascade">
+        <input
+          type="search"
+          id="champ-recherche"
+          placeholder="Rechercher dans les objectifs…"
+          autocomplete="off"
+        >
+        <select id="filtre-statut">
+          <option value="">Tous statuts</option>
+          <option value="running">En cours</option>
+          <option value="stopped">Arrêté</option>
+          <option value="forced_stop">Arrêté forcé</option>
+          <option value="failed">Échec</option>
+          <option value="budget_exceeded">Budget dépassé</option>
+        </select>
+      </div>
+      <ul id="liste-cascades"><li class="vide">Aucune cascade.</li></ul>
+    </aside>
+
+    <section id="panneau-principal">
+      <div id="etat-vide" class="message-vide">
+        <p>Sélectionnez une cascade dans la barre latérale pour afficher son état.</p>
+      </div>
+
+      <div id="vue-cascade" hidden>
+        <div id="entete-cascade">
+          <h2 id="objectif-cascade"></h2>
+          <div class="metadonnees-cascade">
+            <span id="id-cascade" class="pastille"></span>
+            <span id="statut-cascade" class="pastille"></span>
+            <span id="verdict-cascade" class="pastille"></span>
+            <span id="cout-cascade" class="pastille"></span>
+          </div>
+        </div>
+
+        <div id="vue-graphe">
+          <h3>Cascade (6 nœuds)</h3>
+          <div class="noeuds">
+            <div class="noeud" data-role="producteur">Producteur</div>
+            <div class="fleche">→</div>
+            <div class="noeud synthese">Synthèse</div>
+            <div class="fleche">→</div>
+            <div class="noeud" data-role="critique">Critique</div>
+            <div class="fleche">→</div>
+            <div class="noeud synthese">Synthèse</div>
+            <div class="fleche">→</div>
+            <div class="noeud" data-role="adversaire">Adversaire</div>
+            <div class="fleche">→</div>
+            <div class="noeud synthese">Synthèse</div>
+            <div class="fleche">→</div>
+            <div class="noeud" data-role="arbitre">Arbitre</div>
+            <div class="fleche">→</div>
+            <div class="noeud verdict">Verdict</div>
+          </div>
+        </div>
+
+        <div id="vue-historique">
+          <h3>Itérations</h3>
+          <table id="table-historique">
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>Rôle</th>
+                <th>Fournisseur</th>
+                <th>Modèle</th>
+                <th>J. entrée</th>
+                <th>J. sortie</th>
+                <th>Coût</th>
+                <th>Latence</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+
+        <div id="vue-synthese">
+          <h3>Dernière synthèse</h3>
+          <pre id="synthese-json"></pre>
+        </div>
+
+        <div id="vue-verdict">
+          <h3>Verdict final</h3>
+          <div id="contenu-verdict"></div>
+        </div>
+
+        <div id="vue-prompts">
+          <h3>Prompts (par rôle)</h3>
+          <div class="grille-prompts">
+            <div class="panneau-prompt" data-role="iteration_1">
+              <h4>Producteur <small>(iteration_1.j2)</small></h4>
+              <textarea class="editeur-prompt"></textarea>
+              <button class="bouton-sauvegarder-prompt">💾 Sauvegarder</button>
+              <span class="statut-sauvegarde"></span>
+            </div>
+            <div class="panneau-prompt" data-role="iteration_2">
+              <h4>Critique <small>(iteration_2.j2)</small></h4>
+              <textarea class="editeur-prompt"></textarea>
+              <button class="bouton-sauvegarder-prompt">💾 Sauvegarder</button>
+              <span class="statut-sauvegarde"></span>
+            </div>
+            <div class="panneau-prompt" data-role="iteration_3">
+              <h4>Adversaire <small>(iteration_3.j2)</small></h4>
+              <textarea class="editeur-prompt"></textarea>
+              <button class="bouton-sauvegarder-prompt">💾 Sauvegarder</button>
+              <span class="statut-sauvegarde"></span>
+            </div>
+            <div class="panneau-prompt" data-role="iteration_4">
+              <h4>Arbitre <small>(iteration_4.j2)</small></h4>
+              <textarea class="editeur-prompt"></textarea>
+              <button class="bouton-sauvegarder-prompt">💾 Sauvegarder</button>
+              <span class="statut-sauvegarde"></span>
+            </div>
+            <div class="panneau-prompt" data-role="synthesis">
+              <h4>Synthèse <small>(synthesis.j2)</small></h4>
+              <textarea class="editeur-prompt"></textarea>
+              <button class="bouton-sauvegarder-prompt">💾 Sauvegarder</button>
+              <span class="statut-sauvegarde"></span>
+            </div>
+          </div>
+        </div>
+
+        <div id="vue-fichiers">
+          <h3>Fichiers persistés</h3>
+          <ul id="liste-fichiers"></ul>
+        </div>
+
+        <div id="vue-evenements">
+          <h3>Journal temps réel (SSE)</h3>
+          <pre id="flux-evenements"></pre>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script src="/statique/app.js"></script>
+</body>
+</html>

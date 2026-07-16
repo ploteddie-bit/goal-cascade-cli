@@ -57,7 +57,7 @@ class BudgetExceeded(Exception):
 class BudgetTracker:
     """Kill switch budgétaire avec alerte et hard stop.
 
-    Usage dans CascadeExecutor._run_loop :
+    Usage dans CascadeExecutor._run_with_graph :
         tracker.check_budget(state.run_id, state.accumulated_cost)
     """
 

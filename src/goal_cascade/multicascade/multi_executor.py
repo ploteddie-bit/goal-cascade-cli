@@ -49,12 +49,25 @@ class ModuleFailedError(Exception):
 
 
 class IntegrationFailedError(Exception):
-    """La cascade d'intégration finale a terminé en état d'échec."""
+    """La cascade d'intégration finale a terminé en état d'échec.
 
-    def __init__(self, state: CascadeState) -> None:
+    Si déclenchée après 5 cycles infructueux, le message indique
+    explicitement qu'il faut revoir le découpage Phase 1 (spec §7.4).
+    """
+
+    def __init__(
+        self,
+        state: CascadeState | None = None,
+        message: str | None = None,
+    ) -> None:
         self.state = state
-        summary = state.last_error or state.status
-        super().__init__(f"Intégration en échec : {summary}")
+        if message is not None:
+            super().__init__(message)
+        elif state is not None:
+            summary = state.last_error or state.status
+            super().__init__(f"Intégration en échec : {summary}")
+        else:
+            super().__init__("Intégration en échec (état inconnu)")
 
 
 class InterfaceViolationError(Exception):
@@ -100,6 +113,11 @@ class MultiCascadeExecutor:
     _results: dict[str, CascadeState] = field(default_factory=dict, init=False, repr=False)
     # Coût total accumulé par tous les modules exécutés
     _total_cost: float = field(default=0.0, init=False, repr=False)
+    # Compteur de cycles d'intégration (spec §7.4 — limite 5 avant revoir Phase 1)
+    _integration_cycles: int = field(default=0, init=False, repr=False)
+
+    # Limite absolue de cycles d'intégration (spec §7.4)
+    INTEGRATION_MAX_CYCLES: int = 5
 
     # ------------------------------------------------------------------
     # Exécution complète
@@ -125,6 +143,7 @@ class MultiCascadeExecutor:
         """
         self._results.clear()
         self._total_cost = 0.0
+        self._integration_cycles = 0  # Reset du compteur d'intégration
 
         # C1 : validation acyclique explicite avant toute exécution.
         self.module_graph.validate_acyclic()
@@ -211,6 +230,19 @@ class MultiCascadeExecutor:
                 "Aucun résultat de module disponible. Appelez run_all() avant run_integration()."
             )
 
+        # A3 : Compteur de cycles d'intégration (spec §7.4 — limite 5).
+        self._integration_cycles += 1
+        if self._integration_cycles > self.INTEGRATION_MAX_CYCLES:
+            raise IntegrationFailedError(
+                state=None,
+                message=(
+                    f"Limite de {self.INTEGRATION_MAX_CYCLES} cycles d'intégration atteinte "
+                    "sans succès. Le découpage Phase 1 est probablement mal conçu : "
+                    "les frontières entre modules sont mal placées. "
+                    "Revenir à Phase 1 et redécouper."
+                ),
+            )
+
         # C2 : vérification budgétaire avant la cascade d'intégration.
         if self.budget_tracker is not None:
             self.budget_tracker.check_budget("integration", self._total_cost)
@@ -237,6 +269,13 @@ class MultiCascadeExecutor:
         if self.budget_tracker is not None:
             self.budget_tracker.record(final_state.accumulated_cost)
             self._total_cost += final_state.accumulated_cost
+
+        # Succès : on reset le compteur pour les prochains appels éventuels.
+        # Note: ne PAS reset sur "forced_stop" — c'est un échec où la cascade
+        # a épuisé ses 5 itérations internes, l'utilisateur va typiquement retry
+        # l'intégration depuis l'extérieur (donc on garde le compteur).
+        if final_state.status == "stopped":
+            self._integration_cycles = 0
 
         if final_state.status == "failed" or (
             final_state.final_verdict is not None

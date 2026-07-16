@@ -64,6 +64,7 @@ __all__ = [
     "rag_sync",
     "init",
     "cascade_plan",
+    "dashboard",
 ]
 
 
@@ -886,6 +887,78 @@ def list_cmd():
     console.print(table)
 
 
+@app.command(name="replay")
+def replay(
+    id_source: str = typer.Argument(
+        ..., help="ID du run source à rejouer (objectif réutilisé)"
+    ),
+    variante: Variant = typer.Option(
+        None, "--variante", "-v", help="Variante (par défaut : celle du run source)"
+    ),
+    fournisseur: ProviderChoice = typer.Option(
+        ProviderChoice.MOCK,
+        "--fournisseur",
+        "-f",
+        help="Fournisseur : mock, kimi-cli, kimi-code",
+    ),
+    config: Path | None = typer.Option(
+        None,
+        "--config",
+        help=f"Chemin du fichier config TOML. Par défaut : {DEFAULT_CONFIG_PATH} si présent.",
+    ),
+    modele_synthetiseur: str | None = typer.Option(
+        None,
+        "--modele-synthetiseur",
+        envvar="GOAL_SYNTHESIZER_MODEL",
+        help="Modèle small/cheap dédié aux synthèses",
+    ),
+    public_cible: str = typer.Option("", "--public", "-p", help="Public cible"),
+    contraintes: str = typer.Option(
+        "", "--contraintes", "-c", help="Contraintes (format, longueur, etc.)"
+    ),
+    sans_synth: bool = typer.Option(
+        False, "--sans-synth", help="Désactiver la synthèse orientée objectif"
+    ),
+):
+    """Rejoue une cascade à partir de l'objectif d'un run existant.
+
+    Utile pour comparer deux exécutions d'un même objectif avec des
+    paramètres différents (variante, fournisseur, prompts modifiés via
+    dashboard, etc.). Le nouveau run est indépendant du source — utilise
+    `goal diff <id1> <id2>` pour comparer les résultats.
+    """
+    from .orchestrator import state_manager
+
+    etat_source = state_manager.load_state(id_source)
+    if etat_source is None:
+        console.print(f"[red]Cascade '{id_source}' introuvable.[/red]")
+        raise typer.Exit(1)
+
+    if variante is None:
+        variante = etat_source.variant
+
+    console.print(
+        f"[cyan]Rejeu de {id_source}[/cyan] "
+        f"(variante={variante.value}, fournisseur={fournisseur.value})"
+    )
+    console.print(
+        "[dim]Astuce : modifiez les prompts via `goal dashboard` "
+        "avant le replay.[/dim]"
+    )
+
+    # Invoque la commande run avec les paramètres du source
+    run(
+        objective=etat_source.objective,
+        variant=variante,
+        provider=fournisseur,
+        config=config,
+        synthesizer_model=modele_synthetiseur,
+        audience=public_cible,
+        constraints=contraintes,
+        no_synth=sans_synth,
+    )
+
+
 @app.command(name="rag-status")
 def rag_status(
     run_id: str = typer.Argument(..., help="ID du run à inspecter"),
@@ -1481,6 +1554,40 @@ def cascade_run(
         f"  Intégration : "
         f"{integration_state.final_verdict.decision if integration_state.final_verdict else 'N/A'}"
     )
+
+
+@app.command(name="dashboard")
+def dashboard(
+    host: str = typer.Option(
+        "127.0.0.1", "--host", help="Interface d'écoute (défaut : localhost)"
+    ),
+    port: int = typer.Option(
+        8080, "--port", "-p", help="Port TCP (défaut : 8080)"
+    ),
+    reload: bool = typer.Option(
+        False, "--reload", help="Recharge auto sur changement de code (dev)"
+    ),
+):
+    """Lance le dashboard web de pilotage des cascades.
+
+    Expose l'état des runs en cours via FastAPI + SSE, permet
+    l'édition des prompts par rôle et la visualisation des 6 nœuds
+    en temps réel.
+
+    Ouvre http://<host>:<port>/ dans un navigateur.
+    """
+    try:
+        from .dashboard import lancer_serveur
+    except ImportError as exc:
+        console.print(
+            f"[red]Module dashboard indisponible : {exc}[/red]\n"
+            "Installer les deps : pip install fastapi uvicorn"
+        )
+        raise typer.Exit(1) from None
+
+    console.print(f"[cyan]G.O.A.L. Tableau de bord → http://{host}:{port}/[/cyan]")
+    console.print("[dim]Ctrl-C pour arrêter[/dim]")
+    lancer_serveur(host=host, port=port, reload=reload)
 
 
 if __name__ == "__main__":

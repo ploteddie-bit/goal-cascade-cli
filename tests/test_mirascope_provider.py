@@ -161,3 +161,83 @@ def test_mirascope_provider_uses_rate_limiter(monkeypatch: pytest.MonkeyPatch) -
     assert captured["role"] == "producer"
     assert captured["tier"] == "small"
     assert captured["rate_config"].max_retries == 2
+
+
+# ── A8 : cache exact désactivé (limitation Mirascope v2) ───────────
+
+
+class TestCacheExactDesactive:
+    """Les 3 providers (anthropic/openai/google) NE bénéficient PAS du cache
+    exact tant que Mirascope v2 n'expose pas les options cache_control.
+
+    Ces tests figent le comportement pour détecter toute régression si un
+    contributeur activait le cache par erreur (ou si Mirascope v2 est mis
+    à jour). Le log ``cache_intent`` est notre seul indicateur observable.
+    """
+
+    @pytest.fixture
+    def provider_anthropic(self, monkeypatch: pytest.MonkeyPatch) -> MirascopeProvider:
+        async def fake_call_with_retry_and_fallback(
+            backend_call, backend, prompt, role, tier, rate_config, available_backends,
+        ) -> LLMResponse:
+            # Appelle réellement _call_backend pour déclencher le log cache_intent.
+            # On ne veut PAS faire un vrai appel HTTP (test_mock).
+            try:
+                return await backend_call(
+                    backend=backend, prompt=prompt, role=role, tier=tier
+                )
+            except Exception:
+                # Si _call_backend plante, on retombe sur un mock minimal
+                return LLMResponse(text="mocked", provider=backend.value, model="x")
+
+        monkeypatch.setattr(
+            "goal_cascade.providers.mirascope_provider.call_with_retry_and_fallback",
+            fake_call_with_retry_and_fallback,
+        )
+        return MirascopeProvider(
+            backend=Backend.ANTHROPIC,
+            rate_limit_config=RateLimitConfig(max_retries=1),
+        )
+
+    def test_cache_intent_logged_avec_applied_false(
+        self, provider_anthropic, monkeypatch
+    ) -> None:
+        """Chaque appel Anthropic émet un log cache_intent applied=False.
+
+        Le logger structlog est appelé : ``logger.info("cache_intent", extra={...})``.
+        Donc ``event="cache_intent"`` et ``kwargs={"extra": {...}}``.
+        """
+        import goal_cascade.providers.mirascope_provider as provider_mod
+
+        captured = []
+
+        def fake_logger_info(event, **kwargs):
+            captured.append({"event": event, **kwargs})
+
+        monkeypatch.setattr(
+            provider_mod.logger, "info", fake_logger_info
+        )
+
+        provider_anthropic.call("x", "producer", "small")
+
+        cache_logs = [c for c in captured if c.get("event") == "cache_intent"]
+        assert len(cache_logs) >= 1, (
+            f"Aucun log cache_intent trouvé. Captured: {[c.get('event') for c in captured]}"
+        )
+        # structlog: logger.info("name", extra={...}) → kwargs["extra"] contient les champs
+        extras = cache_logs[0].get("extra", {})
+        assert extras.get("applied") is False, (
+            f"applied doit être False tant que Mirascope v2 ne supporte pas cache. "
+            f"Reçu: {extras}"
+        )
+        # Le reason doit mentionner la limitation
+        assert "mirascope_v2_no_cache_control_api" in str(extras.get("reason", ""))
+
+    def test_cache_intent_signale_pas_de_cache_applied(
+        self, provider_anthropic
+    ) -> None:
+        """Le provider expose enable_cache mais ne l'applique pas (limitation)."""
+        # enable_cache=True par défaut ; mais applied reste False
+        assert provider_anthropic._enable_cache is True
+        # On documente cette intention via le logger (cf. test précédent)
+

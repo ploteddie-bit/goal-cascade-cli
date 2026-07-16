@@ -275,7 +275,30 @@ class MirascopeProvider(BaseProvider):
         successifs (le client HTTP sous-jacent garde une référence à la
         première boucle event loop).
 
-        Le prompt-caching Anthropic n'est pas encore active : Mirascope v2
+        ⚠️  ÉTAT DU CACHE EXACT (Juillet 2026)
+        ====================================================
+        Aucun des trois providers ne bénéficie actuellement du cache exact,
+        car Mirascope v2 (notre couche d'abstraction) n'expose pas les
+        options de cache_control via son API publique ``mirascope.llm``.
+
+        Spécification §8.1 vs réalité :
+
+            | Provider | Spec §8.1                | Code réel (Juillet 2026) |
+            |----------|---------------------------|--------------------------|
+            | Anthropic| cache_control: ephemeral  | Intent log only           |
+            | OpenAI   | auto (>1024 tokens)      | Intent log only           |
+            | Google   | implicit                  | Intent log only           |
+
+        Le module ``providers/anthropic_cache.py`` prépare l'infrastructure
+        (détection SDK, structure de messages avec cache_control.ephemeral,
+        dégradation gracieuse). ``build_cached_messages(...)`` existe mais
+        n'est PAS appelé tant que Mirascope v2 ne supportera pas cette option.
+
+        ACTION REQUISE : surveiller mirascope>=2.0 et basculer le bloc ci-dessous
+        vers ``build_cached_messages(...)`` dès que possible. Cf. ADR potentiel à
+        créer (cf. A8 du bilan de revue).
+        \u26a0\ufe0f  Voir aussi test_mirascope_provider.py::test_cache_intent_logged
+        qui fige ce comportement (anti-regression).\n\n        Le prompt-caching Anthropic n'est pas encore active : Mirascope v2
         n'expose pas ``cache_control`` via l'API publique ``mirascope.llm``.
         Le module ``providers/anthropic_cache.py`` prepare l'infrastructure
         (detection SDK, structure de messages avec cache_control.ephemeral,
