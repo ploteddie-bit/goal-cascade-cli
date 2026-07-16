@@ -241,3 +241,83 @@ class TestCacheExactDesactive:
         assert provider_anthropic._enable_cache is True
         # On documente cette intention via le logger (cf. test précédent)
 
+
+# ── P1 — Classification des erreurs (résilience) ──────────────────
+
+
+def test_classify_exception_raises_provider_unavailable_for_timeout(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Un TimeoutError Mirascope doit lever ProviderUnavailableError.
+
+    Anti-régression : avant le fix, seuls les RateLimitError étaient
+    classifiés (les timeouts/5xx/network errors échappaient à la résilience).
+    """
+    import types
+    from goal_cascade.providers import mirascope_provider as mod
+    from goal_cascade.providers.rate_limiter import ProviderUnavailableError
+
+    class FakeTimeoutError(Exception):
+        pass
+
+    fake_excs = types.SimpleNamespace(TimeoutError=FakeTimeoutError)
+    monkeypatch.setattr(mod, "_get_mirascope_exceptions", lambda: fake_excs)
+
+    provider = type("P", (), {"_classify_exception": mod.MirascopeProvider._classify_exception})()
+    with pytest.raises(ProviderUnavailableError):
+        provider._classify_exception(FakeTimeoutError("timeout test"))
+
+
+def test_classify_exception_raises_rate_limit(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Un RateLimitError Mirascope doit lever notre RateLimitError locale."""
+    import types
+    from goal_cascade.providers import mirascope_provider as mod
+    from goal_cascade.providers.rate_limiter import RateLimitError
+
+    class FakeRateLimitError(Exception):
+        pass
+
+    fake_excs = types.SimpleNamespace(RateLimitError=FakeRateLimitError)
+    monkeypatch.setattr(mod, "_get_mirascope_exceptions", lambda: fake_excs)
+
+    provider = type("P", (), {"_classify_exception": mod.MirascopeProvider._classify_exception})()
+    with pytest.raises(RateLimitError):
+        provider._classify_exception(FakeRateLimitError("rate limit test"))
+
+
+def test_classify_exception_silencieux_si_mirascope_non_installe(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Si _get_mirascope_exceptions lève ImportError, on n'agit pas (l'excep remontera)."""
+    import types
+    from goal_cascade.providers import mirascope_provider as mod
+
+    def raise_import():
+        raise ImportError("mirascope not installed")
+
+    monkeypatch.setattr(mod, "_get_mirascope_exceptions", raise_import)
+
+    provider = type("P", (), {"_classify_exception": mod.MirascopeProvider._classify_exception})()
+    # Ne doit PAS lever
+    provider._classify_exception(ValueError("anything"))  # noqa: no exception
+
+
+def test_classify_exception_silencieux_si_exception_non_reconnue(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Si l'exception n'est pas un type Mirascope connu, on ne lève rien."""
+    import types
+    from goal_cascade.providers import mirascope_provider as mod
+
+    class FakeRateLimitError(Exception):
+        pass
+
+    fake_excs = types.SimpleNamespace(RateLimitError=FakeRateLimitError)
+    monkeypatch.setattr(mod, "_get_mirascope_exceptions", lambda: fake_excs)
+
+    provider = type("P", (), {"_classify_exception": mod.MirascopeProvider._classify_exception})()
+    # Doit retourner None silencieusement (l'exception remontera au caller)
+    provider._classify_exception(ValueError("unknown error"))  # noqa: no exception
+

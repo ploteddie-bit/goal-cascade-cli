@@ -62,7 +62,17 @@ class KimiCommandProvider(BaseProvider):
         try:
             if self.isolate_work_dir:
                 with tempfile.TemporaryDirectory(prefix="goal-kimi-") as temp_dir:
-                    result = self._run(command, Path(temp_dir))
+                    # P2 — HOME isolation : Kimi --print auto-approuve les outils
+                    # shell/fichiers. Un prompt injection pourrait accéder au vrai
+                    # $HOME (cache, clés, config). En redirigeant HOME vers le
+                    # cwd temporaire, le modèle kimi ne voit qu'un répertoire vide.
+                    import os as _os
+                    env = _os.environ.copy()
+                    env["HOME"] = temp_dir
+                    # Supprime les variables potentiellement sensibles
+                    for sens in ("GOOGLE_API_KEY", "AWS_SECRET_ACCESS_KEY", "OPENAI_API_KEY"):
+                        env.pop(sens, None)
+                    result = self._run(command, Path(temp_dir), env=env)
             else:
                 result = self._run(command, self.work_dir)
         except (OSError, subprocess.TimeoutExpired) as exc:
@@ -89,10 +99,30 @@ class KimiCommandProvider(BaseProvider):
             token_count_estimated=True,
         )
 
-    def _run(self, command: list[str], cwd: Path) -> subprocess.CompletedProcess[str]:
+    def _run(
+        self,
+        command: list[str],
+        cwd: Path,
+        env: dict[str, str] | None = None,
+    ) -> subprocess.CompletedProcess[str]:
+        """Exécute la commande Kimi avec isolation optionnelle.
+
+        Args:
+            command: commande et arguments.
+            cwd: répertoire de travail.
+            env: dictionnaire d'environnement à passer (fusionné avec
+                ``os.environ`` si ``env`` est None, ou utilisé tel quel
+                si ``env`` est fourni). En mode isolé, ``HOME`` est
+                redirigé vers le cwd pour éviter toute interaction avec
+                le vrai $HOME (cache Kimi, clés, config, etc.).
+        """
+        import os as _os
+
+        run_env = env if env is not None else _os.environ.copy()
         return subprocess.run(
             command,
             cwd=cwd,
+            env=run_env,
             capture_output=True,
             text=True,
             timeout=self.timeout_s,

@@ -364,26 +364,44 @@ class MirascopeProvider(BaseProvider):
         )
 
     def _classify_exception(self, exc: BaseException) -> None:
-        """Convertit une exception Mirascope en RateLimitError ou ProviderUnavailableError."""
+        """Convertit une exception Mirascope en RateLimitError ou ProviderUnavailableError.
+
+        Mapping des exceptions Mirascope reconnues vers nos exceptions locales :
+        - RateLimitError  → RateLimitError  (notre classe locale)
+        - AuthenticationError, ConnectionError, TimeoutError,
+          ServerError, ProviderError → ProviderUnavailableError
+
+        Si l'exception ne matche aucun type reconnu (ex: Mirascope non
+        installé, ou exception non documentée), on ne lève rien — l'exception
+        originale remontera au caller.
+
+        AVANT (bug) : la boucle ``for name in (RateLimitError, ProviderUnavailableError, Exception)``
+        itérait sur les CLASSES locales (et ``Exception`` Python), pas sur des strings.
+        ``getattr(excs, name.__name__, None)`` cherchait donc "RateLimitError",
+        "ProviderUnavailableError", "Exception" dans le module mirascope.
+        Comme mirascope n'expose pas "ProviderUnavailableError" ni "Exception" (built-in),
+        seuls les RateLimitError mirascope étaient classifiés. Tous les autres
+        (TimeoutError, ConnectionError, ServerError, etc.) échappaient à la
+        résilience — le retry et le fallback ne s'appliquaient pas.
+        """
         try:
             excs = _get_mirascope_exceptions()
         except ImportError:
             return
-        for name in (RateLimitError, ProviderUnavailableError, Exception):
-            cls = getattr(excs, name.__name__, None)
-            if cls is not None and isinstance(exc, cls):
-                if cls is getattr(excs, "RateLimitError", None):
-                    raise RateLimitError(str(exc)) from exc
-                if cls is getattr(excs, "AuthenticationError", None):
-                    raise ProviderUnavailableError(str(exc)) from exc
-                if cls is getattr(excs, "ConnectionError", None):
-                    raise ProviderUnavailableError(str(exc)) from exc
-                if cls is getattr(excs, "TimeoutError", None):
-                    raise ProviderUnavailableError(str(exc)) from exc
-                if cls is getattr(excs, "ServerError", None):
-                    raise ProviderUnavailableError(str(exc)) from exc
-                if cls is getattr(excs, "ProviderError", None):
-                    raise ProviderUnavailableError(str(exc)) from exc
+
+        # Noms d'exceptions Mirascope à classifier → exception locale cible
+        mapping: list[tuple[str, type]] = [
+            ("RateLimitError", RateLimitError),
+            ("AuthenticationError", ProviderUnavailableError),
+            ("ConnectionError", ProviderUnavailableError),
+            ("TimeoutError", ProviderUnavailableError),
+            ("ServerError", ProviderUnavailableError),
+            ("ProviderError", ProviderUnavailableError),
+        ]
+        for mirascope_name, local_exc in mapping:
+            mirascope_cls = getattr(excs, mirascope_name, None)
+            if mirascope_cls is not None and isinstance(exc, mirascope_cls):
+                raise local_exc(str(exc)) from exc
 
     def _estimate_cost(
         self, backend: Backend, model: str, input_tokens: int, output_tokens: int
