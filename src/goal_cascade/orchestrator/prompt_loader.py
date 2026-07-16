@@ -80,8 +80,14 @@ def _validate_template_name(name: str) -> None:
         pass
 
 
-class PromptLoader:
-    """Chargeur de prompts Jinja2 à résolution hiérarchique.
+class SandboxedPromptLoader:
+    """Chargeur de prompts Jinja2 à résolution hiérarchique SANDBOXÉE.
+
+    Variante sécurisée de :class:`goal_cascade.prompts.PromptLoader` — utilise
+    :class:`jinja2.sandbox.SandboxedEnvironment` pour empêcher l'accès aux
+    attributs Python dangereux (`__class__`, `__globals__`, etc.) dans les
+    templates. Utilisée par le chargeur de l'orchestrateur pour les prompts
+    potentiellement écrits par un LLM.
 
     Parameters
     ----------

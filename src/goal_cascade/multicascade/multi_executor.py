@@ -91,9 +91,10 @@ class InterfaceViolationError(Exception):
 class MultiCascadeExecutor:
     """Orchestrateur multi-cascade.
 
-    Exécute chaque module dans l'ordre topologique (par batches
-    parallèles quand les dépendances le permettent), vérifie les
-    contrats d'interface, puis lance une cascade d'intégration.
+    Exécute chaque module dans l'ordre topologique, par batches
+    (couches du DAG networkx) traités séquentiellement. Les modules
+    d'un même batch pourraient s'exécuter en parallèle, mais
+    l'implémentation actuelle est séquentielle (cf. spec §7.2).
 
     Args:
         module_graph: Graphe acyclique des modules et de leurs contrats.

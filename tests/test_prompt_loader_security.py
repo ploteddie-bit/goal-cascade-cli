@@ -17,8 +17,8 @@ from jinja2.exceptions import SecurityError, UndefinedError
 
 from goal_cascade.orchestrator.prompt_loader import (
     InvalidTemplateNameError,
-    PromptLoader,
     PromptNotFoundError,
+    SandboxedPromptLoader,
 )
 
 # ── B1 : Traversal de chemin ────────────────────────────────────
@@ -39,12 +39,12 @@ class TestB1PathTraversal:
         ],
     )
     def test_rejects_path_traversal(self, malicious_name: str) -> None:
-        loader = PromptLoader()
+        loader = SandboxedPromptLoader()
         with pytest.raises(InvalidTemplateNameError, match="invalide"):
             loader.load(malicious_name)
 
     def test_template_source_also_validates(self) -> None:
-        loader = PromptLoader()
+        loader = SandboxedPromptLoader()
         with pytest.raises(InvalidTemplateNameError):
             loader.template_source("../../../etc/passwd")
 
@@ -64,14 +64,14 @@ class TestB2Hierarchy:
         user_dir.mkdir(parents=True)
         (user_dir / "test_hierarchy.j2").write_text("USER", encoding="utf-8")
 
-        loader = PromptLoader(extra_paths=[project_dir, user_dir])
+        loader = SandboxedPromptLoader(extra_paths=[project_dir, user_dir])
         result = loader.load("test_hierarchy.j2")
         assert result.strip() == "PROJECT"
 
     def test_search_paths_order(self, tmp_path: Path) -> None:
         custom = tmp_path / "custom"
         custom.mkdir()
-        loader = PromptLoader(extra_paths=[custom])
+        loader = SandboxedPromptLoader(extra_paths=[custom])
         paths = loader.search_paths
         # Le chemin custom doit être en premier
         assert paths[0] == custom.resolve()
@@ -90,7 +90,7 @@ class TestB3Sandboxing:
             "{{ ''.__class__.__mro__[1].__subclasses__() }}",
             encoding="utf-8",
         )
-        loader = PromptLoader(extra_paths=[tmp_path])
+        loader = SandboxedPromptLoader(extra_paths=[tmp_path])
         with pytest.raises((SecurityError, UndefinedError)):
             loader.load("evil.j2")
 
@@ -103,7 +103,7 @@ class TestB3Sandboxing:
             "{% import 'os' as os %}{{ os.system('whoami') }}",
             encoding="utf-8",
         )
-        loader = PromptLoader(extra_paths=[tmp_path])
+        loader = SandboxedPromptLoader(extra_paths=[tmp_path])
         # Jinja2 {% import %} cherche un template nommé 'os' (pas le module Python).
         # Le loader échoue avant que le sandbox n'intervienne → TemplateNotFound.
         with pytest.raises((SecurityError, UndefinedError, TemplateNotFound)):
@@ -117,20 +117,20 @@ class TestB4MissingTemplate:
     """B4 : PromptNotFoundError avec les chemins recherchés."""
 
     def test_error_contains_template_name(self, tmp_path: Path) -> None:
-        loader = PromptLoader(extra_paths=[tmp_path])
+        loader = SandboxedPromptLoader(extra_paths=[tmp_path])
         with pytest.raises(PromptNotFoundError) as exc_info:
             loader.load("nonexistent_template.j2")
         assert "nonexistent_template.j2" in str(exc_info.value)
 
     def test_error_contains_searched_paths(self, tmp_path: Path) -> None:
-        loader = PromptLoader(extra_paths=[tmp_path])
+        loader = SandboxedPromptLoader(extra_paths=[tmp_path])
         with pytest.raises(PromptNotFoundError) as exc_info:
             loader.load("missing.j2")
         assert hasattr(exc_info.value, "searched")
         assert len(exc_info.value.searched) > 0
 
     def test_error_name_attribute(self, tmp_path: Path) -> None:
-        loader = PromptLoader(extra_paths=[tmp_path])
+        loader = SandboxedPromptLoader(extra_paths=[tmp_path])
         with pytest.raises(PromptNotFoundError) as exc_info:
             loader.load("absent.j2")
         assert exc_info.value.name == "absent.j2"
@@ -145,13 +145,13 @@ class TestB5StrictUndefined:
     def test_missing_variable_raises(self, tmp_path: Path) -> None:
         template = tmp_path / "strict_test.j2"
         template.write_text("Hello {{ nonexistent_var }}", encoding="utf-8")
-        loader = PromptLoader(extra_paths=[tmp_path])
+        loader = SandboxedPromptLoader(extra_paths=[tmp_path])
         with pytest.raises((SecurityError, UndefinedError)):
             loader.load("strict_test.j2")
 
     def test_provided_variable_works(self, tmp_path: Path) -> None:
         template = tmp_path / "ok_test.j2"
         template.write_text("Hello {{ name }}", encoding="utf-8")
-        loader = PromptLoader(extra_paths=[tmp_path])
+        loader = SandboxedPromptLoader(extra_paths=[tmp_path])
         result = loader.load("ok_test.j2", name="World")
         assert "Hello World" in result

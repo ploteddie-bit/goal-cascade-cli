@@ -6,14 +6,14 @@ from pathlib import Path
 
 import pytest
 
-from goal_cascade.orchestrator.prompt_loader import PromptLoader, PromptNotFoundError
+from goal_cascade.orchestrator.prompt_loader import SandboxedPromptLoader, PromptNotFoundError
 
 # -- Tests demandés (chargeur hiérarchique) -----------------------------------
 
 
 def test_load_from_package() -> None:
     """Charger iteration_1.j2 depuis le package et vérifier la présence de l'objectif."""
-    loader = PromptLoader()
+    loader = SandboxedPromptLoader()
     result = loader.load(
         "iteration_1.j2",
         objective="Écrire un poème sur Python",
@@ -32,7 +32,7 @@ def test_load_from_user_override(tmp_path: Path) -> None:
     custom_dir.mkdir(parents=True)
     (custom_dir / "custom_test.j2").write_text("TEMPLATE PERSONNALISE : {{ objective }}\n")
 
-    loader = PromptLoader(extra_paths=[custom_dir])
+    loader = SandboxedPromptLoader(extra_paths=[custom_dir])
     result = loader.load("custom_test.j2", objective="Test override")
     assert "TEMPLATE PERSONNALISE" in result
     assert "Test override" in result
@@ -40,7 +40,7 @@ def test_load_from_user_override(tmp_path: Path) -> None:
 
 def test_load_raises_on_missing() -> None:
     """Un template inexistant doit lever PromptNotFoundError."""
-    loader = PromptLoader()
+    loader = SandboxedPromptLoader()
     with pytest.raises(PromptNotFoundError) as exc_info:
         loader.load("ce_template_n_existe_pas.j2")
     assert "ce_template_n_existe_pas.j2" in str(exc_info.value)
@@ -48,7 +48,7 @@ def test_load_raises_on_missing() -> None:
 
 def test_list_templates() -> None:
     """list_templates() doit contenir au minimum les templates du package."""
-    loader = PromptLoader()
+    loader = SandboxedPromptLoader()
     templates = loader.list_templates()
     for expected in ("iteration_1.j2", "synthesis.j2"):
         assert expected in templates, f"{expected} manquant dans {templates}"
@@ -86,10 +86,10 @@ class TestPromptNotFoundError:
 
 
 class TestTemplateSource:
-    """Tests sur PromptLoader.template_source."""
+    """Tests sur SandboxedPromptLoader.template_source."""
 
     def test_template_source_returns_path_for_known_template(self) -> None:
-        loader = PromptLoader()
+        loader = SandboxedPromptLoader()
         result = loader.template_source("iteration_1.j2")
 
         assert result is not None
@@ -97,7 +97,7 @@ class TestTemplateSource:
         assert result.is_file()
 
     def test_template_source_returns_none_for_missing_template(self) -> None:
-        loader = PromptLoader()
+        loader = SandboxedPromptLoader()
         result = loader.template_source("this_template_does_not_exist_xyz.j2")
 
         assert result is None
