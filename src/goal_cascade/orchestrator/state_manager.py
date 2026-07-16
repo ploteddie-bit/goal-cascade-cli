@@ -156,7 +156,12 @@ def save_receipt(run_id: str, receipt: RunReceipt) -> Path:
 
 
 def list_runs() -> list[dict]:
-    """Liste tous les runs connus."""
+    """Liste tous les runs connus.
+
+    Un state.json corrompu est sauté (sans crasher la liste entière)
+    mais l'événement est loggé dans le journal d'audit et le chemin
+    du fichier défectueux est consigné pour investigation.
+    """
     if not RUNS_DIR.exists():
         return []
     runs = []
@@ -168,9 +173,14 @@ def list_runs() -> list[dict]:
             continue
         try:
             data = json.loads(state_file.read_text(encoding="utf-8"))
-        except (json.JSONDecodeError, OSError):
-            # state.json corrompu ou illisible : on saute ce run
-            # sans faire crasher la liste entière.
+        except (json.JSONDecodeError, OSError) as exc:
+            # state.json corrompu ou illisible → log d'erreur
+            # (le caller dashboard/compteur récupérera ce log via
+            # le journal d'audit pour alimenter l'endpoint /api/sante)
+            logger.warning(
+                "state_corrompu skip run=%s file=%s err=%s",
+                run_dir.name, state_file, exc,
+            )
             continue
         runs.append(
             {
