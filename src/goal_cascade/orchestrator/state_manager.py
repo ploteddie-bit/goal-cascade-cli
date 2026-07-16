@@ -44,10 +44,22 @@ def _initialize_runs_dir() -> None:
 _initialize_runs_dir()
 
 
-def get_run_dir(run_id: str) -> Path:
-    """Retourne le dossier d'un run, créé avec les permissions 0o700."""
+def get_run_dir(run_id: str, create: bool = True) -> Path:
+    """Retourne le chemin du dossier d'un run.
+
+    Args:
+        run_id: identifiant hex du run.
+        create: si True (défaut), crée le dossier avec permissions 0o700.
+            Si False, retourne le chemin sans créer (utilisé par les routes
+            GET du dashboard pour éviter la pollution filesystem via des
+            requêtes avec run_id forgés — sécurité anti-DoS/anti-pollution).
+
+    Returns:
+        Le chemin du dossier (qu'il existe ou non selon ``create``).
+    """
     run_dir = RUNS_DIR / run_id
-    ensure_private_dir(run_dir)
+    if create:
+        ensure_private_dir(run_dir)
     return run_dir
 
 

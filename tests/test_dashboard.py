@@ -399,3 +399,63 @@ def test_ui_appjs_appelle_api_avec_query_params() -> None:
     # L'event listener est branché sur les changements
     assert "addEventListener" in js
     assert ("'input'" in js or '"input"' in js) and ("'change'" in js or '"change"' in js)
+
+
+# ── D3 — Auth Bearer (E2E) ───────────────────────────────────────
+
+
+def test_dashboard_sans_token_env_accepte_toutes_requetes(
+    client_runs: TestClient,
+) -> None:
+    """Mode dev : sans GOAL_DASHBOARD_TOKEN, auth désactivée (rétrocompat).
+
+    Vérifie que le mode dev par défaut reste ouvert (pas de 401 surprise).
+    """
+    # Le TestClient par défaut n'a pas GOAL_DASHBOARD_TOKEN
+    r = client_runs.get("/api/cascades")
+    assert r.status_code == 200
+
+
+def test_dashboard_avec_token_env_exige_bearer(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Mode prod : avec GOAL_DASHBOARD_TOKEN, TOUTES les routes exigent Bearer."""
+    from goal_cascade.orchestrator import state_manager
+    from fastapi.testclient import TestClient
+    from goal_cascade.dashboard import app
+
+    # Configure l'env (mode prod)
+    monkeypatch.setenv("GOAL_DASHBOARD_TOKEN", "secret-test-12345")
+    monkeypatch.setattr(state_manager, "RUNS_DIR", tmp_path)
+
+    client = TestClient(app)
+
+    # Sans header → 401
+    r = client.get("/api/cascades")
+    assert r.status_code == 401
+
+    # Avec mauvais token → 403
+    r = client.get("/api/cascades", headers={"Authorization": "Bearer wrong"})
+    assert r.status_code == 403
+
+    # Avec bon token → 200
+    r = client.get(
+        "/api/cascades", headers={"Authorization": "Bearer secret-test-12345"}
+    )
+    assert r.status_code == 200
+
+    # Pareil pour le PUT (route sensible originelle)
+    r = client.put(
+        "/api/cascades/aabbccdd/prompts/iteration_1",
+        json={"contenu": "x"},
+    )
+    assert r.status_code == 401  # sans auth
+    r = client.put(
+        "/api/cascades/aabbccdd/prompts/iteration_1",
+        json={"contenu": "x"},
+        headers={"Authorization": "Bearer secret-test-12345"},
+    )
+    # PUT a quand même 400/404 (run absent) mais PAS 401/403
+    assert r.status_code in (200, 400, 404, 413, 500)
+    assert r.status_code != 401
+    assert r.status_code != 403

@@ -25,18 +25,7 @@ from . import etat as etat_tableau
 
 logger = logging.getLogger(__name__)
 
-# ── Application ─────────────────────────────────────────────────
-
-app = FastAPI(
-    title="G.O.A.L. Cascade — Tableau de bord",
-    description="Pilotage temps réel d'une cascade multi-agents.",
-    version="0.1.0",
-)
-
-_REP_MODELES = Path(__file__).parent / "templates"
-_REP_STATIQUE = Path(__file__).parent / "static"
-
-# ── Sécurité ─────────────────────────────────────────────────────
+# ── Sécurité (helpers — déclarés AVANT l'app pour que FastAPI puisse les résoudre) ──
 
 _REGEX_ID_CASCADE = re.compile(r"^[0-9a-f]{4,16}$")
 _REGEX_ROLE = re.compile(r"^[a-z][a-z0-9_\-]{0,63}$")
@@ -70,6 +59,24 @@ def _verifier_token_tableau_de_bord(
     fourni = authorization[len("Bearer ") :].strip()
     if fourni != attendu:
         raise HTTPException(status_code=403, detail="Token invalide")
+
+
+# ── Application ─────────────────────────────────────────────────
+
+# D3 : Auth globale. La dépendance _verifier_token_tableau_de_bord()
+# ne déclenche un 401 QUE si GOAL_DASHBOARD_TOKEN est défini dans
+# l'environnement. En dev local (token absent), toutes les routes
+# restent accessibles. En prod (token présent), TOUTES les routes
+# (lecture et écriture) exigent un Bearer valide.
+app = FastAPI(
+    title="G.O.A.L. Cascade — Tableau de bord",
+    description="Pilotage temps réel d'une cascade multi-agents.",
+    version="0.1.0",
+    dependencies=[Depends(_verifier_token_tableau_de_bord)],
+)
+
+_REP_MODELES = Path(__file__).parent / "templates"
+_REP_STATIQUE = Path(__file__).parent / "static"
 
 
 # ── Routes HTML ──────────────────────────────────────────────────

@@ -131,12 +131,17 @@ def obtenir_etat_cascade(id_cascade: str) -> dict[str, Any] | None:
     try:
         etat = CascadeState.model_validate(brut)
     except ValidationError as exc:
+        # Note historique : le code précédent tentait `model_validate(brut, extra="ignore")`
+        # en fallback, mais ce kwarg est SILENCIEUSEMENT IGNORÉ en Pydantic v2
+        # (pour rendre la validation tolérante il faut ConfigDict(extra="ignore")
+        # sur la classe). On logue donc l'échec et on abandonne (retour None)
+        # — la cascade sera marquée "malformée" par lister_cascades_malformees().
         logger.warning(
-            "Cascade %s champs supplémentaires (%d), chargement tolérant",
+            "Cascade %s invalide (%d erreurs validation), ignorée",
             id_cascade,
             len(exc.errors()),
         )
-        etat = CascadeState.model_validate(brut, extra="ignore")
+        return None
 
     return {
         "id_cascade": etat.run_id,
@@ -186,7 +191,7 @@ def obtenir_etat_cascade(id_cascade: str) -> dict[str, Any] | None:
 
 def _lire_etat_brut(id_cascade: str) -> dict[str, Any] | None:
     """Lit le state.json brut en contournant la validation stricte initiale."""
-    chemin = state_manager.get_run_dir(id_cascade) / "state.json"
+    chemin = state_manager.get_run_dir(id_cascade, create=False) / "state.json"
     if not chemin.exists():
         return None
     try:
@@ -197,7 +202,7 @@ def _lire_etat_brut(id_cascade: str) -> dict[str, Any] | None:
 
 def lister_fichiers_cascade(id_cascade: str) -> dict[str, Any]:
     """Liste les fichiers persistés avec tailles et dates ISO 8601."""
-    rep = state_manager.get_run_dir(id_cascade)
+    rep = state_manager.get_run_dir(id_cascade, create=False)
     if not rep.exists():
         return {"id_cascade": id_cascade, "fichiers": []}
     fichiers = []
@@ -216,7 +221,7 @@ def lister_fichiers_cascade(id_cascade: str) -> dict[str, Any]:
 
 def lire_evenements_depuis(id_cascade: str, depuis_sequence: int = 0) -> list[dict[str, Any]]:
     """Lit les événements du journal depuis la séquence `depuis_sequence` (exclue)."""
-    chemin = state_manager.get_run_dir(id_cascade) / "events.jsonl"
+    chemin = state_manager.get_run_dir(id_cascade, create=False) / "events.jsonl"
     if not chemin.exists():
         return []
     evenements = []
@@ -234,7 +239,7 @@ def lire_evenements_depuis(id_cascade: str, depuis_sequence: int = 0) -> list[di
 
 def obtenir_derniere_sequence(id_cascade: str) -> int:
     """Retourne la dernière séquence d'événement (0 si aucun)."""
-    chemin = state_manager.get_run_dir(id_cascade) / "events.jsonl"
+    chemin = state_manager.get_run_dir(id_cascade, create=False) / "events.jsonl"
     if not chemin.exists():
         return 0
     derniere = 0
@@ -251,7 +256,7 @@ def obtenir_derniere_sequence(id_cascade: str) -> int:
 
 def obtenir_recu(id_cascade: str) -> dict[str, Any] | None:
     """Charge le reçu de coût (receipt.json)."""
-    chemin = state_manager.get_run_dir(id_cascade) / "receipt.json"
+    chemin = state_manager.get_run_dir(id_cascade, create=False) / "receipt.json"
     if not chemin.exists():
         return None
     try:
@@ -292,7 +297,7 @@ def obtenir_prompts_cascade(id_cascade: str, variante: str = "A") -> dict[str, s
     chargeur = PromptLoader()
     roles = _PROMPTS_PAR_VARIANTE.get(variante, _PROMPTS_PAR_VARIANTE["A"])
     prompts = {}
-    rep_prompts = state_manager.get_run_dir(id_cascade) / "prompts"
+    rep_prompts = state_manager.get_run_dir(id_cascade, create=False) / "prompts"
 
     for nom in roles:
         # 1. Override sauvegardé pour cette cascade
@@ -357,6 +362,9 @@ def compter_cascades() -> dict[str, int]:
             # Validation stricte — un run avec champs supplémentaires
             # est compté comme "malformé" (cohérent avec lister_cascades
             # qui l'ignore silencieusement)
+            # Note: extra="ignore" kwarg ignoré silencieusement par Pydantic v2
+            # (pour rendre la validation tolérante, ajouter ConfigDict(extra="ignore")
+            # sur CascadeState OU catch l'erreur). On garde la stricte ici.
             CascadeState.model_validate(data)
             chargeables += 1
         except (ValidationError, json.JSONDecodeError, OSError):
