@@ -100,15 +100,19 @@ class CascadePlan(BaseModel):
             Le chemin du cycle s'il existe, None sinon.
         """
         # Construire le graphe d'adjacence
-        adj: dict[str, list[str]] = {mid: [] for mid in module_ids}
-        in_degree: dict[str, int] = dict.fromkeys(module_ids, 0)
+        # module_ids peut être un set/dict_keys (ordre non-déterministe
+        # en Python 3.7+) — on trie explicitement pour rendre le
+        # parcours déterministe.
+        module_ids_sorted = sorted(module_ids)
+        adj: dict[str, list[str]] = {mid: [] for mid in module_ids_sorted}
+        in_degree: dict[str, int] = dict.fromkeys(module_ids_sorted, 0)
 
         for dep in self.dependencies:
             adj[dep.producer].append(dep.consumer)
             in_degree[dep.consumer] += 1
 
-        # Kahn : retirer les noeuds sans predecesseur
-        queue = [n for n in module_ids if in_degree[n] == 0]
+        # Kahn : retirer les noeuds sans predecesseur (triés)
+        queue = [n for n in module_ids_sorted if in_degree[n] == 0]
         visited = 0
 
         while queue:

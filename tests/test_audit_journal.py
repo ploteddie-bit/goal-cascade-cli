@@ -427,3 +427,59 @@ def test_rag_bridge_propagates_ollama_host(monkeypatch, tmp_path) -> None:
     with pytest.raises(RagSyncError):
         bridge.sync_run("rag-env", journal=journal)
     assert captured["env"]["OLLAMA_HOST"] == "http://10.0.0.1:11434"
+
+
+# ── #3 — Tamper-evidence (chaînage par hash) ──────────────────────
+
+
+def test_journal_hash_chain_chaque_event_inclut_prev_hash(
+    tmp_path, monkeypatch
+) -> None:
+    """Chaque event écrit doit inclure prev_event_hash et event_hash.
+
+    La chaîne commence par prev_event_hash="" pour le premier event,
+    et chaque event_hash est calculé à partir du contenu + prev_event_hash.
+    Modifier n'importe quel event passé casse la chaîne.
+    """
+    monkeypatch.setattr(state_manager, "RUNS_DIR", tmp_path)
+    rep = tmp_path / "abc123"
+    rep.mkdir(parents=True)
+    journal = AuditJournal("abc123")
+    journal.finalize({"status": "running"})
+
+    # Émettre 3 events
+    journal.record_event("event_a", foo=1)
+    journal.record_event("event_b", foo=2)
+    journal.record_event("event_c", foo=3)
+
+    # Lire le journal
+    events = []
+    for line in (rep / "events.jsonl").read_text(encoding="utf-8").splitlines():
+        if line.strip():
+            events.append(json.loads(line))
+
+    # 4 events attendus : 1 run_finished (du finalize) + 3 manuels
+    assert len(events) == 4
+
+    # Chaque event a sequence, event_hash, prev_event_hash
+    for ev in events:
+        assert "sequence" in ev
+        assert "event_hash" in ev
+        assert "prev_event_hash" in ev
+
+    # Le 1er event (run_finished du finalize) a prev_event_hash vide
+    assert events[0]["prev_event_hash"] == ""
+
+    # Chaque event sauf le 1er a prev_event_hash = event_hash du précédent
+    for i in range(1, 4):
+        assert events[i]["prev_event_hash"] == events[i - 1]["event_hash"], (
+            f"events[{i}].prev_event_hash doit matcher events[{i-1}].event_hash"
+        )
+
+    # Les event_hash sont uniques
+    hashes = [ev["event_hash"] for ev in events]
+    assert len(set(hashes)) == 4
+
+    # Les sequences sont monotones
+    seqs = [ev["sequence"] for ev in events]
+    assert seqs == [1, 2, 3, 4]

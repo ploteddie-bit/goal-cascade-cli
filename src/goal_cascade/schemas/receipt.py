@@ -43,7 +43,13 @@ class RunReceipt(BaseModel):
     calls: list[LLMCallRecord] = Field(default_factory=list)
     total_cost_usd: float = Field(..., ge=0.0)
     cache_hit_rate: float = Field(
-        ..., ge=0.0, le=1.0, description="cache_read_tokens / total_input_tokens"
+        ...,
+        # Anthropic compte le cache hors input_tokens → le ratio peut
+        # dépasser 1.0 (ex: 2.5 si le cache hit est 2.5× l'input facturé).
+        # On accepte jusqu'à 10.0 pour couvrir tous les providers.
+        # L'affichage dans le résumé reste borné à 100 % via min(rate, 1.0).
+        ge=0.0, le=10.0,
+        description="cache_read_tokens / total_input_tokens (peut > 1.0 si provider compte cache hors input)",
     )
     projected_monthly_cost: float = Field(
         ..., ge=0.0, description="Basé sur runs_per_day_projection × 30 jours"
@@ -78,6 +84,8 @@ class RunReceipt(BaseModel):
             total_duration_s=duration_s,
             calls=calls,
             total_cost_usd=total_cost,
+            # Borne interne (0.0-10.0) — les providers comme Anthropic
+            # peuvent rapporter un cache_hit > 1.0 (cache hors input).
             cache_hit_rate=cache_rate,
             projected_monthly_cost=projected,
         )
