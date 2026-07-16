@@ -161,16 +161,23 @@ def list_runs() -> list[dict]:
         return []
     runs = []
     for run_dir in sorted(RUNS_DIR.iterdir(), reverse=True):
-        if run_dir.is_dir():
-            state_file = run_dir / "state.json"
-            if state_file.exists():
-                data = json.loads(state_file.read_text(encoding="utf-8"))
-                runs.append(
-                    {
-                        "run_id": data.get("run_id", run_dir.name),
-                        "objective": data.get("objective", "")[:60],
-                        "status": data.get("status", "unknown"),
-                        "iterations": data.get("current_iteration", 0),
-                    }
-                )
+        if not run_dir.is_dir():
+            continue
+        state_file = run_dir / "state.json"
+        if not state_file.exists():
+            continue
+        try:
+            data = json.loads(state_file.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError):
+            # state.json corrompu ou illisible : on saute ce run
+            # sans faire crasher la liste entière.
+            continue
+        runs.append(
+            {
+                "run_id": data.get("run_id", run_dir.name),
+                "objective": data.get("objective", "")[:60],
+                "status": data.get("status", "unknown"),
+                "iterations": data.get("current_iteration", 0),
+            }
+        )
     return runs
