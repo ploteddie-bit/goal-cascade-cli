@@ -212,6 +212,7 @@ def lister_fichiers_cascade(id_cascade: str) -> dict[str, Any]:
             fichiers.append(
                 {
                     "nom": chemin.name,
+                    "chemin": str(chemin),
                     "taille": stat.st_size,
                     "modifie": datetime.fromtimestamp(stat.st_mtime, tz=UTC).isoformat(),
                 }

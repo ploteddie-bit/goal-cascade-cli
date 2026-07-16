@@ -83,6 +83,18 @@ async function chargerDetail(id) {
   }
 }
 
+// Ouvre un fichier dans VS Code via le schéma URI vscode://file/
+// Nécessite que VS Code soit enregistré comme handler du schéma vscode://
+// (par défaut sur Linux/Mac/Windows quand installé via le binaire officiel).
+function ouvrirDansVSCode(chemin) {
+  // Encode le chemin pour l'URI (caractères spéciaux)
+  const cheminEncode = encodeURI(chemin);
+  const url = `vscode://file${cheminEncode.startsWith('/') ? '' : '/'}${cheminEncode}`;
+  // Sur Linux/WSL le handler s'attend à un chemin local ; sur WSL
+  // un chemin /home/... est reconnu directement.
+  window.open(url, '_blank');
+}
+
 function afficherDetail(d) {
   document.getElementById('objectif-cascade').textContent = d.objectif;
   document.getElementById('id-cascade').textContent = d.id_cascade;
@@ -140,8 +152,16 @@ async function afficherFichiers(id) {
     const d = await fetch(API.fichiers(id)).then(r => r.json());
     const ul = document.getElementById('liste-fichiers');
     ul.innerHTML = (d.fichiers || []).map(f =>
-      `<li><span>${echapper(f.nom)}</span><span class="taille-fichier">${formaterTaille(f.taille)}</span></li>`
+      `<li>
+        <span class="nom-fichier">${echapper(f.nom)}</span>
+        <span class="taille-fichier">${formaterTaille(f.taille)}</span>
+        <button class="vscode-btn" data-chemin="${echapper(f.chemin)}" title="Ouvrir dans VS Code">VS Code</button>
+      </li>`
     ).join('');
+    // Branche les boutons VS Code
+    ul.querySelectorAll('.vscode-btn').forEach(btn => {
+      btn.addEventListener('click', () => ouvrirDansVSCode(btn.dataset.chemin));
+    });
   } catch (e) {
     document.getElementById('liste-fichiers').innerHTML = `<li>Erreur: ${echapper(String(e))}</li>`;
   }

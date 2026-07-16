@@ -409,3 +409,23 @@ pre {
 .taille-fichier {
   color: #6a7280;
 }
+
+.nom-fichier {
+  flex: 1;
+}
+
+.vscode-btn {
+  background: #007acc;
+  color: #fff;
+  border: none;
+  padding: 2px 8px;
+  border-radius: 3px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: ui-monospace, "SF Mono", monospace;
+}
+
+.vscode-btn:hover {
+  background: #1f8ad2;
+}

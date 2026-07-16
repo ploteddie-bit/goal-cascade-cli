@@ -459,3 +459,101 @@ def test_dashboard_avec_token_env_exige_bearer(
     assert r.status_code in (200, 400, 404, 413, 500)
     assert r.status_code != 401
     assert r.status_code != 403
+
+
+# ── Éditeur de fichiers (run files) ──────────────────────────────
+
+
+@pytest.fixture
+def run_avec_fichiers(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> str:
+    """Crée un run avec plusieurs fichiers persistés (events, prompts, iterations)."""
+    from goal_cascade.orchestrator import state_manager
+    from goal_cascade.audit_journal import AuditJournal
+
+    monkeypatch.setattr(state_manager, "RUNS_DIR", tmp_path)
+    run_id = "abcdef12"
+    rep = tmp_path / run_id
+    rep.mkdir()
+    journal = AuditJournal(run_id)
+    journal.finalize({"status": "stopped"})
+    # Créer des fichiers typiques
+    (rep / "events.jsonl").write_text(
+        '{"sequence":1,"event":"run_started","timestamp_utc":"2026-07-15T10:00:00","run_id":"abcdef12"}\n'
+        '{"sequence":2,"event":"run_finished","timestamp_utc":"2026-07-15T10:00:01","run_id":"abcdef12"}\n'
+    )
+    (rep / "state.json").write_text('{"run_id":"abcdef12","objective":"Test editor","status":"stopped"}')
+    (rep / "iteration_1.txt").write_text("Contenu de l'itération 1 du producer.")
+    (rep / "synthesis_1.json").write_text('{"objective":"Test","key_decisions":["d1"]}')
+    (rep / "prompt_1_producer.txt").write_text("Tu es un redacteur. Fais le draft.")
+    return run_id
+
+
+def test_editeur_lit_fichier_iteration(client_runs, run_avec_fichiers):
+    """L'éditeur peut lire le contenu d'un fichier de run (iteration_1.txt)."""
+    r = client_runs.get(f"/api/cascades/{run_avec_fichiers}/fichier/iterations/1")
+    assert r.status_code == 200
+    data = r.json()
+    assert data["contenu"] == "Contenu de l'itération 1 du producer."
+    assert data["type_mime"] == "text/plain"
+
+
+def test_editeur_lit_synthese_json(client_runs, run_avec_fichiers):
+    """L'éditeur parse les JSON (synthesis) et retourne le dict."""
+    r = client_runs.get(f"/api/cascades/{run_avec_fichiers}/fichier/syntheses/1")
+    assert r.status_code == 200
+    data = r.json()
+    assert data["contenu"] == {"objective": "Test", "key_decisions": ["d1"]}
+    assert data["type_mime"] == "application/json"
+
+
+def test_editeur_lit_prompt(client_runs, run_avec_fichiers):
+    """L'éditeur lit les prompts (prompt_1_producer.txt)."""
+    r = client_runs.get(f"/api/cascades/{run_avec_fichiers}/fichier/prompts/producer/1")
+    assert r.status_code == 200
+    assert r.json()["contenu"] == "Tu es un redacteur. Fais le draft."
+
+
+def test_editeur_lit_state_json(client_runs, run_avec_fichiers):
+    """L'éditeur lit state.json (état complet de la cascade)."""
+    r = client_runs.get(f"/api/cascades/{run_avec_fichiers}/fichier/state")
+    assert r.status_code == 200
+    assert r.json()["contenu"] == {
+        "run_id": "abcdef12",
+        "objective": "Test editor",
+        "status": "stopped",
+    }
+
+
+def test_editeur_lit_events_jsonl(client_runs, run_avec_fichiers):
+    """L'éditeur lit events.jsonl (le journal temps réel)."""
+    r = client_runs.get(f"/api/cascades/{run_avec_fichiers}/fichier/evenements")
+    assert r.status_code == 200
+    data = r.json()
+    assert data["type_mime"] == "application/x-ndjson"
+    assert "run_started" in data["contenu"]
+
+
+def test_editeur_type_inconnu_renvoie_400(client_runs, run_avec_fichiers):
+    """Un type de fichier non supporté → 400."""
+    r = client_runs.get(f"/api/cascades/{run_avec_fichiers}/fichier/inconnu/1")
+    assert r.status_code == 400
+
+
+def test_editeur_iteration_hors_range_renvoie_404(client_runs, run_avec_fichiers):
+    """Un numéro d'itération hors range (0 ou > 5) → 404."""
+    r = client_runs.get(f"/api/cascades/{run_avec_fichiers}/fichier/iterations/99")
+    assert r.status_code == 404
+
+
+def test_editeur_path_traversal_bloque(client_runs):
+    """L'éditeur refuse les chemins avec .. (path traversal)."""
+    # Test : role avec .. ne doit pas passer la regex de role
+    r = client_runs.get("/api/cascades/abcdef12/fichier/prompts/..%2F..%2Fetc%2Fpasswd/1")
+    assert r.status_code in (400, 404)
+
+
+def test_editeur_run_inconnu_renvoie_404(client_runs):
+    """Un run_id inexistant → 404."""
+    r = client_runs.get("/api/cascades/abcdef12/fichier/iterations/1")
+    # Le run n'existe pas → 404 (le regex de run_id passe mais pas le fichier)
+    assert r.status_code == 404

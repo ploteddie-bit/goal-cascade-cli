@@ -267,6 +267,177 @@ async def obtenir_prompts(id_cascade: str) -> dict[str, str]:
     return etat_tableau.obtenir_prompts_cascade(id_cascade, variante=variante)
 
 
+# ── Éditeur de fichiers (run files) ─────────────────────────────
+
+# Mapping type → chemin relatif (paramètres de l'URL)
+def _resolve_run_file_path(
+    id_cascade: str,
+    type_fichier: str,
+    role: str | None = None,
+    iteration: int | None = None,
+) -> Path:
+    """Résout un chemin vers un fichier de run, avec validation stricte.
+
+    Paths supportés :
+    - state         → state.json
+    - evenements    → events.jsonl
+    - iterations/N  → iteration_N.txt
+    - syntheses/N   → synthesis_N.json
+    - prompts/{role}/N → prompt_N_{role}.txt
+    """
+    _verifier_id_securise(id_cascade, "id_cascade")
+
+    if type_fichier == "state":
+        chemin = "state.json"
+    elif type_fichier == "evenements":
+        chemin = "events.jsonl"
+    elif type_fichier == "iterations":
+        if iteration is None or iteration < 1 or iteration > 5:
+            # Fichier n'existe pas → 404 (le path /iteration_N.txt n'existe pas)
+            raise HTTPException(
+                status_code=404,
+                detail=f"iteration {iteration} hors range (1-5) — fichier non trouvé",
+            )
+        chemin = f"iteration_{iteration}.txt"
+    elif type_fichier == "syntheses":
+        if iteration is None or iteration < 1 or iteration > 5:
+            raise HTTPException(
+                status_code=404,
+                detail=f"iteration {iteration} hors range (1-5) — fichier non trouvé",
+            )
+        chemin = f"synthesis_{iteration}.json"
+    elif type_fichier == "prompts":
+        if not role:
+            raise HTTPException(
+                status_code=400, detail="role requis pour type=prompts"
+            )
+        if iteration is None or iteration < 1 or iteration > 5:
+            raise HTTPException(
+                status_code=404,
+                detail=f"iteration {iteration} hors range (1-5) — fichier non trouvé",
+            )
+        # role a déjà été validé comme chemin hex (via _verifier_id_securise
+        # sur le path resolver) — mais ici on a un rôle textuel comme
+        # "producer" qui n'est PAS un id hex. Validation séparée.
+        if not re.match(r"^[a-z][a-z0-9_-]{0,31}$", role):
+            raise HTTPException(
+                status_code=400,
+                detail=f"role invalide : {role!r}",
+            )
+        chemin = f"prompt_{iteration}_{role}.txt"
+    else:
+        raise HTTPException(
+            status_code=400,
+            detail=f"type inconnu: {type_fichier!r} (attendu: state|evenements|iterations|syntheses|prompts)",
+        )
+
+    return (
+        etat_tableau.state_manager.get_run_dir(id_cascade, create=False)
+        / chemin
+    )
+
+
+def _detect_mime_type(chemin: Path) -> str:
+    """Devine le type MIME selon l'extension."""
+    if chemin.suffix == ".json":
+        return "application/json"
+    if chemin.suffix == ".jsonl":
+        return "application/x-ndjson"
+    if chemin.suffix == ".md":
+        return "text/markdown"
+    return "text/plain"
+
+
+@app.get("/api/cascades/{id_cascade}/fichier/{type_fichier}/{role}/{iteration}")
+async def lire_fichier_prompt(
+    id_cascade: str, type_fichier: str, role: str, iteration: int
+) -> dict[str, Any]:
+    """Lit un prompt (type=prompts, role, iteration)."""
+    chemin = _resolve_run_file_path(
+        id_cascade, type_fichier, role=role, iteration=iteration
+    )
+    if not chemin.exists():
+        raise HTTPException(
+            status_code=404, detail=f"Fichier non trouvé : {chemin.name}"
+        )
+    contenu = chemin.read_text(encoding="utf-8")
+    return {
+        "nom": chemin.name,
+        "chemin": str(chemin),
+        "contenu": contenu,
+        "type_mime": _detect_mime_type(chemin),
+        "taille": len(contenu),
+    }
+
+
+@app.get("/api/cascades/{id_cascade}/fichier/{type_fichier}/{iteration}")
+async def lire_fichier_indexe(
+    id_cascade: str, type_fichier: str, iteration: int
+) -> dict[str, Any]:
+    """Lit un fichier indexé (iterations/N ou syntheses/N)."""
+    chemin = _resolve_run_file_path(
+        id_cascade, type_fichier, iteration=iteration
+    )
+    if not chemin.exists():
+        raise HTTPException(
+            status_code=404, detail=f"Fichier non trouvé : {chemin.name}"
+        )
+    contenu = chemin.read_text(encoding="utf-8")
+    # Pour les JSON, on parse pour retourner un objet (UI plus pratique)
+    if chemin.suffix == ".json":
+        import json as _json
+        try:
+            return {
+                "nom": chemin.name,
+                "chemin": str(chemin),
+                "contenu": _json.loads(contenu),
+                "type_mime": _detect_mime_type(chemin),
+                "taille": len(contenu),
+            }
+        except _json.JSONDecodeError:
+            pass
+    return {
+        "nom": chemin.name,
+        "chemin": str(chemin),
+        "contenu": contenu,
+        "type_mime": _detect_mime_type(chemin),
+        "taille": len(contenu),
+    }
+
+
+@app.get("/api/cascades/{id_cascade}/fichier/{type_fichier}")
+async def lire_fichier_simple(
+    id_cascade: str, type_fichier: str
+) -> dict[str, Any]:
+    """Lit un fichier simple (state ou evenements)."""
+    chemin = _resolve_run_file_path(id_cascade, type_fichier)
+    if not chemin.exists():
+        raise HTTPException(
+            status_code=404, detail=f"Fichier non trouvé : {chemin.name}"
+        )
+    contenu = chemin.read_text(encoding="utf-8")
+    # state.json est parsé en dict pour l'UI
+    if chemin.suffix == ".json":
+        import json as _json
+        try:
+            return {
+                "nom": chemin.name,
+                "chemin": str(chemin),
+                "contenu": _json.loads(contenu),
+                "type_mime": _detect_mime_type(chemin),
+                "taille": len(contenu),
+            }
+        except _json.JSONDecodeError:
+            pass
+    return {
+        "nom": chemin.name,
+        "chemin": str(chemin),
+        "contenu": contenu,
+        "type_mime": _detect_mime_type(chemin),
+        "taille": len(contenu),
+    }
+
+
 @app.put(
     "/api/cascades/{id_cascade}/prompts/{role}",
     dependencies=[Depends(_verifier_token_tableau_de_bord)],
