@@ -483,3 +483,60 @@ def test_journal_hash_chain_chaque_event_inclut_prev_hash(
     # Les sequences sont monotones
     seqs = [ev["sequence"] for ev in events]
     assert seqs == [1, 2, 3, 4]
+
+
+def test_journal_hash_round_trip_recalcul_independent(tmp_path, monkeypatch) -> None:
+    """Le hash stocké doit être recalculable indépendamment du contenu du fichier.
+
+    Pour chaque event dans le journal :
+    1. Reconstruire le dict SANS le champ event_hash
+    2. Sérialiser de manière canonique (mêmes kwargs sort_keys, ensure_ascii)
+    3. Calculer sha256(sérialisation + prev_event_hash)
+    4. Comparer avec le event_hash stocké → doit matcher exactement
+
+    C'est la garantie de tamper-evidence : n'importe qui peut recalculer
+    le hash de manière indépendante et détecter une altération.
+    """
+    import hashlib
+    monkeypatch.setattr(state_manager, "RUNS_DIR", tmp_path)
+    rep = tmp_path / "abc123"
+    rep.mkdir(parents=True)
+    journal = AuditJournal("abc123")
+    journal.finalize({"status": "running"})
+
+    # Émettre 5 events pour avoir une chaîne intéressante
+    for i in range(5):
+        journal.record_event(f"event_{i}", payload=f"data_{i}")
+
+    # Lire chaque ligne et recalculer le hash
+    events = []
+    for line in (rep / "events.jsonl").read_text(encoding="utf-8").splitlines():
+        if line.strip():
+            ev = json.loads(line)
+            events.append(ev)
+
+    for ev in events:
+        # 1. Reconstruire le dict SANS event_hash
+        ev_sans_hash = {k: v for k, v in ev.items() if k != "event_hash"}
+
+        # 2. Sérialisation canonique (mêmes kwargs que record_event)
+        sans_hash_str = json.dumps(
+            ev_sans_hash, ensure_ascii=False, sort_keys=True
+        )
+
+        # 3. Recalcul du hash
+        recalcule = hashlib.sha256(
+            (sans_hash_str + ev["prev_event_hash"]).encode("utf-8")
+        ).hexdigest()
+
+        # 4. Match avec le hash stocké
+        assert recalcule == ev["event_hash"], (
+            f"event seq={ev['sequence']} ({ev['event']}): "
+            f"hash recalculé {recalcule[:16]}... != stocké {ev['event_hash'][:16]}..."
+        )
+
+    # Vérification supplémentaire : prev_event_hash de N+1 == event_hash de N
+    for i in range(1, len(events)):
+        assert events[i]["prev_event_hash"] == events[i - 1]["event_hash"], (
+            f"Cassure de chaîne à l'event {i}"
+        )

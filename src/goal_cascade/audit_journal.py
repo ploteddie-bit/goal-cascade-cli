@@ -120,19 +120,28 @@ class AuditJournal:
             **_redact_data(data),
         }
 
-        # 3) Calculer le hash de l'event (= sha256 du JSON sérialisé + prev_event_hash).
-        event_json = json.dumps(
+        # 3) Calculer le hash SUR le contenu SANS le champ event_hash.
+        #    Le hash est ainsi DÉTERMINISTE : il représente exactement
+        #    le contenu sérialisé (sans le champ qu'on est en train
+        #    de calculer). La vérification se fait en relisant le journal
+        #    et en recalculant sha256(json(sans event_hash) + prev_event_hash).
+        sans_hash_str = json.dumps(
             event_sans_hash, ensure_ascii=False, sort_keys=True
         )
         event_hash = hashlib.sha256(
-            (event_json + prev_event_hash).encode("utf-8")
+            (sans_hash_str + prev_event_hash).encode("utf-8")
         ).hexdigest()
         event_sans_hash["event_hash"] = event_hash
 
-        # 4) Écriture atomique (lock + append) avec recalcul final du
-        #    hash APRÈS sérialisation (le hash inclut le champ event_hash
-        #    lui-même pour boucler la chaîne — toute modif d'event_hash
-        #    casse la cohérence du suivant).
+        # 4) Sérialisation FINALE (avec event_hash inclus) — c'est la
+        #    chaîne qui sera écrite sur disque.
+        final_str = json.dumps(
+            event_sans_hash, ensure_ascii=False, sort_keys=True
+        )
+
+        # 5) Écriture atomique (lock + append). Le hash INSÉRÉ dans la
+        #    ligne est le HASH DU CONTENU SANS event_hash, pas de la
+        #    ligne finale — ce qui garantit la cohérence déterministe.
         with open(self.events_path, "a", encoding="utf-8") as stream:
             try:
                 import fcntl
@@ -142,20 +151,7 @@ class AuditJournal:
                 # Le compteur _sequence reste vulnérable aux races.
                 pass
             try:
-                # Re-sérialiser avec event_hash inclus
-                final_json = json.dumps(
-                    event_sans_hash, ensure_ascii=False, sort_keys=True
-                )
-                final_hash = hashlib.sha256(
-                    (final_json + prev_event_hash).encode("utf-8")
-                ).hexdigest()
-                # Note: on accepte un hash légèrement différent entre
-                # le calcul inline et la persistance (recalcul post-include).
-                # Pour une chaîne strictement déterministe il faudrait
-                # inclure le hash APRÈS sérialisation finale. On documente
-                # cette limite ici ; elle n'affecte pas la sécurité car
-                # tout event_hash peut être recalculé indépendamment.
-                stream.write(final_json + "\n")
+                stream.write(final_str + "\n")
             finally:
                 try:
                     fcntl.flock(stream.fileno(), fcntl.LOCK_UN)
